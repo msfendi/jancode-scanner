@@ -34,15 +34,28 @@
         </div>
     </li>
     
-    <li class="nav-item {{ request()->is('jancode*') ? 'active' : '' }}">
-        <a class="nav-link {{ request()->is('jancode*') ? '' : 'collapsed' }}" href="#" data-toggle="collapse" data-target="#collapseMaster"
-            aria-expanded="{{ request()->is('jancode*') ? 'true' : 'false' }}" aria-controls="collapseMaster">
+    <li class="nav-item {{ request()->is('jancode*') || request()->is('scanner*') || request()->is('hangtag*') ? 'active' : '' }}">
+        <a class="nav-link {{ request()->is('jancode*') || request()->is('scanner*') || request()->is('hangtag*') ? '' : 'collapsed' }}" href="#" data-toggle="collapse" data-target="#collapseJancode"
+            aria-expanded="{{ request()->is('jancode*') || request()->is('scanner*') || request()->is('hangtag*') ? 'true' : 'false' }}" aria-controls="collapseJancode">
             <i class="fas fa-fw fa-barcode"></i>
-            <span>Master Data</span>
+            <span>Jancode</span>
         </a>
-        <div id="collapseMaster" class="collapse {{ request()->is('jancode*') ? 'show' : '' }}" aria-labelledby="headingMaster" data-parent="#accordionSidebar">
+        <div id="collapseJancode" class="collapse {{ request()->is('jancode*') || request()->is('scanner*') || request()->is('hangtag*') ? 'show' : '' }}" aria-labelledby="headingJancode" data-parent="#accordionSidebar">
             <div class="bg-white py-2 collapse-inner rounded">
-                <a class="collapse-item {{ request()->routeIs('jancode.index') ? 'active' : '' }}" href="{{ route('jancode.index') }}">Jancode</a>
+                <a class="collapse-item {{ request()->routeIs('jancode.index') ? 'active' : '' }}" href="{{ route('jancode.index') }}">Master Data Jancode</a>
+                <a class="collapse-item {{ request()->routeIs('scanner.index') ? 'active' : '' }}" href="{{ route('scanner.index') }}">Scanner Jancode</a>
+            </div>
+        </div>
+    </li>
+    <li class="nav-item {{ request()->is('hangtag*') ? 'active' : '' }}">
+        <a class="nav-link {{ request()->is('hangtag*') ? '' : 'collapsed' }}" href="#" data-toggle="collapse" data-target="#collapseHangtag"
+            aria-expanded="{{ request()->is('hangtag*') ? 'true' : 'false' }}" aria-controls="collapseHangtag">
+            <i class="fas fa-fw fa-barcode"></i>
+            <span>Hangtag</span>
+        </a>
+        <div id="collapseHangtag" class="collapse {{ request()->is('hangtag*') ? 'show' : '' }}" aria-labelledby="headingHangtag" data-parent="#accordionSidebar">
+            <div class="bg-white py-2 collapse-inner rounded">
+                <a class="collapse-item {{ request()->routeIs('hangtag.home') ? 'active' : '' }}" href="{{ route('hangtag.home') }}">Data Hangtag</a>
             </div>
         </div>
     </li>

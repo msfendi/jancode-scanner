@@ -18,11 +18,15 @@
 
                     <!-- Page Heading -->
                     <div class="d-sm-flex align-items-center justify-content-between mb-4">
-                        <h1 class="h3 mb-0 text-gray-800">Jancode List</h1>
+                        <h1 class="h3 mb-0 text-gray-800">Hangtag List - {{ $buyer }}</h1>
                         <div>
+                            <a href="{{ route('hangtag.scanner.index', $buyer) }}"
+                                class="d-none d-sm-inline-block btn btn-sm btn-info shadow-sm">
+                                <i class="fas fa-barcode fa-sm text-white-50"></i> Scanner
+                            </a>
                             <a href="javascript:void(0)"
-                                class="d-none d-sm-inline-block btn btn-sm btn-primary shadow-sm" id="createNewJancode">
-                                <i class="fas fa-plus fa-sm text-white-50"></i> Create Jancode
+                                class="d-none d-sm-inline-block btn btn-sm btn-primary shadow-sm" id="createNewHangtag">
+                                <i class="fas fa-plus fa-sm text-white-50"></i> Create Hangtag
                             </a>
                             <button class="d-none d-sm-inline-block btn btn-sm btn-success shadow-sm"
                                 data-toggle="modal" data-target="#importModal">
@@ -34,7 +38,7 @@
                     <!-- DataTales Example -->
                     <div class="card shadow mb-4">
                         <div class="card-header py-3">
-                            <h6 class="m-0 font-weight-bold text-primary">Data Jancode</h6>
+                            <h6 class="m-0 font-weight-bold text-primary">Data Hangtag</h6>
                         </div>
                         <div class="card-body">
                             <div class="table-responsive">
@@ -42,15 +46,14 @@
                                     <thead>
                                         <tr>
                                             <th>No</th>
-                                            <th>Jancode</th>
-                                            <th>Size</th>
-                                            <th>Qty</th>
+                                            <th>Barcode</th>
+                                            <th>Buyer</th>
                                             <th>Country</th>
                                             <th>Color</th>
-                                            <th>Desc</th>
-                                            <th>Scanned</th>
+                                            <th>Size</th>
+                                            <th>Qty</th>
+                                            <th>Total Scanned</th>
                                             <th>Balance</th>
-                                            <th>Void</th>
                                             <th width="140px">Action</th>
                                         </tr>
                                     </thead>
@@ -69,9 +72,10 @@
 
             @include('layout.footer')
 
-            <!-- Jancode Modal -->
+            <!-- Hangtag Modal -->
 
-            <div class="modal fade" id="ajaxModel" aria-hidden="true">
+            {{-- add manually --}}
+            {{-- <div class="modal fade" id="ajaxModel" aria-hidden="true">
                 <div class="modal-dialog">
                     <div class="modal-content">
                         <div class="modal-header">
@@ -81,13 +85,13 @@
                             </button>
                         </div>
                         <div class="modal-body">
-                            <form id="jancodeForm" name="jancodeForm" class="form-horizontal">
-                                <input type="hidden" name="id" id="jancode_id">
+                            <form id="HangtagForm" name="HangtagForm" class="form-horizontal">
+                                <input type="hidden" name="id" id="Hangtag_id">
                                 <div class="form-group">
-                                    <label for="jancode" class="col-sm-12 control-label">Jancode</label>
+                                    <label for="barcode" class="col-sm-12 control-label">Barcode</label>
                                     <div class="col-sm-12">
-                                        <input type="text" class="form-control" id="jancode" name="jancode"
-                                            placeholder="Enter Jancode" value="" required>
+                                        <input type="text" class="form-control" id="barcode" name="barcode"
+                                            placeholder="Enter Barcode" value="" required>
                                     </div>
                                 </div>
                                 <div class="form-group">
@@ -142,12 +146,12 @@
                         </div>
                     </div>
                 </div>
-            </div>
+            </div> --}}
 
             <!-- Import Modal -->
             <div class="modal fade" id="importModal" tabindex="-1" aria-hidden="true">
                 <div class="modal-dialog">
-                    <form id="importForm" action="{{ route('jancode.import') }}" method="POST"
+                    <form id="importForm" action="{{ route('hangtag.import', $buyer) }}" method="POST"
                         enctype="multipart/form-data">
                         @csrf
                         <div class="modal-content">
@@ -178,7 +182,7 @@
                     <div class="modal-content">
                         <div class="modal-header bg-info text-white">
                             <h5 class="modal-title"><i class="fas fa-search mr-1"></i> Detail Scan - <span
-                                    id="detail-jancode"></span></h5>
+                                    id="detail-Hangtag"></span></h5>
                             <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
                                 <span aria-hidden="true">&times;</span>
                             </button>
@@ -218,8 +222,8 @@
                             <div class="row text-center">
                                 <div class="col-md-4">
                                     <div>
-                                        <small class="text-muted">Description</small>
-                                        <p class="font-weight-bold mb-0" id="detail-desc">-</p>
+                                        <small class="text-muted">Buyer</small>
+                                        <p class="font-weight-bold mb-4" id="detail-buyer">-</p>
                                     </div>
                                     <div>
                                         <small class="text-muted">Qty Master</small>
@@ -283,52 +287,51 @@
             const table = $('.data-table').DataTable({
                 processing: true,
                 serverSide: true,
-                ajax: "{{ route('jancode.index') }}",
+                ajax: "{{ route('hangtag.index', $buyer) }}",
                 columns: [
                     { data: 'DT_RowIndex', name: 'DT_RowIndex', orderable: false, searchable: false },
-                    { data: 'jancode', name: 'jancode' },
-                    { data: 'size', name: 'size' },
-                    { data: 'qty', name: 'qty' },
+                    { data: 'barcode', name: 'barcode' },
+                    { data: 'buyer', name: 'buyer' },
                     { data: 'country', name: 'country' },
                     { data: 'color', name: 'color' },
-                    { data: 'description', name: 'description' },
+                    { data: 'size', name: 'size' },
+                    { data: 'qty', name: 'qty' },
                     { data: 'scanned', name: 'scanned', searchable: false },
                     { data: 'balance', name: 'balance', searchable: false },
-                    { data: 'void', name: 'void', render: function (data) { return data == 1 ? '<span class="badge badge-danger">True</span>' : '<span class="badge badge-success">False</span>'; } },
                     { data: 'action', name: 'action', orderable: false, searchable: false },
                 ]
             });
 
             // --- Show Create Modal ---
-            $('#createNewJancode').click(function () {
-                $('#saveBtn').val("create-jancode").html('Save changes');
-                $('#jancode_id').val('');
-                $('#jancodeForm').trigger("reset");
-                $('#modelHeading').html("Create New Jancode");
+            $('#createNewHangtag').click(function () {
+                $('#saveBtn').val("create-Hangtag").html('Save changes');
+                $('#Hangtag_id').val('');
+                $('#HangtagForm').trigger("reset");
+                $('#modelHeading').html("Create New Hangtag");
                 $('#ajaxModel').modal('show');
             });
 
             // --- Show Edit Modal ---
-            $('body').on('click', '.editJancode', function () {
-                const jancode_id = $(this).data('id');
-                const editUrl = "{{ route('jancode.edit', ':id') }}".replace(':id', jancode_id);
+            $('body').on('click', '.editHangtag', function () {
+                const Hangtag_id = $(this).data('id');
+                const editUrl = "{{ route('hangtag.edit', ['buyer' => $buyer, 'id' => ':id']) }}".replace(':id', Hangtag_id);
                 $.get(editUrl, function (data) {
-                    $('#modelHeading').html("Edit Jancode");
-                    $('#saveBtn').val("edit-jancode").html('Save changes');
+                    $('#modelHeading').html("Edit Hangtag");
+                    $('#saveBtn').val("edit-Hangtag").html('Save changes');
                     $('#ajaxModel').modal('show');
-                    $('#jancode_id').val(data.id);
-                    $('#jancode').val(data.jancode);
+                    $('#Hangtag_id').val(data.id);
+                    $('#Hangtag').val(data.barcode);
                     $('#size').val(data.size);
                     $('#qty').val(data.qty);
                     $('#country').val(data.country);
                     $('#color').val(data.color);
-                    $('#description').val(data.description);
+                    $('#buyer').val(data.buyer);
                     $('#void').val(data.void);
                 });
             });
 
             // --- Create/Edit Form Submit ---
-            $('#jancodeForm').submit(function (e) {
+            $('#HangtagForm').submit(function (e) {
                 e.preventDefault();
                 const formData = new FormData(this);
 
@@ -341,12 +344,12 @@
 
                 $.ajax({
                     data: formData,
-                    url: "{{ route('jancode.store') }}",
+                    url: "{{ route('hangtag.store', $buyer) }}",
                     type: "POST",
                     processData: false,
                     contentType: false,
                     success: function (response) {
-                        $('#jancodeForm').trigger("reset");
+                        $('#HangtagForm').trigger("reset");
                         $('#ajaxModel').modal('hide');
                         table.draw();
                         Swal.fire({
@@ -369,8 +372,8 @@
             });
 
             // --- Delete Action ---
-            $('body').on('click', '.deleteJancode', function () {
-                const jancode_id = $(this).data("id");
+            $('body').on('click', '.deleteHangtag', function () {
+                const Hangtag_id = $(this).data("id");
 
                 Swal.fire({
                     title: 'Are you sure?',
@@ -394,7 +397,7 @@
 
                         $.ajax({
                             type: "POST",
-                            url: "{{ route('jancode.index') }}" + '/' + jancode_id,
+                            url: "{{ route('hangtag.destroy', ['buyer' => $buyer, 'id' => ':id']) }}".replace(':id', Hangtag_id),
                             data: formData,
                             processData: false,
                             contentType: false,
@@ -454,17 +457,17 @@
 
             // --- Detail Scan Action ---
             $('body').on('click', '.detailScan', function () {
-                const jancode_id = $(this).data('id');
-                const jancode = $(this).data('jancode');
+                const Hangtag_id = $(this).data('id');
+                const Hangtag = $(this).data('Hangtag');
 
-                $('#detail-jancode').text(jancode);
+                $('#detail-Hangtag').text(Hangtag);
                 $('#detail-sessions').html('<p class="text-center text-muted py-3"><i class="fas fa-spinner fa-spin"></i> Loading...</p>');
                 $('#detailScanModal').modal('show');
 
-                const scanLogUrl = "{{ route('jancode.scanLogs', ':id') }}".replace(':id', jancode_id);
+                const scanLogUrl = "{{ route('hangtag.scanLogs', ['buyer' => $buyer, 'id' => ':id']) }}".replace(':id', Hangtag_id);
 
                 $.get(scanLogUrl, function (data) {
-                    $('#detail-desc').text(data.description || '-');
+                    $('#detail-buyer').text(data.buyer || '-');
                     $('#detail-size').text(data.size || '-');
                     $('#detail-color').text(data.color || '-');
                     $('#detail-qty').text(data.qty);
@@ -475,7 +478,7 @@
                         $('#detail-sessions').html(
                             '<div class="text-center text-muted py-4">' +
                             '<i class="fas fa-inbox fa-2x mb-2"></i>' +
-                            '<p>Belum ada scan untuk jancode ini</p>' +
+                            '<p>Belum ada scan untuk Hangtag ini</p>' +
                             '</div>'
                         );
                         return;

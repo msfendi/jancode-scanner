@@ -4,11 +4,11 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
-class JancodeLogs extends Model
+class HangtagLogs extends Model
 {
-    protected $table = 'jancode_logs';
+    protected $table = 'hangtag_logs';
 
     protected $fillable = [
-        'jancode',
+        'barcode',
     ];
 }
