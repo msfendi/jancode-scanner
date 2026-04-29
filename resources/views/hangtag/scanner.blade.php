@@ -37,11 +37,11 @@
                                     <div class="input-group">
                                         <input class="form-control form-control-lg" type="text" id="barcode"
                                             name="barcode" autocomplete="off" placeholder="Scan atau ketik barcode...">
-                                        {{-- <div class="input-group-append">
-                                            <button class="btn btn-warning" id="btn-void" type="button">
-                                                <i class="fas fa-undo fa-sm mr-1"></i> Void Last
+                                        <div class="input-group-append">
+                                            <button class="btn btn-danger" id="btn-reset" type="button">
+                                                <i class="fas fa-sync fa-sm mr-1"></i> Reset Scan
                                             </button>
-                                        </div> --}}
+                                        </div>
                                     </div>
                                     <small class="form-text text-muted">
                                         <i class="fas fa-info-circle"></i>
@@ -217,7 +217,7 @@
                 }
 
                 $.ajax({
-                    url: "{{ route('hangtag.scanner.scan', $buyer) }}",
+                    url: "{{ route('hangtag.scanner.scan') }}",
                     type: 'POST',
                     contentType: 'application/json',
                     data: JSON.stringify({ barcode: barcode }),
@@ -235,7 +235,17 @@
                     },
                     error: function (xhr) {
                         const data = xhr.responseJSON;
-                        if (data && data.error === 'over') {
+                        if (data && data.error === 'locked') {
+                            // Revert to locked barcode to show correct info
+                            currentHangtag = data.locked_barcode;
+                            updateCounters(data);
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Barcode Berbeda!',
+                                text: data.message,
+                                confirmButtonText: 'OK'
+                            });
+                        } else if (data && data.error === 'over') {
                             updateCountersFromError(data);
                             Swal.fire({
                                 icon: 'warning',
@@ -366,7 +376,7 @@
                 }).then(function (result) {
                     if (result.isConfirmed) {
                         $.ajax({
-                            url: "{{ route('hangtag.scanner.void', $buyer) }}",
+                            url: "{{ route('hangtag.scanner.void') }}",
                             type: 'DELETE',
                             contentType: 'application/json',
                             data: JSON.stringify({ barcode: currentHangtag }),
@@ -402,7 +412,7 @@
             // ── Refresh Count (after void) ─────────────────────────────
             function refreshCount() {
                 $.ajax({
-                    url: "{{ route('hangtag.scanner.count', $buyer) }}",
+                    url: "{{ route('hangtag.scanner.count') }}",
                     type: 'GET',
                     data: { barcode: currentHangtag },
                     success: function (data) {
@@ -410,6 +420,47 @@
                     }
                 });
             }
+
+            // ── Reset Scan ─────────────────────────────────────────────
+            $('#btn-reset').on('click', function () {
+                Swal.fire({
+                    title: 'Reset scan saat ini?',
+                    text: 'Lock barcode akan dilepas dan anda bisa mulai scan barcode baru.',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#d33',
+                    cancelButtonColor: '#3085d6',
+                    confirmButtonText: 'Ya, reset!',
+                    cancelButtonText: 'Batal'
+                }).then(function (result) {
+                    if (result.isConfirmed) {
+                        $.ajax({
+                            url: "{{ route('hangtag.scanner.reset') }}",
+                            type: 'POST',
+                            success: function (response) {
+                                currentHangtag = null;
+                                resetCounters();
+                                $('#info-box').hide();
+                                Swal.fire({
+                                    icon: 'success',
+                                    title: 'Reset Berhasil!',
+                                    text: 'Silahkan scan barcode baru.',
+                                    timer: 1500,
+                                    showConfirmButton: false
+                                });
+                            },
+                            error: function (xhr) {
+                                Swal.fire({ icon: 'error', title: 'Gagal reset!', text: 'Error' });
+                            },
+                            complete: function () {
+                                $input.focus();
+                            }
+                        });
+                    } else {
+                        $input.focus();
+                    }
+                });
+            });
 
         });
     </script>

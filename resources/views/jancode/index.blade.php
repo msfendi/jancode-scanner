@@ -483,10 +483,10 @@
 
                     let html = '<div class="table-responsive" style="max-height:300px; overflow-y:auto;">';
                     html += '  <table class="table table-sm table-bordered table-striped mb-0">';
-                    html += '    <thead class="thead-light"><tr><th width="60">No</th><th>Waktu Scan</th></tr></thead>';
+                    html += '    <thead class="thead-light"><tr><th width="60">No</th><th>Waktu Scan</th><th>Scanned By</th></tr></thead>';
                     html += '    <tbody>';
                     data.logs.forEach(function (log) {
-                        html += '<tr><td>' + log.no + '</td><td>' + log.created_at + '</td></tr>';
+                        html += '<tr><td>' + log.no + '</td><td>' + log.created_at + '</td><td>' + log.user_name + '</td></tr>';
                     });
                     html += '    </tbody>';
                     html += '  </table>';

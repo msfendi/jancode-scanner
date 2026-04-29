@@ -11,21 +11,13 @@ use Yajra\DataTables\Facades\DataTables;
 
 class HangtagController extends Controller
 {
-    public function home()
-    {
-        $buyers = ['MUJI', 'GAP', 'KOHLS', 'OLDNAVY', 'SUKO', 'LEVIS'];
-        return view('hangtag.home', compact('buyers'));
-    }
-
-    public function index(Request $request, $buyer)
+    public function index(Request $request)
     {
         if ($request->ajax()) {
-            $data = Hangtag::where('buyer', $buyer)->latest()->get();
+            $data = Hangtag::latest()->get();
 
             // Pre-load scan counts
             $scanCounts = HangtagLogs::selectRaw('barcode, COUNT(*) as total')
-                // Wait, HangtagLogs doesn't have buyer, just barcode. Is barcode unique across buyers?
-                // Assuming barcode is unique for Hangtags
                 ->groupBy('barcode')
                 ->pluck('total', 'barcode');
 
@@ -44,9 +36,9 @@ class HangtagController extends Controller
                     }
                     return '<span class="badge badge-warning text-dark">' . $balance . '</span>';
                 })
-                ->addColumn('action', function ($row) use ($buyer) {
+                ->addColumn('action', function ($row) {
                     $btn  = '<a href="javascript:void(0)" data-id="' . $row->id . '" data-barcode="' . $row->barcode . '" class="btn btn-info btn-sm btn-circle detailScan" title="Detail Scan"><i class="fas fa-search"></i></a> ';
-                    $btn .= '<a href="' . route('hangtag.exportScanLogs', ['buyer' => $buyer, 'id' => $row->id]) . '" class="btn btn-success btn-sm btn-circle" title="Export Log"><i class="fas fa-file-excel"></i></a> ';
+                    $btn .= '<a href="' . route('hangtag.exportScanLogs', ['id' => $row->id]) . '" class="btn btn-success btn-sm btn-circle" title="Export Log"><i class="fas fa-file-excel"></i></a> ';
                     $btn .= '<a href="javascript:void(0)" data-id="' . $row->id . '" class="edit btn btn-primary btn-sm btn-circle editHangtag" title="Edit"><i class="fas fa-edit"></i></a> ';
                     $btn .= '<a href="javascript:void(0)" data-id="' . $row->id . '" class="btn btn-danger btn-sm btn-circle deleteHangtag" title="Delete"><i class="fas fa-trash"></i></a>';
                     return $btn;
@@ -55,19 +47,19 @@ class HangtagController extends Controller
                 ->make(true);
         }
 
-        return view('hangtag.index', compact('buyer'));
+        return view('hangtag.index');
     }
 
-    public function exportScanLogs($buyer, $id)
+    public function exportScanLogs($id)
     {
-        $hangtag = Hangtag::where('buyer', $buyer)->findOrFail($id);
+        $hangtag = Hangtag::findOrFail($id);
 
         $filename = 'hangtag_scan_log_' . $hangtag->barcode . '_' . now()->format('Ymd_His') . '.xlsx';
 
         return Excel::download(new \App\Exports\HangtagSheet\HangtagScanLogsExport($hangtag), $filename);
     }
 
-    public function store(Request $request, $buyer)
+    public function store(Request $request)
     {
         $request->validate([
             'barcode' => 'required|string',
@@ -75,6 +67,7 @@ class HangtagController extends Controller
             'country' => 'required|string',
             'color'   => 'required|string',
             'size'    => 'required|string',
+            'buyer'   => 'sometimes|string|nullable',
             'void'    => 'sometimes|boolean'
         ]);
 
@@ -86,7 +79,7 @@ class HangtagController extends Controller
                 'country' => $request->country,
                 'color'   => $request->color,
                 'size'    => $request->size,
-                'buyer'   => $buyer,
+                'buyer'   => $request->buyer,
                 'void'    => $request->void ?? 0,
             ]
         );
@@ -94,29 +87,31 @@ class HangtagController extends Controller
         return response()->json(['success' => 'Hangtag saved successfully.']);
     }
 
-    public function edit($buyer, $id)
+    public function edit($id)
     {
-        $hangtag = Hangtag::where('buyer', $buyer)->findOrFail($id);
+        $hangtag = Hangtag::findOrFail($id);
         return response()->json($hangtag);
     }
 
-    public function destroy($buyer, $id)
+    public function destroy($id)
     {
-        Hangtag::where('buyer', $buyer)->findOrFail($id)->delete();
+        Hangtag::findOrFail($id)->delete();
         return response()->json(['success' => 'Hangtag deleted successfully.']);
     }
 
-    public function scanLogs($buyer, $id)
+    public function scanLogs($id)
     {
-        $hangtag = Hangtag::where('buyer', $buyer)->findOrFail($id);
+        $hangtag = Hangtag::findOrFail($id);
 
         $logs = HangtagLogs::where('barcode', $hangtag->barcode)
+            ->with('user')
             ->orderBy('created_at', 'asc')
             ->get()
             ->map(function ($log, $index) {
                 return [
                     'no'         => $index + 1,
                     'created_at' => $log->created_at->format('Y-m-d H:i:s'),
+                    'user_name'  => $log->user ? $log->user->name : 'Unknown',
                 ];
             })
             ->values();

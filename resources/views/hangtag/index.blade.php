@@ -18,9 +18,9 @@
 
                     <!-- Page Heading -->
                     <div class="d-sm-flex align-items-center justify-content-between mb-4">
-                        <h1 class="h3 mb-0 text-gray-800">Hangtag List - {{ $buyer }}</h1>
+                        <h1 class="h3 mb-0 text-gray-800">Hangtag List</h1>
                         <div>
-                            <a href="{{ route('hangtag.scanner.index', $buyer) }}"
+                            <a href="{{ route('hangtag.scanner.index') }}"
                                 class="d-none d-sm-inline-block btn btn-sm btn-info shadow-sm">
                                 <i class="fas fa-barcode fa-sm text-white-50"></i> Scanner
                             </a>
@@ -151,7 +151,7 @@
             <!-- Import Modal -->
             <div class="modal fade" id="importModal" tabindex="-1" aria-hidden="true">
                 <div class="modal-dialog">
-                    <form id="importForm" action="{{ route('hangtag.import', $buyer) }}" method="POST"
+                    <form id="importForm" action="{{ route('hangtag.import') }}" method="POST"
                         enctype="multipart/form-data">
                         @csrf
                         <div class="modal-content">
@@ -287,7 +287,7 @@
             const table = $('.data-table').DataTable({
                 processing: true,
                 serverSide: true,
-                ajax: "{{ route('hangtag.index', $buyer) }}",
+                ajax: "{{ route('hangtag.index') }}",
                 columns: [
                     { data: 'DT_RowIndex', name: 'DT_RowIndex', orderable: false, searchable: false },
                     { data: 'barcode', name: 'barcode' },
@@ -314,7 +314,7 @@
             // --- Show Edit Modal ---
             $('body').on('click', '.editHangtag', function () {
                 const Hangtag_id = $(this).data('id');
-                const editUrl = "{{ route('hangtag.edit', ['buyer' => $buyer, 'id' => ':id']) }}".replace(':id', Hangtag_id);
+                const editUrl = "{{ route('hangtag.edit', ['id' => ':id']) }}".replace(':id', Hangtag_id);
                 $.get(editUrl, function (data) {
                     $('#modelHeading').html("Edit Hangtag");
                     $('#saveBtn').val("edit-Hangtag").html('Save changes');
@@ -344,7 +344,7 @@
 
                 $.ajax({
                     data: formData,
-                    url: "{{ route('hangtag.store', $buyer) }}",
+                    url: "{{ route('hangtag.store') }}",
                     type: "POST",
                     processData: false,
                     contentType: false,
@@ -397,7 +397,7 @@
 
                         $.ajax({
                             type: "POST",
-                            url: "{{ route('hangtag.destroy', ['buyer' => $buyer, 'id' => ':id']) }}".replace(':id', Hangtag_id),
+                            url: "{{ route('hangtag.destroy', ['id' => ':id']) }}".replace(':id', Hangtag_id),
                             data: formData,
                             processData: false,
                             contentType: false,
@@ -464,7 +464,7 @@
                 $('#detail-sessions').html('<p class="text-center text-muted py-3"><i class="fas fa-spinner fa-spin"></i> Loading...</p>');
                 $('#detailScanModal').modal('show');
 
-                const scanLogUrl = "{{ route('hangtag.scanLogs', ['buyer' => $buyer, 'id' => ':id']) }}".replace(':id', Hangtag_id);
+                const scanLogUrl = "{{ route('hangtag.scanLogs', ['id' => ':id']) }}".replace(':id', Hangtag_id);
 
                 $.get(scanLogUrl, function (data) {
                     $('#detail-buyer').text(data.buyer || '-');
@@ -486,10 +486,10 @@
 
                     let html = '<div class="table-responsive" style="max-height:300px; overflow-y:auto;">';
                     html += '  <table class="table table-sm table-bordered table-striped mb-0">';
-                    html += '    <thead class="thead-light"><tr><th width="60">No</th><th>Waktu Scan</th></tr></thead>';
+                    html += '    <thead class="thead-light"><tr><th width="60">No</th><th>Waktu Scan</th><th>Scanned By</th></tr></thead>';
                     html += '    <tbody>';
                     data.logs.forEach(function (log) {
-                        html += '<tr><td>' + log.no + '</td><td>' + log.created_at + '</td></tr>';
+                        html += '<tr><td>' + log.no + '</td><td>' + log.created_at + '</td><td>' + log.user_name + '</td></tr>';
                     });
                     html += '    </tbody>';
                     html += '  </table>';

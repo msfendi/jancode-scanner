@@ -55,7 +55,7 @@
         </a>
         <div id="collapseHangtag" class="collapse {{ request()->is('hangtag*') ? 'show' : '' }}" aria-labelledby="headingHangtag" data-parent="#accordionSidebar">
             <div class="bg-white py-2 collapse-inner rounded">
-                <a class="collapse-item {{ request()->routeIs('hangtag.home') ? 'active' : '' }}" href="{{ route('hangtag.home') }}">Data Hangtag</a>
+                <a class="collapse-item {{ request()->routeIs('hangtag.index') ? 'active' : '' }}" href="{{ route('hangtag.index') }}">Data Hangtag</a>
             </div>
         </div>
     </li>

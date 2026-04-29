@@ -22,6 +22,7 @@ class HangtagScanHistorySheet implements FromCollection, WithHeadings, WithMappi
     public function collection()
     {
         return HangtagLogs::where('barcode', $this->hangtag->barcode)
+            ->with('user')
             ->orderBy('created_at', 'asc')
             ->get();
     }
@@ -35,7 +36,8 @@ class HangtagScanHistorySheet implements FromCollection, WithHeadings, WithMappi
             'Country',
             'Size',
             'Buyer',
-            'Scan Time'
+            'Scan Time',
+            'Scanned By'
         ];
     }
 
@@ -50,7 +52,8 @@ class HangtagScanHistorySheet implements FromCollection, WithHeadings, WithMappi
             $this->hangtag->country,
             $this->hangtag->size,
             $this->hangtag->buyer,
-            $log->created_at->format('Y-m-d H:i:s')
+            $log->created_at->format('Y-m-d H:i:s'),
+            $log->user ? $log->user->name : 'Unknown'
         ];
     }
 

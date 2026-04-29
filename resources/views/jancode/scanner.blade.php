@@ -36,12 +36,15 @@
                                     <label>Jancode :</label>
                                     <div class="input-group">
                                         <input class="form-control form-control-lg" type="text" id="jancode"
-                                            name="jancode" autocomplete="off" placeholder="Scan atau ketik jancode...">
-                                        {{-- <div class="input-group-append">
-                                            <button class="btn btn-warning" id="btn-void" type="button">
+                                            name="jancode" autocomplete="off" placeholder="Scan atau ketik jancode..." maxlength="">
+                                        <div class="input-group-append">
+                                            {{-- <button class="btn btn-warning" id="btn-void" type="button">
                                                 <i class="fas fa-undo fa-sm mr-1"></i> Void Last
+                                            </button> --}}
+                                            <button class="btn btn-danger" id="btn-reset" type="button">
+                                                <i class="fas fa-sync-alt fa-sm mr-1"></i> Reset Scan
                                             </button>
-                                        </div> --}}
+                                        </div>
                                     </div>
                                     <small class="form-text text-muted">
                                         <i class="fas fa-info-circle"></i>
@@ -235,7 +238,17 @@
                     },
                     error: function (xhr) {
                         const data = xhr.responseJSON;
-                        if (data && data.error === 'over') {
+                        if (data && data.error === 'locked') {
+                            // Revert to locked barcode to show correct info
+                            currentJancode = data.locked_barcode;
+                            updateCountersFromError(data);
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Gagal!',
+                                text: data.message,
+                                confirmButtonText: 'OK'
+                            });
+                        } else if (data && data.error === 'over') {
                             updateCountersFromError(data);
                             Swal.fire({
                                 icon: 'warning',
@@ -300,6 +313,14 @@
                 $('#count-scanned').text(scanned);
                 $('#count-total').text(total);
                 $('#count-balance').text(balance);
+
+                if (data.description) {
+                    $('#info-box').show();
+                    $('#info-desc').text(data.description);
+                    $('#info-size').text(data.size);
+                    $('#info-color').text(data.color);
+                    $('#info-jancode').text(data.locked_barcode || currentJancode);
+                }
 
                 updateBalanceStyle(balance, true);
             }
@@ -391,6 +412,41 @@
                             },
                             complete: function () {
                                 $input.focus();
+                            }
+                        });
+                    } else {
+                        $input.focus();
+                    }
+                });
+            });
+
+            // ── Reset Lock ─────────────────────────────────────────────
+            $('#btn-reset').on('click', function () {
+                Swal.fire({
+                    title: 'Reset Scan?',
+                    text: 'Sesi scan saat ini akan dibatalkan, Anda dapat scan jancode lain.',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#e74a3b',
+                    cancelButtonColor: '#858796',
+                    confirmButtonText: 'Ya, Reset!'
+                }).then(function (result) {
+                    if (result.isConfirmed) {
+                        $.ajax({
+                            url: "{{ route('scanner.reset') }}",
+                            type: 'POST',
+                            success: function () {
+                                currentJancode = null;
+                                resetCounters();
+                                $('#info-box').hide();
+                                $('#counter-cards').hide();
+                                Swal.fire('Direset!', 'Sesi scan berhasil direset.', 'success');
+                            },
+                            error: function () {
+                                Swal.fire('Error!', 'Gagal mereset sesi.', 'error');
+                            },
+                            complete: function () {
+                                $input.val('').focus();
                             }
                         });
                     } else {

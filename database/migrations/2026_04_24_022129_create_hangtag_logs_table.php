@@ -12,8 +12,8 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('hangtag_logs', function (Blueprint $table) {
-            $table->id();
             $table->string('barcode');
+            $table->unsignedBigInteger('user_id')->nullable();
             $table->timestamps();
         });
     }

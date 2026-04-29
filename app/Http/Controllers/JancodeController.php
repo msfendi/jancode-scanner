@@ -57,12 +57,14 @@ class JancodeController extends Controller
         $jancode = Jancode::findOrFail($id);
 
         $logs = JancodeLogs::where('jancode', $jancode->jancode)
+                    ->with('user')
                     ->orderBy('created_at', 'asc')
                     ->get()
                     ->map(function ($log, $index) {
                         return [
                             'no'         => $index + 1,
                             'created_at' => $log->created_at->format('Y-m-d H:i:s'),
+                            'user_name'  => $log->user ? $log->user->name : 'Unknown',
                         ];
                     })
                     ->values();

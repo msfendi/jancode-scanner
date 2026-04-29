@@ -12,8 +12,8 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('jancode_logs', function (Blueprint $table) {
-            $table->id();
             $table->string('jancode');
+            $table->unsignedBigInteger('user_id')->nullable();
             $table->timestamps();
         });
     }
