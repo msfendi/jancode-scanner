@@ -73,6 +73,8 @@ Route::group(['middleware' => 'auth'], function () {
         Route::post('/scan', [JancodeScanController::class, 'scan'])->name('scan')->middleware(['auth', 'role:Admin']);
         Route::delete('/void', [JancodeScanController::class, 'voidLast'])->name('void')->middleware(['auth', 'role:Admin']);
         Route::post('/reset', [JancodeScanController::class, 'resetLock'])->name('reset')->middleware(['auth', 'role:Admin']);
+        Route::post('/submit', [JancodeScanController::class, 'submit'])->name('submit')->middleware(['auth', 'role:Admin']);
+        Route::delete('/rollback', [JancodeScanController::class, 'rollback'])->name('rollback')->middleware(['auth', 'role:Admin']);
     });
 
     // Hangtag
@@ -83,6 +85,8 @@ Route::group(['middleware' => 'auth'], function () {
         Route::post('/scanner/scan', [\App\Http\Controllers\HangtagScanController::class, 'scan'])->name('scanner.scan')->middleware(['auth', 'role:Admin']);
         Route::delete('/scanner/void', [\App\Http\Controllers\HangtagScanController::class, 'voidLast'])->name('scanner.void')->middleware(['auth', 'role:Admin']);
         Route::post('/scanner/reset', [\App\Http\Controllers\HangtagScanController::class, 'resetLock'])->name('scanner.reset')->middleware(['auth', 'role:Admin']);
+        Route::post('/scanner/submit', [\App\Http\Controllers\HangtagScanController::class, 'submit'])->name('scanner.submit')->middleware(['auth', 'role:Admin']);
+        Route::delete('/scanner/rollback', [\App\Http\Controllers\HangtagScanController::class, 'rollback'])->name('scanner.rollback')->middleware(['auth', 'role:Admin']);
 
         Route::get('/', [\App\Http\Controllers\HangtagController::class, 'index'])->name('index')->middleware(['auth', 'role:Admin']);
         Route::post('/', [\App\Http\Controllers\HangtagController::class, 'store'])->name('store')->middleware(['auth', 'role:Admin']);

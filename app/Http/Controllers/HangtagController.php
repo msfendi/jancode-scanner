@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\HangtagSheet\HangtagScanLogsExport;
 use App\Imports\HangtagsImport;
 use App\Models\Hangtag;
 use App\Models\HangtagLogs;
@@ -56,7 +57,7 @@ class HangtagController extends Controller
 
         $filename = 'hangtag_scan_log_' . $hangtag->barcode . '_' . now()->format('Ymd_His') . '.xlsx';
 
-        return Excel::download(new \App\Exports\HangtagSheet\HangtagScanLogsExport($hangtag), $filename);
+        return Excel::download(new HangtagScanLogsExport($hangtag), $filename);
     }
 
     public function store(Request $request)

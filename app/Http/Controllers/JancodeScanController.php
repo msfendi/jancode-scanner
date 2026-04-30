@@ -32,10 +32,12 @@ class JancodeScanController extends Controller
         // Check if there's a lock and we're trying to scan a different barcode
         if ($lockedBarcode && $barcode !== $lockedBarcode) {
             $lockedJancode = Jancode::where('jancode', $lockedBarcode)->first();
-            $lockedScannedCount = JancodeLogs::where('jancode', $lockedBarcode)->count();
+            $lockedScannedCount = JancodeLogs::where('jancode', $lockedBarcode)->where('is_submitted', 'true')->count();
+            $lockedUnsubmittedCount = JancodeLogs::where('jancode', $lockedBarcode)->where('user_id', auth()->id())->where('is_submitted', 'false')->count();
+            $lockedTotalAll = JancodeLogs::where('jancode', $lockedBarcode)->count();
 
             // Auto-unlock if the locked barcode is actually already completed
-            if ($lockedJancode && $lockedScannedCount >= $lockedJancode->qty) {
+            if ($lockedJancode && $lockedTotalAll >= $lockedJancode->qty) {
                 session()->forget('locked_jancode_barcode');
                 $lockedBarcode = null;
             } else {
@@ -44,6 +46,8 @@ class JancodeScanController extends Controller
                     'error' => 'locked',
                     'message' => 'Jancode berbeda dengan scan sebelumnya. Selesaikan atau reset scan terlebih dahulu.',
                     'scanned' => $lockedScannedCount,
+                    'unsubmitted' => $lockedUnsubmittedCount,
+                    'total_all' => $lockedTotalAll,
                     'qty' => $lockedJancode ? $lockedJancode->qty : 0,
                     'description' => $lockedJancode ? $lockedJancode->description : null,
                     'size' => $lockedJancode ? $lockedJancode->size : null,
@@ -68,16 +72,22 @@ class JancodeScanController extends Controller
             }
 
             // Cek jika sudah over qty
-            $scanned = JancodeLogs::where('jancode', $barcode)->count();
+            $totalAllCount = JancodeLogs::where('jancode', $barcode)->count();
 
-            if ($scanned >= $master->qty) {
+            if ($totalAllCount >= $master->qty) {
                 DB::rollBack();
                 session()->forget('locked_jancode_barcode');
+
+                $scannedCount = JancodeLogs::where('jancode', $barcode)->where('is_submitted', 'true')->count();
+                $unsubmittedCount = JancodeLogs::where('jancode', $barcode)->where('user_id', auth()->id())->where('is_submitted', 'false')->count();
+
                 return response()->json([
                     'success' => false,
                     'error'   => 'over',
                     'message' => 'Qty sudah terpenuhi, tidak bisa scan lagi',
-                    'scanned' => $scanned,
+                    'scanned' => $scannedCount,
+                    'unsubmitted' => $unsubmittedCount,
+                    'total_all' => $totalAllCount,
                     'qty'     => $master->qty,
                 ], 422);
             }
@@ -88,11 +98,15 @@ class JancodeScanController extends Controller
 
             JancodeLogs::create([
                 'jancode' => $barcode,
-                'user_id' => auth()->id()
+                'user_id' => auth()->id(),
+                'is_submitted' => 'false'
             ]);
 
             DB::commit();
-            $newCount = $scanned + 1;
+
+            $scannedCount = JancodeLogs::where('jancode', $barcode)->where('is_submitted', 'true')->count();
+            $unsubmittedCount = JancodeLogs::where('jancode', $barcode)->where('user_id', auth()->id())->where('is_submitted', 'false')->count();
+            $totalAllCount++;
 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -103,15 +117,17 @@ class JancodeScanController extends Controller
             ], 500);
         }
 
-        if ($newCount >= $master->qty) {
+        if ($totalAllCount >= $master->qty) {
             session()->forget('locked_jancode_barcode');
         }
 
         return response()->json([
             'success'     => true,
-            'scanned'     => $newCount,
+            'scanned'     => $scannedCount,
+            'unsubmitted' => $unsubmittedCount,
+            'total_all'   => $totalAllCount,
             'qty'         => $master->qty,
-            'is_complete' => $newCount >= $master->qty,
+            'is_complete' => $totalAllCount >= $master->qty,
             'description' => $master->description,
             'size'        => $master->size,
             'color'       => $master->color,
@@ -123,7 +139,7 @@ class JancodeScanController extends Controller
     {
         $barcode = $request->jancode;
         if (!$barcode) {
-            return response()->json(['scanned' => 0, 'qty' => 0]);
+            return response()->json(['scanned' => 0, 'unsubmitted' => 0, 'total_all' => 0, 'qty' => 0]);
         }
 
         $master = Jancode::where('jancode', $barcode)
@@ -134,16 +150,73 @@ class JancodeScanController extends Controller
             return response()->json(['error' => 'not_found'], 404);
         }
 
-        $scanned = JancodeLogs::where('jancode', $barcode)->count();
+        $scannedCount = JancodeLogs::where('jancode', $barcode)->where('is_submitted', 'true')->count();
+        $unsubmittedCount = JancodeLogs::where('jancode', $barcode)->where('user_id', auth()->id())->where('is_submitted', 'false')->count();
+        $totalAllCount = JancodeLogs::where('jancode', $barcode)->count();
 
         return response()->json([
-            'scanned'     => $scanned,
+            'scanned'     => $scannedCount,
+            'unsubmitted' => $unsubmittedCount,
+            'total_all'   => $totalAllCount,
             'qty'         => $master->qty,
-            'is_complete' => $scanned >= $master->qty,
+            'is_complete' => $totalAllCount >= $master->qty,
             'description' => $master->description,
             'size'        => $master->size,
             'color'       => $master->color,
         ]);
+    }
+
+    public function submit(Request $request)
+    {
+        $barcode = $request->input('jancode');
+        if (!$barcode) {
+            return response()->json(['success' => false, 'message' => 'Jancode tidak boleh kosong'], 400);
+        }
+
+        try {
+            DB::beginTransaction();
+
+            $master = Jancode::where('jancode', $barcode)->where('void', 'false')->lockForUpdate()->first();
+            if (!$master) {
+                DB::rollBack();
+                return response()->json(['success' => false, 'message' => 'Jancode tidak ditemukan'], 404);
+            }
+
+            JancodeLogs::where('jancode', $barcode)
+                ->where('user_id', auth()->id())
+                ->where('is_submitted', 'false')
+                ->update(['is_submitted' => 'true']);
+
+            $scannedCount = JancodeLogs::where('jancode', $barcode)->where('is_submitted', 'true')->count();
+            $unsubmittedCount = JancodeLogs::where('jancode', $barcode)->where('user_id', auth()->id())->where('is_submitted', 'false')->count();
+            $totalAllCount = JancodeLogs::where('jancode', $barcode)->count();
+
+            if ($totalAllCount >= $master->qty) {
+                session()->forget('locked_jancode_barcode');
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'scanned' => $scannedCount,
+                'unsubmitted' => $unsubmittedCount,
+                'total_all' => $totalAllCount,
+                'qty' => $master->qty,
+                'description' => $master->description,
+                'size' => $master->size,
+                'color' => $master->color,
+                'is_complete' => ($totalAllCount >= $master->qty)
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Terjadi kesalahan sistem saat submit',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 
     // DELETE — void scan terakhir
@@ -157,6 +230,8 @@ class JancodeScanController extends Controller
             $master = Jancode::where('jancode', $barcode)->lockForUpdate()->first();
             
             $last = JancodeLogs::where('jancode', $barcode)
+                               ->where('user_id', auth()->id())
+                               ->where('is_submitted', 'false')
                                ->orderBy('created_at', 'desc')
                                ->first();
 
@@ -172,7 +247,7 @@ class JancodeScanController extends Controller
             DB::rollBack();
             return response()->json([
                 'success' => false,
-                'error' => 'Tidak ada scan yang bisa di-void',
+                'error' => 'Tidak ada scan sementara yang bisa di-void',
             ], 404);
             
         } catch (\Exception $e) {
@@ -180,6 +255,47 @@ class JancodeScanController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Terjadi kesalahan sistem saat membatalkan scan',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+    
+    public function rollback(Request $request)
+    {
+        $barcode = $request->input('jancode');
+        if (!$barcode) {
+             return response()->json(['success' => false, 'message' => 'Jancode tidak boleh kosong'], 400);
+        }
+        
+        try {
+            DB::beginTransaction();
+            
+            $master = Jancode::where('jancode', $barcode)->lockForUpdate()->first();
+            
+            $deletedRows = JancodeLogs::where('jancode', $barcode)
+                               ->where('user_id', auth()->id())
+                               ->where('is_submitted', 'false')
+                               ->delete();
+
+            if ($deletedRows > 0) {
+                DB::commit();
+                return response()->json([
+                    'success' => true,
+                    'message' => "Berhasil menghapus $deletedRows data scan sementara.",
+                ]);
+            }
+            
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'error' => 'Tidak ada scan sementara yang bisa di-rollback',
+            ], 404);
+            
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Terjadi kesalahan sistem saat rollback scan',
                 'error' => $e->getMessage()
             ], 500);
         }

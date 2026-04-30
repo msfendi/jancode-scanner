@@ -18,23 +18,27 @@ class HangtagScanController extends Controller
     {
         $barcode = $request->barcode;
         if (!$barcode) {
-            return response()->json(['scanned' => 0, 'qty' => 0]);
+            return response()->json(['scanned' => 0, 'unsubmitted' => 0, 'total_all' => 0, 'qty' => 0]);
         }
 
         $hangtag = Hangtag::where('barcode', $barcode)->first();
         if (!$hangtag) {
-            return response()->json(['scanned' => 0, 'qty' => 0]);
+            return response()->json(['scanned' => 0, 'unsubmitted' => 0, 'total_all' => 0, 'qty' => 0]);
         }
 
-        $scannedCount = HangtagLogs::where('barcode', $barcode)->count();
+        $scannedCount = HangtagLogs::where('barcode', $barcode)->where('is_submitted', 'true')->count();
+        $unsubmittedCount = HangtagLogs::where('barcode', $barcode)->where('user_id', auth()->id())->where('is_submitted', 'false')->count();
+        $totalAllCount = HangtagLogs::where('barcode', $barcode)->count();
 
         return response()->json([
             'scanned'     => $scannedCount,
+            'unsubmitted' => $unsubmittedCount,
+            'total_all'   => $totalAllCount,
             'qty'         => $hangtag->qty,
             'buyer'       => $hangtag->buyer,
             'size'        => $hangtag->size,
             'color'       => $hangtag->color,
-            'is_complete' => ($scannedCount >= $hangtag->qty)
+            'is_complete' => ($totalAllCount >= $hangtag->qty)
         ]);
     }
 
@@ -53,10 +57,12 @@ class HangtagScanController extends Controller
         // Check if there's a lock and we're trying to scan a different barcode
         if ($lockedBarcode && $barcode !== $lockedBarcode) {
             $lockedHangtag = Hangtag::where('barcode', $lockedBarcode)->first();
-            $lockedScannedCount = HangtagLogs::where('barcode', $lockedBarcode)->count();
+            $lockedScannedCount = HangtagLogs::where('barcode', $lockedBarcode)->where('is_submitted', 'true')->count();
+            $lockedUnsubmittedCount = HangtagLogs::where('barcode', $lockedBarcode)->where('user_id', auth()->id())->where('is_submitted', 'false')->count();
+            $lockedTotalAll = HangtagLogs::where('barcode', $lockedBarcode)->count();
 
             // Auto-unlock if the locked barcode is actually already completed
-            if ($lockedHangtag && $lockedScannedCount >= $lockedHangtag->qty) {
+            if ($lockedHangtag && $lockedTotalAll >= $lockedHangtag->qty) {
                 session()->forget('locked_hangtag_barcode');
                 $lockedBarcode = null;
             } else {
@@ -65,6 +71,8 @@ class HangtagScanController extends Controller
                     'error' => 'locked',
                     'message' => 'Barcode berbeda dengan scan sebelumnya. Selesaikan atau reset scan terlebih dahulu.',
                     'scanned' => $lockedScannedCount,
+                    'unsubmitted' => $lockedUnsubmittedCount,
+                    'total_all' => $lockedTotalAll,
                     'qty' => $lockedHangtag ? $lockedHangtag->qty : 0,
                     'buyer' => $lockedHangtag ? $lockedHangtag->buyer : null,
                     'size' => $lockedHangtag ? $lockedHangtag->size : null,
@@ -90,16 +98,22 @@ class HangtagScanController extends Controller
             }
 
             // Hitung aktual secara real-time
-            $scannedCount = HangtagLogs::where('barcode', $barcode)->count();
-            if ($scannedCount >= $hangtag->qty) {
+            $totalAllCount = HangtagLogs::where('barcode', $barcode)->count();
+            if ($totalAllCount >= $hangtag->qty) {
                 DB::rollBack();
                 // Ensure lock is cleared if it's already full
                 session()->forget('locked_hangtag_barcode');
+
+                $scannedCount = HangtagLogs::where('barcode', $barcode)->where('is_submitted', 'true')->count();
+                $unsubmittedCount = HangtagLogs::where('barcode', $barcode)->where('user_id', auth()->id())->where('is_submitted', 'false')->count();
+
                 return response()->json([
                     'success' => false,
                     'error' => 'over',
                     'message' => 'Qty sudah terpenuhi, tidak bisa scan lagi',
                     'scanned' => $scannedCount,
+                    'unsubmitted' => $unsubmittedCount,
+                    'total_all' => $totalAllCount,
                     'qty' => $hangtag->qty,
                 ], 422);
             }
@@ -112,11 +126,15 @@ class HangtagScanController extends Controller
             // Insert new log atomicaly
             HangtagLogs::create([
                 'barcode' => $barcode,
-                'user_id' => auth()->id()
+                'user_id' => auth()->id(),
+                'is_submitted' => 'false'
             ]);
 
             DB::commit();
-            $scannedCount++;
+            
+            $scannedCount = HangtagLogs::where('barcode', $barcode)->where('is_submitted', 'true')->count();
+            $unsubmittedCount = HangtagLogs::where('barcode', $barcode)->where('user_id', auth()->id())->where('is_submitted', 'false')->count();
+            $totalAllCount = HangtagLogs::where('barcode', $barcode)->count();
 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -128,19 +146,75 @@ class HangtagScanController extends Controller
         }
 
         // Unlock if complete
-        if ($scannedCount >= $hangtag->qty) {
+        if ($totalAllCount >= $hangtag->qty) {
             session()->forget('locked_hangtag_barcode');
         }
 
         return response()->json([
             'success'     => true,
             'scanned'     => $scannedCount,
+            'unsubmitted' => $unsubmittedCount,
+            'total_all'   => $totalAllCount,
             'qty'         => $hangtag->qty,
             'buyer'       => $hangtag->buyer,
             'size'        => $hangtag->size,
             'color'       => $hangtag->color,
-            'is_complete' => ($scannedCount >= $hangtag->qty)
+            'is_complete' => ($totalAllCount >= $hangtag->qty)
         ]);
+    }
+    
+    public function submit(Request $request)
+    {
+        $barcode = $request->input('barcode');
+        if (!$barcode) {
+            return response()->json(['success' => false, 'message' => 'Barcode tidak boleh kosong'], 400);
+        }
+
+        try {
+            DB::beginTransaction();
+
+            $hangtag = Hangtag::where('barcode', $barcode)->lockForUpdate()->first();
+            if (!$hangtag) {
+                DB::rollBack();
+                return response()->json(['success' => false, 'message' => 'Hangtag tidak ditemukan'], 404);
+            }
+
+            // Update user's unsubmitted scans to submitted
+            HangtagLogs::where('barcode', $barcode)
+                ->where('user_id', auth()->id())
+                ->where('is_submitted', 'false')
+                ->update(['is_submitted' => 'true']);
+
+            $scannedCount = HangtagLogs::where('barcode', $barcode)->where('is_submitted', 'true')->count();
+            $unsubmittedCount = HangtagLogs::where('barcode', $barcode)->where('user_id', auth()->id())->where('is_submitted', 'false')->count();
+            $totalAllCount = HangtagLogs::where('barcode', $barcode)->count();
+
+            if ($totalAllCount >= $hangtag->qty) {
+                session()->forget('locked_hangtag_barcode');
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'scanned' => $scannedCount,
+                'unsubmitted' => $unsubmittedCount,
+                'total_all' => $totalAllCount,
+                'qty' => $hangtag->qty,
+                'buyer' => $hangtag->buyer,
+                'size' => $hangtag->size,
+                'color' => $hangtag->color,
+                'is_complete' => ($totalAllCount >= $hangtag->qty)
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Terjadi kesalahan sistem saat submit',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 
     public function voidLast(Request $request)
@@ -154,6 +228,8 @@ class HangtagScanController extends Controller
             $hangtag = Hangtag::where('barcode', $barcode)->lockForUpdate()->first();
             
             $lastLog = HangtagLogs::where('barcode', $barcode)
+                ->where('user_id', auth()->id())
+                ->where('is_submitted', 'false')
                 ->orderBy('created_at', 'desc')
                 ->first();
 
@@ -182,6 +258,47 @@ class HangtagScanController extends Controller
         }
     }
     
+    public function rollback(Request $request)
+    {
+        $barcode = $request->input('barcode');
+        if (!$barcode) {
+             return response()->json(['success' => false, 'message' => 'Barcode tidak boleh kosong'], 400);
+        }
+        
+        try {
+            DB::beginTransaction();
+            
+            $master = Hangtag::where('barcode', $barcode)->lockForUpdate()->first();
+            
+            $deletedRows = HangtagLogs::where('barcode', $barcode)
+                               ->where('user_id', auth()->id())
+                               ->where('is_submitted', 'false')
+                               ->delete();
+
+            if ($deletedRows > 0) {
+                DB::commit();
+                return response()->json([
+                    'success' => true,
+                    'message' => "Berhasil menghapus $deletedRows data scan sementara.",
+                ]);
+            }
+            
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'error' => 'Tidak ada scan sementara yang bisa di-rollback',
+            ], 404);
+            
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Terjadi kesalahan sistem saat rollback scan',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
     public function resetLock(Request $request)
     {
         session()->forget('locked_hangtag_barcode');

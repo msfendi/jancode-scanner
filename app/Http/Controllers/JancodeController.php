@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Exports\ScanLogsExport;
+use App\Exports\JancodeSheet\ScanLogsExport;
 use App\Models\Jancode;
 use App\Models\JancodeLogs;
 use App\Imports\JancodesImport;

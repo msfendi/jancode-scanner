@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Exports;
+namespace App\Exports\JancodeSheet;
 
 use App\Models\JancodeLogs;
 use Maatwebsite\Excel\Concerns\FromCollection;

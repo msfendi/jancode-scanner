@@ -14,6 +14,7 @@ return new class extends Migration
         Schema::create('hangtag_logs', function (Blueprint $table) {
             $table->string('barcode');
             $table->unsignedBigInteger('user_id')->nullable();
+            $table->string('is_submitted')->default('false');
             $table->timestamps();
         });
     }
