@@ -57,6 +57,8 @@ class JancodeScanController extends Controller
             }
         }
 
+        $count = $request->input('count', 1);
+
         try {
             DB::beginTransaction();
 
@@ -74,7 +76,7 @@ class JancodeScanController extends Controller
             // Cek jika sudah over qty
             $totalAllCount = JancodeLogs::where('jancode', $barcode)->count();
 
-            if ($totalAllCount >= $master->qty) {
+            if ($totalAllCount + $count > $master->qty) {
                 DB::rollBack();
                 session()->forget('locked_jancode_barcode');
 
@@ -84,7 +86,7 @@ class JancodeScanController extends Controller
                 return response()->json([
                     'success' => false,
                     'error'   => 'over',
-                    'message' => 'Qty sudah terpenuhi, tidak bisa scan lagi',
+                    'message' => 'Qty sudah terpenuhi, tidak bisa scan lebih dari sisa (' . ($master->qty - $totalAllCount) . ' tersisa)',
                     'scanned' => $scannedCount,
                     'unsubmitted' => $unsubmittedCount,
                     'total_all' => $totalAllCount,
@@ -96,17 +98,24 @@ class JancodeScanController extends Controller
                 session(['locked_jancode_barcode' => $barcode]);
             }
 
-            JancodeLogs::create([
-                'jancode' => $barcode,
-                'user_id' => auth()->id(),
-                'is_submitted' => 'false'
-            ]);
+            $logsToInsert = [];
+            $now = now();
+            for ($i = 0; $i < $count; $i++) {
+                $logsToInsert[] = [
+                    'jancode' => $barcode,
+                    'user_id' => auth()->id(),
+                    'is_submitted' => 'false',
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ];
+            }
+            JancodeLogs::insert($logsToInsert);
 
             DB::commit();
 
             $scannedCount = JancodeLogs::where('jancode', $barcode)->where('is_submitted', 'true')->count();
             $unsubmittedCount = JancodeLogs::where('jancode', $barcode)->where('user_id', auth()->id())->where('is_submitted', 'false')->count();
-            $totalAllCount++;
+            $totalAllCount += $count;
 
         } catch (\Exception $e) {
             DB::rollBack();

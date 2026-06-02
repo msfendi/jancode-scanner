@@ -82,6 +82,8 @@ class HangtagScanController extends Controller
             }
         }
 
+        $count = $request->input('count', 1);
+
         try {
             DB::beginTransaction();
 
@@ -99,7 +101,7 @@ class HangtagScanController extends Controller
 
             // Hitung aktual secara real-time
             $totalAllCount = HangtagLogs::where('barcode', $barcode)->count();
-            if ($totalAllCount >= $hangtag->qty) {
+            if ($totalAllCount + $count > $hangtag->qty) {
                 DB::rollBack();
                 // Ensure lock is cleared if it's already full
                 session()->forget('locked_hangtag_barcode');
@@ -110,7 +112,7 @@ class HangtagScanController extends Controller
                 return response()->json([
                     'success' => false,
                     'error' => 'over',
-                    'message' => 'Qty sudah terpenuhi, tidak bisa scan lagi',
+                    'message' => 'Qty sudah terpenuhi, tidak bisa scan lebih dari sisa (' . ($hangtag->qty - $totalAllCount) . ' tersisa)',
                     'scanned' => $scannedCount,
                     'unsubmitted' => $unsubmittedCount,
                     'total_all' => $totalAllCount,
@@ -124,17 +126,24 @@ class HangtagScanController extends Controller
             }
 
             // Insert new log atomicaly
-            HangtagLogs::create([
-                'barcode' => $barcode,
-                'user_id' => auth()->id(),
-                'is_submitted' => 'false'
-            ]);
+            $logsToInsert = [];
+            $now = now();
+            for ($i = 0; $i < $count; $i++) {
+                $logsToInsert[] = [
+                    'barcode' => $barcode,
+                    'user_id' => auth()->id(),
+                    'is_submitted' => 'false',
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ];
+            }
+            HangtagLogs::insert($logsToInsert);
 
             DB::commit();
             
             $scannedCount = HangtagLogs::where('barcode', $barcode)->where('is_submitted', 'true')->count();
             $unsubmittedCount = HangtagLogs::where('barcode', $barcode)->where('user_id', auth()->id())->where('is_submitted', 'false')->count();
-            $totalAllCount = HangtagLogs::where('barcode', $barcode)->count();
+            $totalAllCount += $count;
 
         } catch (\Exception $e) {
             DB::rollBack();

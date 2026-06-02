@@ -255,20 +255,27 @@
             function processQueue() {
                 if (isScanning || scanQueue.length === 0) return;
 
-                const jancode = scanQueue.shift();
+                // Ambil semua antrean scan sekaligus untuk mengurangi request AJAX
+                const batchCount = scanQueue.length;
+                const jancode = scanQueue[0];
+                scanQueue = []; // Kosongkan antrean
+                
                 isScanning = true;
 
                 // Track if this is a new jancode
                 if (jancode !== currentJancode) {
                     currentJancode = jancode;
                     resetCounters();
+                    // Instant feedback untuk scan pertama
+                    $('#count-unsubmitted').text(batchCount);
+                    $('#counter-cards').show();
                 }
 
                 $.ajax({
                     url: '/scanner/scan',
                     type: 'POST',
                     contentType: 'application/json',
-                    data: JSON.stringify({ jancode: jancode }),
+                    data: JSON.stringify({ jancode: jancode, count: batchCount }),
                     success: function (response) {
                         updateCounters(response);
 

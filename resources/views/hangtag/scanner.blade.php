@@ -254,20 +254,27 @@
             function processQueue() {
                 if (isScanning || scanQueue.length === 0) return;
 
-                const barcode = scanQueue.shift();
+                // Ambil semua antrean scan sekaligus untuk mengurangi request AJAX
+                const batchCount = scanQueue.length;
+                const barcode = scanQueue[0];
+                scanQueue = []; // Kosongkan antrean
+
                 isScanning = true;
 
                 // Track if this is a new barcode
                 if (barcode !== currentHangtag) {
                     currentHangtag = barcode;
                     resetCounters();
+                    // Instant feedback untuk scan pertama
+                    $('#count-unsubmitted').text(batchCount);
+                    $('#counter-cards').show();
                 }
 
                 $.ajax({
                     url: "{{ route('hangtag.scanner.scan') }}",
                     type: 'POST',
                     contentType: 'application/json',
-                    data: JSON.stringify({ barcode: barcode }),
+                    data: JSON.stringify({ barcode: barcode, count: batchCount }),
                     success: function (response) {
                         updateCounters(response);
 
