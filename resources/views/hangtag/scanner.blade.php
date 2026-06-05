@@ -196,9 +196,9 @@
 
             // ── Variables ──────────────────────────────────────────────
             let currentHangtag = null;
-            let isScanning = false;   
+            let isScanning = false;
             let bufferTimer = null;
-            const BUFFER_DELAY = 300;     
+            const BUFFER_DELAY = 300;
             let scanQueue = []; // Antrean scan
 
             // ── Auto Focus ─────────────────────────────────────────────
@@ -230,7 +230,7 @@
             function queueScan() {
                 const barcode = $input.val().trim();
                 if (!barcode) return;
-                
+
                 // Langsung kosongkan input agar scan berikutnya bisa masuk
                 $input.val('');
 
@@ -239,13 +239,13 @@
                     let scanned = parseInt($('#count-scanned').text()) || 0;
                     let unsubmitted = parseInt($('#count-unsubmitted').text()) || 0;
                     let total = parseInt($('#count-total').text()) || 0;
-                    
+
                     $('#count-unsubmitted').text(unsubmitted + 1);
                     let balance = total - (scanned + unsubmitted + 1);
                     $('#count-balance').text(balance);
                     updateBalanceStyle(balance, false);
                 }
-                
+
                 scanQueue.push(barcode);
                 processQueue();
             }

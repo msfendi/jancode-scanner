@@ -19,6 +19,7 @@ class HangtagController extends Controller
 
             // Pre-load scan counts
             $scanCounts = HangtagLogs::selectRaw('barcode, COUNT(*) as total')
+                ->where('is_submitted', 'true')
                 ->groupBy('barcode')
                 ->pluck('total', 'barcode');
 
