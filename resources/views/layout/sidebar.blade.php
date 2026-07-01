@@ -59,6 +59,19 @@
             </div>
         </div>
     </li>
+    
+    <li class="nav-item {{ request()->is('rfid*') ? 'active' : '' }}">
+        <a class="nav-link {{ request()->is('rfid*') ? '' : 'collapsed' }}" href="#" data-toggle="collapse" data-target="#collapseRFID"
+            aria-expanded="{{ request()->is('rfid*') ? 'true' : 'false' }}" aria-controls="collapseRFID">
+            <i class="fas fa-fw fa-barcode"></i>
+            <span>RFID</span>
+        </a>
+        <div id="collapseRFID" class="collapse {{ request()->is('rfid*') ? 'show' : '' }}" aria-labelledby="headingRFID" data-parent="#accordionSidebar">
+            <div class="bg-white py-2 collapse-inner rounded">
+                <a class="collapse-item {{ request()->routeIs('rfid.index') ? 'active' : '' }}" href="{{ route('rfid.index') }}">Data RFID</a>
+            </div>
+        </div>
+    </li>
     @endrole
 
 
