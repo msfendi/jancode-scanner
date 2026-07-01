@@ -95,6 +95,7 @@ Route::group(['middleware' => 'auth'], function () {
         Route::post('/import', [\App\Http\Controllers\HangtagController::class, 'import'])->name('import')->middleware(['auth', 'role:Admin']);
         Route::get('/{id}/scan-logs', [\App\Http\Controllers\HangtagController::class, 'scanLogs'])->name('scanLogs')->middleware(['auth', 'role:Admin']);
         Route::get('/{id}/export-scan-logs', [\App\Http\Controllers\HangtagController::class, 'exportScanLogs'])->name('exportScanLogs')->middleware(['auth', 'role:Admin']);
+        Route::get('/export-template', [\App\Http\Controllers\HangtagController::class, 'exportTemplate'])->name('exportTemplate')->middleware(['auth', 'role:Admin']);
     });
 });
 

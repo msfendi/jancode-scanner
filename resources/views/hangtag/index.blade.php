@@ -30,8 +30,12 @@
                             </a>
                             <button class="d-none d-sm-inline-block btn btn-sm btn-success shadow-sm"
                                 data-toggle="modal" data-target="#importModal">
-                                <i class="fas fa-file-excel fa-sm text-white-50"></i> Import Excel
+                                <i class="fas fa-file-import fa-sm text-white-50"></i> Import Excel
                             </button>
+                            <a href="{{ route('hangtag.exportTemplate') }}"
+                                class="d-none d-sm-inline-block btn btn-sm btn-secondary shadow-sm">
+                                <i class="fas fa-file-download fa-sm text-white-50"></i> Template Excel
+                            </a>
                         </div>
                     </div>
 
@@ -75,7 +79,8 @@
             <!-- Hangtag Modal -->
 
             {{-- add manually --}}
-            {{-- <div class="modal fade" id="ajaxModel" aria-hidden="true">
+            {{-- add manually --}}
+            <div class="modal fade" id="ajaxModel" aria-hidden="true">
                 <div class="modal-dialog">
                     <div class="modal-content">
                         <div class="modal-header">
@@ -123,10 +128,10 @@
                                     </div>
                                 </div>
                                 <div class="form-group">
-                                    <label class="col-sm-12 control-label">Description</label>
+                                    <label class="col-sm-12 control-label">Buyer</label>
                                     <div class="col-sm-12">
-                                        <input type="text" id="description" name="description" required
-                                            placeholder="Enter Description" class="form-control">
+                                        <input type="text" id="buyer" name="buyer" placeholder="Enter Buyer (Optional)"
+                                            class="form-control">
                                     </div>
                                 </div>
                                 <div class="form-group">
@@ -146,7 +151,7 @@
                         </div>
                     </div>
                 </div>
-            </div> --}}
+            </div>
 
             <!-- Import Modal -->
             <div class="modal fade" id="importModal" tabindex="-1" aria-hidden="true">
@@ -320,7 +325,7 @@
                     $('#saveBtn').val("edit-Hangtag").html('Save changes');
                     $('#ajaxModel').modal('show');
                     $('#Hangtag_id').val(data.id);
-                    $('#Hangtag').val(data.barcode);
+                    $('#barcode').val(data.barcode);
                     $('#size').val(data.size);
                     $('#qty').val(data.qty);
                     $('#country').val(data.country);

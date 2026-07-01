@@ -142,4 +142,10 @@ class HangtagController extends Controller
 
         return response()->json(['message' => 'Hangtags imported successfully!']);
     }
+
+    public function exportTemplate()
+    {
+        return Excel::download(new \App\Exports\HangtagSheet\HangtagTemplateExport, 'hangtag_template.xlsx');
+    }
 }
+

@@ -7,8 +7,8 @@ use Illuminate\Database\Eloquent\Model;
 class HangtagLogs extends Model
 {
     protected $table = 'hangtag_logs';
-    protected $primaryKey = null;
-    public $incrementing = false;
+    protected $primaryKey = 'id';
+    public $incrementing = true;
 
     protected $fillable = [
         'barcode',
