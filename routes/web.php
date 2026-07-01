@@ -7,7 +7,6 @@ use App\Http\Controllers\RegisterController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\RFIDController;
 
 /*
 |--------------------------------------------------------------------------
@@ -100,6 +99,3 @@ Route::group(['middleware' => 'auth'], function () {
     });
 });
 
-Route::get('/rfid', [RFIDController::class, 'index'])->name('rfid.index');
-Route::get('/rfid/data', [RFIDController::class, 'data'])->name('rfid.data');
-Route::post('/rfid/clear', [RFIDController::class, 'clear'])->name('rfid.clear');
