@@ -12,6 +12,7 @@ class JancodeLogs extends Model
 
     protected $fillable = [
         'jancode',
+        'jancode_id',
         'user_id',
     ];
 

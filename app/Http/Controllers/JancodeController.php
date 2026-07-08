@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\JancodeSheet\JancodeTemplateExport;
 use App\Exports\JancodeSheet\ScanLogsExport;
 use App\Models\Jancode;
 use App\Models\JancodeLogs;
 use App\Imports\JancodesImport;
+use App\Imports\JancodesNewFormatImport;
 use Illuminate\Http\Request;
 use Maatwebsite\Excel\Facades\Excel;
 use Yajra\DataTables\Facades\DataTables;
@@ -19,17 +21,18 @@ class JancodeController extends Controller
             $data = Jancode::latest()->get();
 
             // Pre-load scan counts in one query
-            $scanCounts = JancodeLogs::selectRaw('jancode, COUNT(*) as total')
-                ->groupBy('jancode')
-                ->pluck('total', 'jancode');
+            $scanCounts = JancodeLogs::selectRaw('jancode_id, COUNT(*) as total')
+                ->whereNotNull('jancode_id')
+                ->groupBy('jancode_id')
+                ->pluck('total', 'jancode_id');
 
             return Datatables::of($data)
                 ->addIndexColumn()
                 ->addColumn('scanned', function ($row) use ($scanCounts) {
-                    return $scanCounts[$row->jancode] ?? 0;
+                    return $scanCounts[$row->id] ?? 0;
                 })
                 ->addColumn('balance', function ($row) use ($scanCounts) {
-                    $scanned = $scanCounts[$row->jancode] ?? 0;
+                    $scanned = $scanCounts[$row->id] ?? 0;
                     $balance = $row->qty - $scanned;
                     if ($balance < 0) {
                         return '<span class="badge badge-danger">' . $balance . '</span>';
@@ -56,7 +59,7 @@ class JancodeController extends Controller
     {
         $jancode = Jancode::findOrFail($id);
 
-        $logs = JancodeLogs::where('jancode', $jancode->jancode)
+        $logs = JancodeLogs::where('jancode_id', $jancode->id)
                     ->with('user')
                     ->orderBy('created_at', 'asc')
                     ->get()
@@ -72,10 +75,10 @@ class JancodeController extends Controller
         $total = $logs->count();
 
         return response()->json([
-            'jancode'      => $jancode->jancode,
-            'description'  => $jancode->description,
-            'size'         => $jancode->size,
-            'color'        => $jancode->color,
+            'destination'  => $jancode->destination,
+            'buyer'        => $jancode->buyer,
+            'style'        => $jancode->style,
+            'cpo'          => $jancode->cpo,
             'qty'          => $jancode->qty,
             'total_scans'  => $total,
             'balance'      => $jancode->qty - $total,
@@ -98,9 +101,10 @@ class JancodeController extends Controller
             'jancode'     => 'required|string',
             'size'        => 'required|string',
             'qty'         => 'required|integer',
-            'country'     => 'required|string',
-            'color'       => 'required|string',
-            'description' => 'required|string',
+            'destination' => 'required|string',
+            'buyer'       => 'required|string',
+            'style'       => 'required|string',
+            'cpo'         => 'required|string',
             'void'        => 'sometimes|boolean'
         ]);
 
@@ -110,9 +114,10 @@ class JancodeController extends Controller
                 'jancode'     => $request->jancode,
                 'size'        => $request->size,
                 'qty'         => $request->qty,
-                'country'     => $request->country,
-                'color'       => $request->color,
-                'description' => $request->description,
+                'destination' => $request->destination,
+                'buyer'       => $request->buyer,
+                'style'       => $request->style,
+                'cpo'         => $request->cpo,
                 'void'        => $request->void ?? 0,
             ]
         );
@@ -141,5 +146,21 @@ class JancodeController extends Controller
         Excel::import(new JancodesImport, $request->file('file'));
 
         return response()->json(['message' => 'Jancodes imported successfully!']);
+    }
+
+    public function importNewFormat(Request $request)
+    {
+        $request->validate([
+            'file' => 'required|mimes:xlsx,xls,csv'
+        ]);
+
+        Excel::import(new JancodesNewFormatImport, $request->file('file'));
+
+        return response()->json(['message' => 'Jancodes (new format) imported successfully!']);
+    }
+
+    public function exportTemplate()
+    {
+        return Excel::download(new JancodeTemplateExport, 'jancode_template.xlsx');
     }
 }

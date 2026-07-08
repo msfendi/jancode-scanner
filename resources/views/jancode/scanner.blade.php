@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 @include('layout.header')
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/npm/@ttskch/select2-bootstrap4-theme@x.x.x/dist/select2-bootstrap4.min.css" rel="stylesheet" />
 
 <body id="page-top">
     <!-- Page Wrapper -->
@@ -31,29 +33,44 @@
                         <div class="card-body">
 
                             <div class="row">
+                                <!-- Target Selection -->
+                                <div class="col-lg-6 mb-3">
+                                    <label>Pilih Target (Jancode/Size) :</label>
+                                    <div class="input-group">
+                                        <select class="form-control" id="targetSelect" name="targetSelect">
+                                            <!-- Select2 options via AJAX -->
+                                        </select>
+                                        <div class="input-group-append">
+                                            <button class="btn btn-primary" id="btn-lock" type="button">
+                                                <i class="fas fa-lock fa-sm mr-1"></i> Kunci Target
+                                            </button>
+                                            <button class="btn btn-danger" id="btn-unlock" type="button" style="display:none;">
+                                                <i class="fas fa-unlock fa-sm mr-1"></i> Ganti
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <small class="form-text text-muted">Cari target yang ingin di-scan berdasarkan Jancode, Size, Color, atau Qty.</small>
+                                </div>
+
                                 <!-- Input -->
-                                <div class="col-lg-6">
-                                    <label>Jancode :</label>
+                                <div class="col-lg-6 mb-3">
+                                    <label>Scan Barcode Fisik :</label>
                                     <div class="input-group">
                                         <input class="form-control form-control-lg" type="text" id="jancode"
-                                            name="jancode" autocomplete="off" placeholder="Scan atau ketik jancode..."
-                                            maxlength="">
+                                            name="jancode" autocomplete="off" placeholder="Scan barcode disini..."
+                                            disabled>
                                         <div class="input-group-append">
-                                            <button class="btn btn-success" id="btn-submit" type="button">
+                                            <button class="btn btn-success" id="btn-submit" type="button" disabled>
                                                 <i class="fas fa-check fa-sm mr-1"></i> Submit
                                             </button>
-                                            <button class="btn btn-warning" id="btn-rollback" type="button">
+                                            <button class="btn btn-warning" id="btn-rollback" type="button" disabled>
                                                 <i class="fas fa-undo fa-sm mr-1"></i> Rollback
-                                            </button>
-                                            <button class="btn btn-danger" id="btn-reset" type="button">
-                                                <i class="fas fa-sync-alt fa-sm mr-1"></i> Unlock Barcode
                                             </button>
                                         </div>
                                     </div>
                                     <small class="form-text text-muted">
                                         <i class="fas fa-info-circle"></i>
-                                        Scanner otomatis submit setelah selesai scan.
-                                        <strong>Void Last</strong> untuk hapus scan terakhir.
+                                        Pilih target terlebih dahulu sebelum mulai scan.
                                     </small>
                                 </div>
 
@@ -182,11 +199,8 @@
 
         </div>
         <!-- End of Content Wrapper -->
-
-    </div>
-    <!-- End of Page Wrapper -->
-
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
     <script type="text/javascript">
         $(document).ready(function () {
@@ -196,22 +210,94 @@
             });
 
             // ── Variables ──────────────────────────────────────────────
-            let currentJancode = null;
+            let lockedTargetId = null;
+            let lockedTargetJancode = null;
             let isScanning = false;
             let bufferTimer = null;
             const BUFFER_DELAY = 200;
-            let scanQueue = []; // Antrean scan
+            let scanQueue = [];
 
-            // ── Auto Focus ─────────────────────────────────────────────
             const $input = $('#jancode');
-            $input.focus();
-            $input.on('blur', function () {
-                setTimeout(function () { $input.focus(); }, 200);
+            const $targetSelect = $('#targetSelect');
+            const $btnLock = $('#btn-lock');
+            const $btnUnlock = $('#btn-unlock');
+            const $btnSubmit = $('#btn-submit');
+            const $btnRollback = $('#btn-rollback');
+
+            // ── Select2 Init ───────────────────────────────────────────
+            $targetSelect.select2({
+                theme: 'bootstrap4',
+                placeholder: 'Cari jancode / ukuran...',
+                allowClear: true,
+                ajax: {
+                    url: '/scanner/search',
+                    dataType: 'json',
+                    delay: 250,
+                    data: function (params) {
+                        return { q: params.term };
+                    },
+                    processResults: function (data) {
+                        return { results: data };
+                    },
+                    cache: true
+                }
+            });
+
+            // ── Lock/Unlock Logic ──────────────────────────────────────
+            $btnLock.click(function() {
+                const data = $targetSelect.select2('data')[0];
+                if (!data || !data.id) {
+                    Swal.fire('Peringatan', 'Silakan pilih target terlebih dahulu', 'warning');
+                    return;
+                }
+
+                lockedTargetId = data.id;
+                lockedTargetJancode = data.jancode;
+
+                $targetSelect.prop('disabled', true);
+                $btnLock.hide();
+                $btnUnlock.show();
+
+                $input.prop('disabled', false).focus();
+                $btnSubmit.prop('disabled', false);
+                $btnRollback.prop('disabled', false);
+
+                $('#info-jancode').text(data.jancode || '-');
+                $('#info-size').text(data.size || '-');
+                
+                refreshCount();
+            });
+
+            $btnUnlock.click(function() {
+                Swal.fire({
+                    title: 'Ganti Target?',
+                    text: 'Pastikan scan sebelumnya sudah di-submit',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: 'Ya, Ganti',
+                    cancelButtonText: 'Batal'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        $.post('/scanner/reset', function() {
+                            lockedTargetId = null;
+                            lockedTargetJancode = null;
+                            $targetSelect.prop('disabled', false).val(null).trigger('change');
+                            $btnUnlock.hide();
+                            $btnLock.show();
+                            
+                            $input.prop('disabled', true).val('');
+                            $btnSubmit.prop('disabled', true);
+                            $btnRollback.prop('disabled', true);
+
+                            $('#info-box').hide();
+                            $('#counter-cards').hide();
+                        });
+                    }
+                });
             });
 
             // ── Input Handling ─────────────────────────────────────────
             $input.on('keydown', function (e) {
-                // Enter key — queue immediately
                 if (e.key === 'Enter' || e.keyCode === 13) {
                     e.preventDefault();
                     clearTimeout(bufferTimer);
@@ -232,19 +318,20 @@
                 const jancode = $input.val().trim();
                 if (!jancode) return;
 
-                // Langsung kosongkan input agar scan berikutnya bisa masuk
                 $input.val('');
 
-                // Optimistic UI untuk respon instan tanpa delay visual
-                if (currentJancode === jancode) {
+                if (jancode === lockedTargetJancode) {
                     let scanned = parseInt($('#count-scanned').text()) || 0;
                     let unsubmitted = parseInt($('#count-unsubmitted').text()) || 0;
                     let total = parseInt($('#count-total').text()) || 0;
                     
-                    $('#count-unsubmitted').text(unsubmitted + 1);
-                    let balance = total - (scanned + unsubmitted + 1);
-                    $('#count-balance').text(balance);
-                    updateBalanceStyle(balance, false);
+                    // Hanya lakukan optimistic UI jika total sudah diketahui dari server
+                    if (total > 0) {
+                        $('#count-unsubmitted').text(unsubmitted + 1);
+                        let balance = total - (scanned + unsubmitted + 1);
+                        $('#count-balance').text(balance);
+                        updateBalanceStyle(balance, false);
+                    }
                 }
 
                 scanQueue.push(jancode);
@@ -253,95 +340,76 @@
 
             // ── Process Queue ──────────────────────────────────────────
             function processQueue() {
-                if (isScanning || scanQueue.length === 0) return;
+                if (isScanning || scanQueue.length === 0 || !lockedTargetId) return;
 
-                // Ambil semua antrean scan sekaligus untuk mengurangi request AJAX
                 const batchCount = scanQueue.length;
                 const jancode = scanQueue[0];
-                scanQueue = []; // Kosongkan antrean
+                scanQueue = [];
                 
                 isScanning = true;
-
-                // Track if this is a new jancode
-                if (jancode !== currentJancode) {
-                    currentJancode = jancode;
-                    resetCounters();
-                    // Instant feedback untuk scan pertama
-                    $('#count-unsubmitted').text(batchCount);
-                    $('#counter-cards').show();
-                }
 
                 $.ajax({
                     url: '/scanner/scan',
                     type: 'POST',
                     contentType: 'application/json',
-                    data: JSON.stringify({ jancode: jancode, count: batchCount }),
+                    data: JSON.stringify({ 
+                        jancode: jancode, 
+                        jancode_id: lockedTargetId, 
+                        count: batchCount 
+                    }),
                     success: function (response) {
                         updateCounters(response);
 
                         if (response.is_complete) {
-                            scanQueue = []; // Hapus antrean tersisa karena limit sudah tercapai
-                            $input.removeAttr('maxlength');
+                            scanQueue = [];
                             Swal.fire({
                                 icon: 'success',
                                 title: 'Selesai!',
-                                text: 'Qty terpenuhi untuk jancode ' + jancode,
+                                text: 'Qty terpenuhi. Silakan klik tombol Submit untuk menyimpan data.',
                                 confirmButtonText: 'OK'
                             });
-                        } else {
-                            if (currentJancode) {
-                                $input.attr('maxlength', currentJancode.length);
-                            }
                         }
                     },
                     error: function (xhr) {
-                        scanQueue = []; // Bersihkan antrean jika ada error agar tidak diteruskan
-
+                        scanQueue = [];
                         const data = xhr.responseJSON;
-                        if (data && data.error === 'locked') {
-                            // Revert to locked barcode to show correct info
-                            currentJancode = data.locked_barcode;
-                            if (currentJancode) {
-                                $input.attr('maxlength', currentJancode.length);
-                            }
+                        // Tutup alert aktif dulu agar alert baru selalu bisa muncul
+                        Swal.close();
+                        if (data && data.error === 'over') {
                             updateCountersFromError(data);
-                            Swal.fire({
-                                icon: 'error',
-                                title: 'Gagal!',
-                                text: data.message,
-                                confirmButtonText: 'OK'
-                            });
-                        } else if (data && data.error === 'over') {
-                            $input.removeAttr('maxlength');
-                            updateCountersFromError(data);
-                            Swal.fire({
-                                icon: 'warning',
-                                title: 'Over Scan!',
-                                text: data.message,
-                                confirmButtonText: 'OK'
+                            Swal.fire('Over Scan!', data.message, 'warning').then(() => {
+                                if (lockedTargetId) $input.focus();
+                                processQueue();
                             });
                         } else if (data && data.error === 'not_found') {
-                            currentJancode = null;
-                            $input.removeAttr('maxlength');
+                            refreshCount();
                             Swal.fire({
                                 icon: 'error',
-                                title: 'Tidak Ditemukan!',
-                                text: data.message || 'Jancode tidak ditemukan',
+                                title: 'Tidak Cocok!',
+                                text: data.message || 'Barcode tidak sesuai target',
                                 confirmButtonText: 'OK'
+                            }).then(() => {
+                                if (lockedTargetId) $input.focus();
+                                processQueue();
                             });
                         } else {
+                            refreshCount();
                             Swal.fire({
                                 icon: 'error',
                                 title: 'Gagal!',
                                 text: data ? data.message : 'Terjadi kesalahan',
                                 confirmButtonText: 'OK'
+                            }).then(() => {
+                                if (lockedTargetId) $input.focus();
+                                processQueue();
                             });
                         }
                     },
                     complete: function () {
                         isScanning = false;
-                        $input.focus();
-                        processQueue(); // Lanjut ke antrean berikutnya jika ada
+                        // Focus hanya jika tidak ada SweetAlert aktif
+                        if (lockedTargetId && !Swal.isVisible()) $input.focus();
+                        processQueue();
                     }
                 });
             }
@@ -446,14 +514,14 @@
 
             // ── Void Last ──────────────────────────────────────────────
             $('#btn-void').on('click', function () {
-                if (!currentJancode) {
+                if (!lockedTargetId) {
                     Swal.fire({ icon: 'warning', title: 'Belum ada scan aktif!', confirmButtonText: 'OK' });
                     return;
                 }
 
                 Swal.fire({
                     title: 'Void scan terakhir?',
-                    text: 'Scan terakhir untuk ' + currentJancode + ' akan dihapus.',
+                    text: 'Scan terakhir untuk ' + lockedTargetJancode + ' akan dihapus.',
                     icon: 'warning',
                     showCancelButton: true,
                     confirmButtonColor: '#d33',
@@ -466,7 +534,7 @@
                             url: '/scanner/void',
                             type: 'DELETE',
                             contentType: 'application/json',
-                            data: JSON.stringify({ jancode: currentJancode }),
+                            data: JSON.stringify({ jancode_id: lockedTargetId }),
                             success: function (response) {
                                 // Re-fetch current count after void
                                 refreshCount();
@@ -534,7 +602,7 @@
 
             // ── Submit Scan ────────────────────────────────────────────
             $('#btn-submit').on('click', function () {
-                if (!currentJancode) {
+                if (!lockedTargetId) {
                     Swal.fire({ icon: 'warning', title: 'Belum ada scan aktif!', confirmButtonText: 'OK' });
                     return;
                 }
@@ -560,20 +628,26 @@
                             url: "{{ route('scanner.submit') }}",
                             type: 'POST',
                             contentType: 'application/json',
-                            data: JSON.stringify({ jancode: currentJancode }),
+                            data: JSON.stringify({ jancode_id: lockedTargetId }),
                             success: function (response) {
                                 updateCounters(response);
-                                if (response.is_complete) {
-                                    $input.removeAttr('maxlength');
-                                } else if (currentJancode) {
-                                    $input.attr('maxlength', currentJancode.length);
-                                }
                                 Swal.fire({
                                     icon: 'success',
                                     title: 'Berhasil!',
                                     text: 'Scan sementara berhasil disubmit.',
                                     timer: 1500,
                                     showConfirmButton: false
+                                }).then(() => {
+                                    if (response.is_complete) {
+                                        lockedTargetId = null;
+                                        lockedTargetJancode = null;
+                                        $targetSelect.prop('disabled', false).val(null).trigger('change');
+                                        $btnUnlock.hide();
+                                        $btnLock.show();
+                                        $input.prop('disabled', true).val('');
+                                        $('#info-box').hide();
+                                        $('#counter-cards').hide();
+                                    }
                                 });
                             },
                             error: function (xhr) {
@@ -595,12 +669,13 @@
                 });
             });
 
-            // ── Refresh Count (after void) ─────────────────────────────
+            // ── Refresh Count (after void / lock) ──────────────────────
             function refreshCount() {
+                if (!lockedTargetId) return;
                 $.ajax({
                     url: '/scanner/count',
                     type: 'GET',
-                    data: { jancode: currentJancode },
+                    data: { jancode_id: lockedTargetId },
                     success: function (data) {
                         updateCounters(data);
                     }
@@ -609,7 +684,7 @@
 
             // ── Rollback Scan Sementara ────────────────────────────────
             $('#btn-rollback').on('click', function () {
-                if (!currentJancode) {
+                if (!lockedTargetId) {
                     Swal.fire({ icon: 'warning', title: 'Belum ada scan aktif!', confirmButtonText: 'OK' });
                     return;
                 }
@@ -635,7 +710,7 @@
                             url: "{{ route('scanner.rollback') }}",
                             type: 'DELETE',
                             contentType: 'application/json',
-                            data: JSON.stringify({ jancode: currentJancode }),
+                            data: JSON.stringify({ jancode_id: lockedTargetId }),
                             success: function (response) {
                                 refreshCount();
                                 Swal.fire({

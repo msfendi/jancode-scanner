@@ -10,7 +10,7 @@ class JancodesImport implements ToModel, WithHeadingRow
 {
     public function headingRow(): int
     {
-        return 5;
+        return 1;
     }
 
     // public function startRow(): int
@@ -23,10 +23,11 @@ class JancodesImport implements ToModel, WithHeadingRow
         return new Jancode([
             'jancode'     => $row['jan'] ?? '',
             'size'        => $row['size'] ?? '',
-            'qty'         =>  0,
-            'country'     => $row['country'] ?? '',
-            'color'       => $row['color'] ?? '',
-            'description' => $row['descriptionen'] ?? '',
+            'qty'         => (int) ($row['qty_carton'] ?? 0),
+            'destination' => $row['destination'] ?? '',
+            'buyer'       => $row['buyer'] ?? '',
+            'style'       => $row['style'] ?? '',
+            'cpo'         => $row['cpo'] ?? '',
         ]);
     }
 }

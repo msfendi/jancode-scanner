@@ -1,6 +1,9 @@
 <?php
 
+use App\Http\Controllers\HangtagController;
+use App\Http\Controllers\HangtagScanController;
 use App\Http\Controllers\HomeController;
+use App\Http\Controllers\JancodeController;
 use App\Http\Controllers\JancodeScanController;
 use App\Http\Controllers\LoginController;
 use App\Http\Controllers\RegisterController;
@@ -59,16 +62,19 @@ Route::group(['middleware' => 'auth'], function () {
     Route::post('/user/assignrole', [UserController::class, 'assignrole'])->name('user.assignrole')->middleware(['auth', 'role:Admin']);
 
     //Jancode
-    Route::get('/jancode', [App\Http\Controllers\JancodeController::class, 'index'])->name('jancode.index')->middleware(['auth', 'role:Admin']);
-    Route::post('/jancode', [App\Http\Controllers\JancodeController::class, 'store'])->name('jancode.store')->middleware(['auth', 'role:Admin']);
-    Route::get('/jancode/{id}/edit', [App\Http\Controllers\JancodeController::class, 'edit'])->name('jancode.edit')->middleware(['auth', 'role:Admin']);
-    Route::delete('/jancode/{id}', [App\Http\Controllers\JancodeController::class, 'destroy'])->name('jancode.destroy')->middleware(['auth', 'role:Admin']);
-    Route::post('/jancode/import', [App\Http\Controllers\JancodeController::class, 'import'])->name('jancode.import')->middleware(['auth', 'role:Admin']);
-    Route::get('/jancode/{id}/scan-logs', [App\Http\Controllers\JancodeController::class, 'scanLogs'])->name('jancode.scanLogs')->middleware(['auth', 'role:Admin']);
-    Route::get('/jancode/{id}/export-scan-logs', [App\Http\Controllers\JancodeController::class, 'exportScanLogs'])->name('jancode.exportScanLogs')->middleware(['auth', 'role:Admin']);
+    Route::get('/jancode', [JancodeController::class, 'index'])->name('jancode.index')->middleware(['auth', 'role:Admin']);
+    Route::post('/jancode', [JancodeController::class, 'store'])->name('jancode.store')->middleware(['auth', 'role:Admin']);
+    Route::get('/jancode/{id}/edit', [JancodeController::class, 'edit'])->name('jancode.edit')->middleware(['auth', 'role:Admin']);
+    Route::delete('/jancode/{id}', [JancodeController::class, 'destroy'])->name('jancode.destroy')->middleware(['auth', 'role:Admin']);
+    Route::post('/jancode/import', [JancodeController::class, 'import'])->name('jancode.import')->middleware(['auth', 'role:Admin']);
+    Route::post('/jancode/import-new', [JancodeController::class, 'importNewFormat'])->name('jancode.importNewFormat')->middleware(['auth', 'role:Admin']);
+    Route::get('/jancode/{id}/scan-logs', [JancodeController::class, 'scanLogs'])->name('jancode.scanLogs')->middleware(['auth', 'role:Admin']);
+    Route::get('/jancode/{id}/export-scan-logs', [JancodeController::class, 'exportScanLogs'])->name('jancode.exportScanLogs')->middleware(['auth', 'role:Admin']);
+    Route::get('/jancode/export-template', [JancodeController::class, 'exportTemplate'])->name('jancode.exportTemplate')->middleware(['auth', 'role:Admin']);
 
     Route::prefix('scanner')->name('scanner.')->group(function () {
         Route::get('/', [JancodeScanController::class, 'index'])->name('index')->middleware(['auth', 'role:Admin']);
+        Route::get('/search', [JancodeScanController::class, 'search'])->name('search')->middleware(['auth', 'role:Admin']);
         Route::get('/count', [JancodeScanController::class, 'count'])->name('count')->middleware(['auth', 'role:Admin']);
         Route::post('/scan', [JancodeScanController::class, 'scan'])->name('scan')->middleware(['auth', 'role:Admin']);
         Route::delete('/void', [JancodeScanController::class, 'voidLast'])->name('void')->middleware(['auth', 'role:Admin']);
@@ -80,22 +86,22 @@ Route::group(['middleware' => 'auth'], function () {
     // Hangtag
     Route::prefix('hangtag')->name('hangtag.')->group(function () {
         // Hangtag Scanner
-        Route::get('/scanner', [\App\Http\Controllers\HangtagScanController::class, 'index'])->name('scanner.index')->middleware(['auth', 'role:Admin']);
-        Route::get('/scanner/count', [\App\Http\Controllers\HangtagScanController::class, 'count'])->name('scanner.count')->middleware(['auth', 'role:Admin']);
-        Route::post('/scanner/scan', [\App\Http\Controllers\HangtagScanController::class, 'scan'])->name('scanner.scan')->middleware(['auth', 'role:Admin']);
-        Route::delete('/scanner/void', [\App\Http\Controllers\HangtagScanController::class, 'voidLast'])->name('scanner.void')->middleware(['auth', 'role:Admin']);
-        Route::post('/scanner/reset', [\App\Http\Controllers\HangtagScanController::class, 'resetLock'])->name('scanner.reset')->middleware(['auth', 'role:Admin']);
-        Route::post('/scanner/submit', [\App\Http\Controllers\HangtagScanController::class, 'submit'])->name('scanner.submit')->middleware(['auth', 'role:Admin']);
-        Route::delete('/scanner/rollback', [\App\Http\Controllers\HangtagScanController::class, 'rollback'])->name('scanner.rollback')->middleware(['auth', 'role:Admin']);
+        Route::get('/scanner', [HangtagScanController::class, 'index'])->name('scanner.index')->middleware(['auth', 'role:Admin']);
+        Route::get('/scanner/count', [HangtagScanController::class, 'count'])->name('scanner.count')->middleware(['auth', 'role:Admin']);
+        Route::post('/scanner/scan', [HangtagScanController::class, 'scan'])->name('scanner.scan')->middleware(['auth', 'role:Admin']);
+        Route::delete('/scanner/void', [HangtagScanController::class, 'voidLast'])->name('scanner.void')->middleware(['auth', 'role:Admin']);
+        Route::post('/scanner/reset', [HangtagScanController::class, 'resetLock'])->name('scanner.reset')->middleware(['auth', 'role:Admin']);
+        Route::post('/scanner/submit', [HangtagScanController::class, 'submit'])->name('scanner.submit')->middleware(['auth', 'role:Admin']);
+        Route::delete('/scanner/rollback', [HangtagScanController::class, 'rollback'])->name('scanner.rollback')->middleware(['auth', 'role:Admin']);
 
-        Route::get('/', [\App\Http\Controllers\HangtagController::class, 'index'])->name('index')->middleware(['auth', 'role:Admin']);
-        Route::post('/', [\App\Http\Controllers\HangtagController::class, 'store'])->name('store')->middleware(['auth', 'role:Admin']);
-        Route::get('/{id}/edit', [\App\Http\Controllers\HangtagController::class, 'edit'])->name('edit')->middleware(['auth', 'role:Admin']);
-        Route::delete('/{id}', [\App\Http\Controllers\HangtagController::class, 'destroy'])->name('destroy')->middleware(['auth', 'role:Admin']);
-        Route::post('/import', [\App\Http\Controllers\HangtagController::class, 'import'])->name('import')->middleware(['auth', 'role:Admin']);
-        Route::get('/{id}/scan-logs', [\App\Http\Controllers\HangtagController::class, 'scanLogs'])->name('scanLogs')->middleware(['auth', 'role:Admin']);
-        Route::get('/{id}/export-scan-logs', [\App\Http\Controllers\HangtagController::class, 'exportScanLogs'])->name('exportScanLogs')->middleware(['auth', 'role:Admin']);
-        Route::get('/export-template', [\App\Http\Controllers\HangtagController::class, 'exportTemplate'])->name('exportTemplate')->middleware(['auth', 'role:Admin']);
+        Route::get('/', [HangtagController::class, 'index'])->name('index')->middleware(['auth', 'role:Admin']);
+        Route::post('/', [HangtagController::class, 'store'])->name('store')->middleware(['auth', 'role:Admin']);
+        Route::get('/{id}/edit', [HangtagController::class, 'edit'])->name('edit')->middleware(['auth', 'role:Admin']);
+        Route::delete('/{id}', [HangtagController::class, 'destroy'])->name('destroy')->middleware(['auth', 'role:Admin']);
+        Route::post('/import', [HangtagController::class, 'import'])->name('import')->middleware(['auth', 'role:Admin']);
+        Route::get('/{id}/scan-logs', [HangtagController::class, 'scanLogs'])->name('scanLogs')->middleware(['auth', 'role:Admin']);
+        Route::get('/{id}/export-scan-logs', [HangtagController::class, 'exportScanLogs'])->name('exportScanLogs')->middleware(['auth', 'role:Admin']);
+        Route::get('/export-template', [HangtagController::class, 'exportTemplate'])->name('exportTemplate')->middleware(['auth', 'role:Admin']);
     });
 });
 

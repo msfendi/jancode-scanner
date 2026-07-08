@@ -21,7 +21,7 @@ class ScanHistorySheet implements FromCollection, WithHeadings, WithMapping, Wit
 
     public function collection()
     {
-        return JancodeLogs::where('jancode', $this->jancode->jancode)
+        return JancodeLogs::where('jancode_id', $this->jancode->id)
             ->with('user')
             ->orderBy('created_at', 'asc')
             ->get();
@@ -33,8 +33,10 @@ class ScanHistorySheet implements FromCollection, WithHeadings, WithMapping, Wit
             'No',
             'Jancode',
             'Size',
-            'Color',
-            'Description',
+            'Destination',
+            'Buyer',
+            'Style',
+            'CPO',
             'Scan Time',
             'Scanned By'
         ];
@@ -48,8 +50,10 @@ class ScanHistorySheet implements FromCollection, WithHeadings, WithMapping, Wit
             $this->rowNumber,
             $this->jancode->jancode,
             $this->jancode->size,
-            $this->jancode->color,
-            $this->jancode->description,
+            $this->jancode->destination,
+            $this->jancode->buyer,
+            $this->jancode->style,
+            $this->jancode->cpo,
             $log->created_at->format('Y-m-d H:i:s'),
             $log->user ? $log->user->name : 'Unknown'
         ];

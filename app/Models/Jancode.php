@@ -15,9 +15,10 @@ class Jancode extends Model
         'jancode',
         'size',
         'qty',
-        'country',
-        'color',
-        'description',
+        'destination',
+        'buyer',
+        'style',
+        'cpo',
         'void',
     ];
 }

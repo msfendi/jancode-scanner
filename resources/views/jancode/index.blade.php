@@ -24,9 +24,17 @@
                                 class="d-none d-sm-inline-block btn btn-sm btn-primary shadow-sm" id="createNewJancode">
                                 <i class="fas fa-plus fa-sm text-white-50"></i> Create Jancode
                             </a>
+                            <a href="{{ route('jancode.exportTemplate') }}"
+                                class="d-none d-sm-inline-block btn btn-sm btn-info shadow-sm">
+                                <i class="fas fa-download fa-sm text-white-50"></i> Download Template
+                            </a>
                             <button class="d-none d-sm-inline-block btn btn-sm btn-success shadow-sm"
                                 data-toggle="modal" data-target="#importModal">
                                 <i class="fas fa-file-excel fa-sm text-white-50"></i> Import Excel
+                            </button>
+                            <button class="d-none d-sm-inline-block btn btn-sm btn-warning shadow-sm"
+                                data-toggle="modal" data-target="#importNewFormatModal">
+                                <i class="fas fa-file-excel fa-sm text-white-50"></i> Import Excel (New)
                             </button>
                         </div>
                     </div>
@@ -45,9 +53,11 @@
                                             <th>Jancode</th>
                                             <th>Size</th>
                                             <th>Qty</th>
-                                            <th>Country</th>
+                                            <th>Destination</th>
+                                            <th>Buyer</th>
+                                            <th>Style</th>
                                             <th>Color</th>
-                                            <th>Desc</th>
+                                            <th>CPO</th>
                                             <th>Scanned</th>
                                             <th>Balance</th>
                                             <th>Void</th>
@@ -105,24 +115,31 @@
                                     </div>
                                 </div>
                                 <div class="form-group">
-                                    <label class="col-sm-12 control-label">Country</label>
+                                    <label class="col-sm-12 control-label">Destination</label>
                                     <div class="col-sm-12">
-                                        <input type="text" id="country" name="country" required
-                                            placeholder="Enter Country" class="form-control">
+                                        <input type="text" id="destination" name="destination" required
+                                            placeholder="Enter Destination" class="form-control">
                                     </div>
                                 </div>
                                 <div class="form-group">
-                                    <label class="col-sm-12 control-label">Color</label>
+                                    <label class="col-sm-12 control-label">Buyer</label>
                                     <div class="col-sm-12">
-                                        <input type="text" id="color" name="color" required placeholder="Enter Color"
+                                        <input type="text" id="buyer" name="buyer" required placeholder="Enter Buyer"
                                             class="form-control">
                                     </div>
                                 </div>
                                 <div class="form-group">
-                                    <label class="col-sm-12 control-label">Description</label>
+                                    <label class="col-sm-12 control-label">Style</label>
                                     <div class="col-sm-12">
-                                        <input type="text" id="description" name="description" required
-                                            placeholder="Enter Description" class="form-control">
+                                        <input type="text" id="style" name="style" required placeholder="Enter Style"
+                                            class="form-control">
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label class="col-sm-12 control-label">CPO</label>
+                                    <div class="col-sm-12">
+                                        <input type="text" id="cpo" name="cpo" required placeholder="Enter CPO"
+                                            class="form-control">
                                     </div>
                                 </div>
                                 <div class="form-group">
@@ -166,6 +183,34 @@
                             <div class="modal-footer">
                                 <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
                                 <button type="submit" class="btn btn-primary">Import</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Import New Format Modal -->
+            <div class="modal fade" id="importNewFormatModal" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog">
+                    <form id="importNewFormatForm" action="{{ route('jancode.importNewFormat') }}" method="POST"
+                        enctype="multipart/form-data">
+                        @csrf
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">Import Excel (New Format)</h5>
+                                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="form-group">
+                                    <label>Upload Excel File</label>
+                                    <input type="file" name="file" class="form-control" required>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                                <button type="submit" class="btn btn-warning">Import (New)</button>
                             </div>
                         </div>
                     </form>
@@ -218,7 +263,7 @@
                             <div class="row text-center">
                                 <div class="col-md-4">
                                     <div>
-                                        <small class="text-muted">Description</small>
+                                        <small class="text-muted">Destination / Buyer</small>
                                         <p class="font-weight-bold mb-0" id="detail-desc">-</p>
                                     </div>
                                     <div>
@@ -238,7 +283,7 @@
                                 </div>
                                 <div class="col-md-4">
                                     <div>
-                                        <small class="text-muted">Color</small>
+                                        <small class="text-muted">Style / CPO</small>
                                         <p class="font-weight-bold mb-4" id="detail-color">-</p>
                                     </div>
                                     <div>
@@ -289,9 +334,11 @@
                     { data: 'jancode', name: 'jancode' },
                     { data: 'size', name: 'size' },
                     { data: 'qty', name: 'qty' },
-                    { data: 'country', name: 'country' },
+                    { data: 'destination', name: 'destination' },
+                    { data: 'buyer', name: 'buyer' },
+                    { data: 'style', name: 'style' },
                     { data: 'color', name: 'color' },
-                    { data: 'description', name: 'description' },
+                    { data: 'cpo', name: 'cpo' },
                     { data: 'scanned', name: 'scanned', searchable: false },
                     { data: 'balance', name: 'balance', searchable: false },
                     { data: 'void', name: 'void', render: function (data) { return data == 1 ? '<span class="badge badge-danger">True</span>' : '<span class="badge badge-success">False</span>'; } },
@@ -320,9 +367,10 @@
                     $('#jancode').val(data.jancode);
                     $('#size').val(data.size);
                     $('#qty').val(data.qty);
-                    $('#country').val(data.country);
-                    $('#color').val(data.color);
-                    $('#description').val(data.description);
+                    $('#destination').val(data.destination);
+                    $('#buyer').val(data.buyer);
+                    $('#style').val(data.style);
+                    $('#cpo').val(data.cpo);
                     $('#void').val(data.void);
                 });
             });
@@ -452,6 +500,48 @@
                 });
             });
 
+            // --- Import New Format Form Submit ---
+            $('#importNewFormatForm').on('submit', function (e) {
+                e.preventDefault();
+                const formData = new FormData(this);
+
+                Swal.fire({
+                    title: 'Importing Data...',
+                    text: 'Please wait while we process the Excel file.',
+                    allowOutsideClick: false,
+                    didOpen: () => Swal.showLoading()
+                });
+
+                $.ajax({
+                    url: $(this).attr('action'),
+                    type: 'POST',
+                    data: formData,
+                    processData: false,
+                    contentType: false,
+                    success: function (response) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Success!',
+                            text: response.message,
+                            confirmButtonText: 'OK'
+                        }).then(() => {
+                            table.draw();
+                            $('#importNewFormatForm')[0].reset();
+                            $('#importNewFormatModal').modal('hide');
+                        });
+                    },
+                    error: function (xhr) {
+                        const errorMsg = xhr.responseJSON ? xhr.responseJSON.message : 'An error occurred during import.';
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Import Failed',
+                            text: errorMsg,
+                            confirmButtonText: 'Try Again'
+                        });
+                    }
+                });
+            });
+
             // --- Detail Scan Action ---
             $('body').on('click', '.detailScan', function () {
                 const jancode_id = $(this).data('id');
@@ -464,9 +554,9 @@
                 const scanLogUrl = "{{ route('jancode.scanLogs', ':id') }}".replace(':id', jancode_id);
 
                 $.get(scanLogUrl, function (data) {
-                    $('#detail-desc').text(data.description || '-');
+                    $('#detail-desc').text((data.destination || '-') + ' / ' + (data.buyer || '-'));
                     $('#detail-size').text(data.size || '-');
-                    $('#detail-color').text(data.color || '-');
+                    $('#detail-color').text((data.style || '-') + ' / ' + (data.cpo || '-'));
                     $('#detail-qty').text(data.qty);
                     $('#detail-balance').text(data.balance);
                     $('#detail-total').text(data.total_scans);
