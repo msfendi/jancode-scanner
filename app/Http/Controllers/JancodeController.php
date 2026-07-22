@@ -105,7 +105,7 @@ class JancodeController extends Controller
             'buyer'       => 'required|string',
             'style'       => 'required|string',
             'cpo'         => 'required|string',
-            'void'        => 'sometimes|boolean'
+            'void'        => 'required|string'
         ]);
 
         Jancode::updateOrCreate(
@@ -118,7 +118,7 @@ class JancodeController extends Controller
                 'buyer'       => $request->buyer,
                 'style'       => $request->style,
                 'cpo'         => $request->cpo,
-                'void'        => $request->void ?? 0,
+                'void'        => $request->void ? 'false' : 'true',
             ]
         );
 

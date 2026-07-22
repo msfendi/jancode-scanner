@@ -8,7 +8,7 @@ use Illuminate\Http\Request;
 
 use Illuminate\Support\Facades\DB;
 
-class JancodeScanController extends Controller
+class JancodeScanControllerCopy extends Controller
 {
     // Halaman utama scanner
     public function index()
@@ -35,24 +35,17 @@ class JancodeScanController extends Controller
         $results = [];
 
         foreach ($targets as $target) {
-            $totalAll = JancodeLogs::where('jancode_id', $target->id)->count();
-            $scanned = JancodeLogs::where('jancode_id', $target->id)->where('is_submitted', 'true')->count();
-            $unsubmitted = JancodeLogs::where('jancode_id', $target->id)->where('is_submitted', 'false')->count();
-            $balance = $target->qty - $totalAll;
+            $scanned = JancodeLogs::where('jancode_id', $target->id)->count();
+            $balance = $target->qty - $scanned;
             
             // Format yang ditampilkan di Select2
             $text = "{$target->jancode} | Size: {$target->size} | Qty: {$target->qty} (Sisa: {$balance})";
             
             $results[] = [
-                'id'          => $target->id,
-                'text'        => $text,
-                'jancode'     => $target->jancode,
-                'size'        => $target->size,
-                'qty'         => $target->qty,
-                'scanned'     => $scanned,
-                'unsubmitted' => $unsubmitted,
-                'total_all'   => $totalAll,
-                'balance'     => $balance,
+                'id' => $target->id,
+                'text' => $text,
+                'jancode' => $target->jancode,
+                'size' => $target->size
             ];
         }
 
@@ -78,7 +71,7 @@ class JancodeScanController extends Controller
         if ($lockedId && $jancodeId != $lockedId) {
             $lockedJancode = Jancode::find($lockedId);
             $lockedScannedCount = JancodeLogs::where('jancode_id', $lockedId)->where('is_submitted', 'true')->count();
-            $lockedUnsubmittedCount = JancodeLogs::where('jancode_id', $lockedId)->where('is_submitted', 'false')->count();
+            $lockedUnsubmittedCount = JancodeLogs::where('jancode_id', $lockedId)->where('user_id', auth()->id())->where('is_submitted', 'false')->count();
             $lockedTotalAll = JancodeLogs::where('jancode_id', $lockedId)->count();
 
             // Auto-unlock if the locked target is actually already completed
@@ -127,7 +120,7 @@ class JancodeScanController extends Controller
                 session()->forget('locked_jancode_id');
 
                 $scannedCount = JancodeLogs::where('jancode_id', $jancodeId)->where('is_submitted', 'true')->count();
-                $unsubmittedCount = JancodeLogs::where('jancode_id', $jancodeId)->where('is_submitted', 'false')->count();
+                $unsubmittedCount = JancodeLogs::where('jancode_id', $jancodeId)->where('user_id', auth()->id())->where('is_submitted', 'false')->count();
 
                 return response()->json([
                     'success' => false,
@@ -161,7 +154,7 @@ class JancodeScanController extends Controller
             DB::commit();
 
             $scannedCount = JancodeLogs::where('jancode_id', $jancodeId)->where('is_submitted', 'true')->count();
-            $unsubmittedCount = JancodeLogs::where('jancode_id', $jancodeId)->where('is_submitted', 'false')->count();
+            $unsubmittedCount = JancodeLogs::where('jancode_id', $jancodeId)->where('user_id', auth()->id())->where('is_submitted', 'false')->count();
             $totalAllCount += $count;
 
         } catch (\Exception $e) {
@@ -185,7 +178,6 @@ class JancodeScanController extends Controller
             'style'       => $master->style,
             'cpo'         => $master->cpo,
             'size'        => $master->size,
-            'jancode'     => $master->jancode,
         ]);
     }
 
@@ -206,14 +198,8 @@ class JancodeScanController extends Controller
         }
 
         $scannedCount = JancodeLogs::where('jancode_id', $jancodeId)->where('is_submitted', 'true')->count();
-        $unsubmittedCount = JancodeLogs::where('jancode_id', $jancodeId)->where('is_submitted', 'false')->count();
+        $unsubmittedCount = JancodeLogs::where('jancode_id', $jancodeId)->where('user_id', auth()->id())->where('is_submitted', 'false')->count();
         $totalAllCount = JancodeLogs::where('jancode_id', $jancodeId)->count();
-
-        // tambahan
-        $logs = JancodeLogs::where('jancode_id', $jancodeId)
-            ->latest('created_at')
-            ->limit(50)
-            ->get();
 
         return response()->json([
             'scanned'     => $scannedCount,
@@ -226,11 +212,6 @@ class JancodeScanController extends Controller
             'style'       => $master->style,
             'cpo'         => $master->cpo,
             'size'        => $master->size,
-            // tambahan
-            'color'       => $master->color,
-            'description' => $master->description,
-            'jancode'     => $master->jancode,
-            'logs'        => $logs,
         ]);
     }
 
@@ -251,11 +232,12 @@ class JancodeScanController extends Controller
             }
 
             JancodeLogs::where('jancode_id', $jancodeId)
+                ->where('user_id', auth()->id())
                 ->where('is_submitted', 'false')
-                ->update(['is_submitted' => 'true', 'user_id' => auth()->id()]);
+                ->update(['is_submitted' => 'true']);
 
             $scannedCount = JancodeLogs::where('jancode_id', $jancodeId)->where('is_submitted', 'true')->count();
-            $unsubmittedCount = JancodeLogs::where('jancode_id', $jancodeId)->where('is_submitted', 'false')->count();
+            $unsubmittedCount = JancodeLogs::where('jancode_id', $jancodeId)->where('user_id', auth()->id())->where('is_submitted', 'false')->count();
             $totalAllCount = JancodeLogs::where('jancode_id', $jancodeId)->count();
 
             if ($totalAllCount >= $master->qty) {
@@ -297,6 +279,7 @@ class JancodeScanController extends Controller
             $master = Jancode::where('id', $jancodeId)->lockForUpdate()->first();
             
             $last = JancodeLogs::where('jancode_id', $jancodeId)
+                               ->where('user_id', auth()->id())
                                ->where('is_submitted', 'false')
                                ->orderBy('created_at', 'desc')
                                ->first();
@@ -305,7 +288,7 @@ class JancodeScanController extends Controller
                 $last->delete();
                 
                 $scannedCount = JancodeLogs::where('jancode_id', $jancodeId)->where('is_submitted', 'true')->count();
-                $unsubmittedCount = JancodeLogs::where('jancode_id', $jancodeId)->where('is_submitted', 'false')->count();
+                $unsubmittedCount = JancodeLogs::where('jancode_id', $jancodeId)->where('user_id', auth()->id())->where('is_submitted', 'false')->count();
                 $totalAllCount = JancodeLogs::where('jancode_id', $jancodeId)->count();
                 
                 // If we void and fall below qty, we lock the session again
@@ -354,6 +337,7 @@ class JancodeScanController extends Controller
             $master = Jancode::where('id', $jancodeId)->lockForUpdate()->first();
             
             $deletedRows = JancodeLogs::where('jancode_id', $jancodeId)
+                               ->where('user_id', auth()->id())
                                ->where('is_submitted', 'false')
                                ->delete();
 
