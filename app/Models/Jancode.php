@@ -12,13 +12,43 @@ class Jancode extends Model
     protected $table = 'jancode';
 
     protected $fillable = [
-        'jancode',
+        'import_batch_id',
+        'country',
+        'buyer',
+        'ocf',
+        'style',
+        'color',
         'size',
+        'qty_per_carton',
+        'jancode',
+        'packing_list_qty_carton',
+        'receive_qty_carton',
+        'balance',
+        'total_qty_pcs',
+        // Legacy column compatibility
         'qty',
         'destination',
-        'buyer',
-        'style',
         'cpo',
         'void',
     ];
+
+    public function importBatch()
+    {
+        return $this->belongsTo(ImportBatch::class, 'import_batch_id');
+    }
+
+    public function logs()
+    {
+        return $this->hasMany(JancodeLogs::class, 'jancode_id');
+    }
+
+    public function palletAssignmentDetails()
+    {
+        return $this->hasMany(PalletAssignmentDetail::class, 'jancode_id');
+    }
+
+    public function scanBatches()
+    {
+        return $this->hasMany(ScanBatch::class, 'jancode_id');
+    }
 }

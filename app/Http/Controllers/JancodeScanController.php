@@ -4,8 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Jancode;
 use App\Models\JancodeLogs;
+use App\Models\ScanBatch;
 use Illuminate\Http\Request;
-
 use Illuminate\Support\Facades\DB;
 
 class JancodeScanController extends Controller
@@ -250,40 +250,130 @@ class JancodeScanController extends Controller
                 return response()->json(['success' => false, 'message' => 'Target tidak ditemukan'], 404);
             }
 
+            // 1. Hitung jumlah scan sementara yang akan disubmit pada batch ini
+            $unsubmittedCount = JancodeLogs::where('jancode_id', $jancodeId)->where('is_submitted', 'false')->count();
+            if ($unsubmittedCount <= 0) {
+                DB::rollBack();
+                return response()->json(['success' => false, 'message' => 'Tidak ada scan sementara untuk disubmit'], 400);
+            }
+
+            // 2. Generate Batch Number unik: BSCAN-YYYYMMDD-XXXX
+            $today = date('Ymd');
+            $prefix = "BSCAN-{$today}-";
+            $lastBatch = ScanBatch::where('batch_no', 'like', "{$prefix}%")
+                ->orderByDesc('id')
+                ->first();
+            $nextSeq = 1;
+            if ($lastBatch) {
+                $lastSeq = (int)substr($lastBatch->batch_no, strlen($prefix));
+                $nextSeq = $lastSeq + 1;
+            }
+            $batchNo = $prefix . str_pad($nextSeq, 4, '0', STR_PAD_LEFT);
+
+            // 3. Hitung akumulasi received & sisa balance
+            $totalMasterCarton = (int)($master->packing_list_qty_carton ?: $master->qty);
+            $alreadyScannedCount = JancodeLogs::where('jancode_id', $jancodeId)->where('is_submitted', 'true')->count();
+            $newReceiveQty = $alreadyScannedCount + $unsubmittedCount;
+            $newBalance = max(0, $totalMasterCarton - $newReceiveQty);
+
+            // 4. Simpan record ScanBatch (History Batch Scan)
+            $scanBatch = ScanBatch::create([
+                'batch_no'    => $batchNo,
+                'jancode_id'  => $jancodeId,
+                'user_id'     => auth()->id(),
+                'scanned_qty' => $unsubmittedCount,
+                'receive_qty' => $newReceiveQty,
+                'balance'     => $newBalance,
+                'total_qty'   => $totalMasterCarton,
+                'notes'       => "Batch scan {$unsubmittedCount} karton disubmit oleh " . (auth()->user()?->name ?? 'Operator'),
+            ]);
+
+            // 5. Update JancodeLogs dengan scan_batch_id dan status is_submitted = 'true'
             JancodeLogs::where('jancode_id', $jancodeId)
                 ->where('is_submitted', 'false')
-                ->update(['is_submitted' => 'true', 'user_id' => auth()->id()]);
+                ->update([
+                    'is_submitted'  => 'true',
+                    'user_id'       => auth()->id(),
+                    'scan_batch_id' => $scanBatch->id,
+                ]);
 
-            $scannedCount = JancodeLogs::where('jancode_id', $jancodeId)->where('is_submitted', 'true')->count();
-            $unsubmittedCount = JancodeLogs::where('jancode_id', $jancodeId)->where('is_submitted', 'false')->count();
+            // 6. Update master Jancode
+            $master->update([
+                'receive_qty_carton' => $newReceiveQty,
+                'balance'            => $newBalance,
+            ]);
+
             $totalAllCount = JancodeLogs::where('jancode_id', $jancodeId)->count();
-
-            if ($totalAllCount >= $master->qty) {
+            if ($totalAllCount >= $totalMasterCarton) {
                 session()->forget('locked_jancode_id');
             }
 
             DB::commit();
 
             return response()->json([
-                'success' => true,
-                'scanned' => $scannedCount,
-                'unsubmitted' => $unsubmittedCount,
-                'total_all' => $totalAllCount,
-                'qty' => $master->qty,
-                'description' => $master->description ?? null,
-                'size' => $master->size ?? null,
-                'color' => $master->color ?? null,
-                'is_complete' => ($totalAllCount >= $master->qty)
+                'success'           => true,
+                'message'           => "Batch scan {$batchNo} berhasil disubmit ({$unsubmittedCount} karton).",
+                'batch_no'          => $batchNo,
+                'batch_id'          => $scanBatch->id,
+                'batch_scanned_qty' => $unsubmittedCount,
+                'scanned'           => $newReceiveQty,
+                'unsubmitted'       => 0,
+                'total_all'         => $newReceiveQty,
+                'qty'               => $totalMasterCarton,
+                'balance'           => $newBalance,
+                'description'       => $master->description ?? null,
+                'size'              => $master->size ?? null,
+                'color'             => $master->color ?? null,
+                'is_complete'       => ($newReceiveQty >= $totalMasterCarton),
             ]);
 
         } catch (\Exception $e) {
             DB::rollBack();
             return response()->json([
                 'success' => false,
-                'message' => 'Terjadi kesalahan sistem saat submit',
-                'error' => $e->getMessage()
+                'message' => 'Terjadi kesalahan sistem saat submit batch scan: ' . $e->getMessage(),
+                'error'   => $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Riwayat Batch Scan (List JSON untuk DataTables / View)
+     */
+    public function batchHistory(Request $request)
+    {
+        if ($request->ajax()) {
+            $jancodeId = $request->input('jancode_id');
+
+            $query = ScanBatch::with(['jancode', 'user'])->latest();
+            if ($jancodeId) {
+                $query->where('jancode_id', $jancodeId);
+            }
+
+            $batches = $query->get()->map(function ($b) {
+                $j = $b->jancode;
+                return [
+                    'id'          => $b->id,
+                    'batch_no'    => $b->batch_no,
+                    'created_at'  => $b->created_at ? $b->created_at->format('d/m/Y H:i:s') : '-',
+                    'jancode'     => $j ? $j->jancode : '-',
+                    'color'       => $j ? $j->color : '-',
+                    'size'        => $j ? $j->size : '-',
+                    'style'       => $j ? $j->style : '-',
+                    'country'     => $j ? ($j->country ?: $j->destination) : '-',
+                    'scanned_qty' => $b->scanned_qty,
+                    'receive_qty' => $b->receive_qty,
+                    'balance'     => $b->balance,
+                    'total_qty'   => $b->total_qty,
+                    'user_name'   => $b->user ? $b->user->name : 'Operator',
+                    'notes'       => $b->notes ?: '-',
+                ];
+            });
+
+            return response()->json(['data' => $batches]);
+        }
+
+        return view('jancode.scan-batches');
     }
 
     // DELETE — void scan terakhir

@@ -43,7 +43,10 @@
         <div id="collapseJancode" class="collapse {{ request()->is('jancode*') || request()->is('scanner*') || request()->is('hangtag*') ? 'show' : '' }}" aria-labelledby="headingJancode" data-parent="#accordionSidebar">
             <div class="bg-white py-2 collapse-inner rounded">
                 <a class="collapse-item {{ request()->routeIs('jancode.index') ? 'active' : '' }}" href="{{ route('jancode.index') }}">Master Data Jancode</a>
+                <a class="collapse-item {{ request()->routeIs('jancode.importBatches*') || request()->routeIs('jancode.importBatchDetail*') ? 'active' : '' }}" href="{{ route('jancode.importBatches') }}">Riwayat Import Batch</a>
+                <a class="collapse-item {{ request()->routeIs('pallet.index') ? 'active' : '' }}" href="{{ route('pallet.index') }}">Manage Pallet Location</a>
                 <a class="collapse-item {{ request()->routeIs('scanner.index') ? 'active' : '' }}" href="{{ route('scanner.index') }}">Scanner Jancode</a>
+                <a class="collapse-item {{ request()->routeIs('scanner.batches*') ? 'active' : '' }}" href="{{ route('scanner.batches') }}">Riwayat Batch Scan</a>
             </div>
         </div>
     </li>

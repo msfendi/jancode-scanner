@@ -22,6 +22,14 @@
                     <!-- Page Heading -->
                     <div class="d-sm-flex align-items-center justify-content-between mb-4">
                         <h1 class="h3 mb-0 text-gray-800">Scanner Jancode</h1>
+                        <div>
+                            <a href="{{ route('scanner.batches') }}" class="btn btn-sm btn-outline-primary shadow-sm mr-2">
+                                <i class="fas fa-history fa-sm mr-1"></i> Riwayat Batch Scan
+                            </a>
+                            <a href="{{ route('pallet.index') }}" class="btn btn-sm btn-info shadow-sm">
+                                <i class="fas fa-boxes fa-sm mr-1"></i> Manage Pallet
+                            </a>
+                        </div>
                     </div>
 
                     <!-- Scan Input Card -->
@@ -810,12 +818,13 @@
                                 success: function (response) {
                                     updateCounters(response);
                                     addScanLogRow('-', lockedTargetJancode, true, 'submitted', unsubmitted + ' scan sementara berhasil disubmit ke server');
+                                    const batchInfo = response.batch_no ? `<br><span class="badge badge-dark px-2 py-1 font-mono">${response.batch_no}</span><br><small class="text-primary font-weight-bold">Akumulasi: ${response.scanned} / ${response.qty} (Sisa: ${response.balance} ctn)</small>` : '';
                                     Swal.fire({
                                         icon: 'success',
-                                        title: 'Berhasil!',
-                                        text: 'Scan sementara berhasil disubmit.',
-                                        timer: 1500,
-                                        showConfirmButton: false
+                                        title: 'Batch Scan Disubmit!',
+                                        html: `<strong>${unsubmitted} karton</strong> berhasil disimpan.${batchInfo}`,
+                                        timer: 2500,
+                                        showConfirmButton: true
                                     }).then(() => {
                                         if (response.is_complete) {
                                             lockedTargetId = null;

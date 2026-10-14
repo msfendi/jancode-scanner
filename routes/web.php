@@ -68,9 +68,23 @@ Route::group(['middleware' => 'auth'], function () {
     Route::delete('/jancode/{id}', [JancodeController::class, 'destroy'])->name('jancode.destroy')->middleware(['auth', 'role:Admin']);
     Route::post('/jancode/import', [JancodeController::class, 'import'])->name('jancode.import')->middleware(['auth', 'role:Admin']);
     Route::post('/jancode/import-new', [JancodeController::class, 'importNewFormat'])->name('jancode.importNewFormat')->middleware(['auth', 'role:Admin']);
+    Route::post('/jancode/ai-preview', [JancodeController::class, 'previewAiImport'])->name('jancode.aiPreview')->middleware(['auth', 'role:Admin']);
+    Route::post('/jancode/ai-confirm', [JancodeController::class, 'confirmAiImport'])->name('jancode.aiConfirm')->middleware(['auth', 'role:Admin']);
     Route::get('/jancode/{id}/scan-logs', [JancodeController::class, 'scanLogs'])->name('jancode.scanLogs')->middleware(['auth', 'role:Admin']);
     Route::get('/jancode/{id}/export-scan-logs', [JancodeController::class, 'exportScanLogs'])->name('jancode.exportScanLogs')->middleware(['auth', 'role:Admin']);
     Route::get('/jancode/export-template', [JancodeController::class, 'exportTemplate'])->name('jancode.exportTemplate')->middleware(['auth', 'role:Admin']);
+    Route::get('/jancode/import-batches', [JancodeController::class, 'importBatches'])->name('jancode.importBatches')->middleware(['auth', 'role:Admin']);
+    Route::get('/jancode/import-batches/{id}', [JancodeController::class, 'importBatchDetail'])->name('jancode.importBatchDetail')->middleware(['auth', 'role:Admin']);
+
+    // Pallet Location & Placement
+    Route::prefix('pallet')->name('pallet.')->middleware(['auth', 'role:Admin'])->group(function () {
+        Route::get('/', [\App\Http\Controllers\PalletController::class, 'index'])->name('index');
+        Route::get('/detail/{id}', [\App\Http\Controllers\PalletController::class, 'getDetail'])->name('detail');
+        Route::post('/store', [\App\Http\Controllers\PalletController::class, 'storeAssignment'])->name('store');
+        Route::post('/move', [\App\Http\Controllers\PalletController::class, 'moveCarton'])->name('move');
+        Route::delete('/detail/{id}', [\App\Http\Controllers\PalletController::class, 'removeDetail'])->name('removeDetail');
+        Route::delete('/clear/{addressId}', [\App\Http\Controllers\PalletController::class, 'clearPallet'])->name('clear');
+    });
 
     Route::prefix('scanner')->name('scanner.')->group(function () {
         Route::get('/', [JancodeScanController::class, 'index'])->name('index')->middleware(['auth', 'role:Admin']);
@@ -81,6 +95,7 @@ Route::group(['middleware' => 'auth'], function () {
         Route::post('/reset', [JancodeScanController::class, 'resetLock'])->name('reset')->middleware(['auth', 'role:Admin']);
         Route::post('/submit', [JancodeScanController::class, 'submit'])->name('submit')->middleware(['auth', 'role:Admin']);
         Route::delete('/rollback', [JancodeScanController::class, 'rollback'])->name('rollback')->middleware(['auth', 'role:Admin']);
+        Route::get('/batches', [JancodeScanController::class, 'batchHistory'])->name('batches')->middleware(['auth', 'role:Admin']);
     });
 
     // Hangtag
