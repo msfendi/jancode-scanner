@@ -20,6 +20,8 @@
         user-select: none;
         scroll-behavior: smooth;
         scrollbar-width: thin;
+        transform-origin: top left;
+        transition: transform 0.15s ease;
     }
     .pallet-board-scroll.active {
         cursor: grabbing;
@@ -45,10 +47,21 @@
         border-top: 5px solid #4e73df;
         display: flex;
         flex-direction: column;
+        transition: opacity 0.2s ease, transform 0.2s ease;
     }
 
     .pallet-row-card.locked-card {
         border-top: 5px solid #e74a3b;
+    }
+
+    /* Highlight matching cards in search */
+    .pallet-row-card.search-match {
+        border: 3px solid #f6c23e;
+        box-shadow: 0 0 12px rgba(246,194,62,0.6);
+    }
+    .pallet-row-card.search-dim {
+        opacity: 0.25;
+        transform: scale(0.98);
     }
 
     /* Subrow Header Bar: a | b or c | d */
@@ -127,6 +140,80 @@
     .font-mono {
         font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
     }
+
+    /* ========================= FULLSCREEN MODE ========================= */
+    body.fullscreen-mode #wrapper { display: none; }
+    body.fullscreen-mode #page-top { padding: 0; }
+
+    #fullscreenOverlay {
+        display: none;
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: #1a1d2e;
+        z-index: 9999;
+        flex-direction: column;
+    }
+    #fullscreenOverlay.active {
+        display: flex;
+    }
+    #fullscreenTopBar {
+        background: #2c3152;
+        color: #fff;
+        padding: 10px 20px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-shrink: 0;
+        border-bottom: 2px solid #4e73df;
+    }
+    #fullscreenTopBar .fs-title {
+        font-size: 16px;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+    }
+    #fullscreenTopBar .fs-controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    #fullscreenBoard {
+        flex: 1;
+        overflow: auto;
+        padding: 16px;
+    }
+    #fullscreenBoard .pallet-board-scroll {
+        min-height: calc(100vh - 80px);
+    }
+    .zoom-label {
+        color: #adb5d9;
+        font-size: 13px;
+        min-width: 48px;
+        text-align: center;
+    }
+
+    /* Search Results Panel */
+    #searchResultsPanel {
+        display: none;
+        border: 2px solid #f6c23e;
+        border-radius: 8px;
+        background: #fffdf0;
+        padding: 14px 18px;
+        margin-bottom: 16px;
+    }
+    #searchResultsPanel.active { display: block; }
+    .search-result-tag {
+        display: inline-flex;
+        align-items: center;
+        background: #4e73df;
+        color: #fff;
+        border-radius: 20px;
+        padding: 3px 12px;
+        margin: 2px 4px;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+    }
+    .search-result-tag:hover { background: #2e59d9; }
 </style>
 
 <body id="page-top">
@@ -225,30 +312,67 @@
                         </div>
                     </div>
 
+                    <!-- Search Panel -->
+                    <div id="searchResultsPanel">
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <span class="font-weight-bold text-warning"><i class="fas fa-search-location mr-2"></i>Hasil Pencarian Pallet:</span>
+                            <button class="btn btn-sm btn-outline-warning" id="btnClearSearch"><i class="fas fa-times mr-1"></i>Bersihkan</button>
+                        </div>
+                        <div id="searchResultTags" class="mb-1"></div>
+                        <small class="text-muted" id="searchResultInfo"></small>
+                    </div>
+
                     <!-- Row Filter & Drag Nav Bar -->
                     <div class="card shadow mb-4">
-                        <div class="card-header py-3 d-flex flex-wrap align-items-center justify-content-between">
-                            <div class="d-flex align-items-center flex-wrap mb-2 mb-md-0">
-                                <span class="font-weight-bold text-primary mr-3"><i class="fas fa-filter mr-1"></i> Filter Row:</span>
-                                <div class="btn-group btn-group-sm flex-wrap mr-3" role="group">
-                                    <a href="{{ route('pallet.index', ['row' => 'all']) }}" class="btn {{ $selectedRow === 'all' ? 'btn-primary' : 'btn-outline-primary' }}">Semua (B–I)</a>
-                                    @foreach(['B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'] as $rLetter)
-                                        <a href="{{ route('pallet.index', ['row' => $rLetter]) }}" class="btn {{ $selectedRow === $rLetter ? 'btn-primary' : 'btn-outline-primary' }}">Row {{ $rLetter }}</a>
-                                    @endforeach
+                        <div class="card-header py-3">
+                            <!-- Row 1: Filter & Nav -->
+                            <div class="d-flex flex-wrap align-items-center justify-content-between mb-2">
+                                <div class="d-flex align-items-center flex-wrap mb-2 mb-md-0">
+                                    <span class="font-weight-bold text-primary mr-3"><i class="fas fa-filter mr-1"></i> Filter Row:</span>
+                                    <div class="btn-group btn-group-sm flex-wrap mr-3" role="group">
+                                        <a href="{{ route('pallet.index', ['row' => 'all']) }}" class="btn {{ $selectedRow === 'all' ? 'btn-primary' : 'btn-outline-primary' }}">Semua (B–I)</a>
+                                        @foreach(['B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'] as $rLetter)
+                                            <a href="{{ route('pallet.index', ['row' => $rLetter]) }}" class="btn {{ $selectedRow === $rLetter ? 'btn-primary' : 'btn-outline-primary' }}">Row {{ $rLetter }}</a>
+                                        @endforeach
+                                    </div>
+                                    <div class="btn-group btn-group-sm" role="group">
+                                        <button type="button" class="btn btn-outline-secondary" id="btnScrollLeft" title="Geser ke Kiri">
+                                            <i class="fas fa-chevron-left"></i>
+                                        </button>
+                                        <button type="button" class="btn btn-outline-secondary" id="btnScrollRight" title="Geser ke Kanan">
+                                            <i class="fas fa-chevron-right"></i>
+                                        </button>
+                                    </div>
                                 </div>
-                                <div class="btn-group btn-group-sm" role="group">
-                                    <button type="button" class="btn btn-outline-secondary" id="btnScrollLeft" title="Geser ke Kiri">
-                                        <i class="fas fa-chevron-left"></i>
-                                    </button>
-                                    <button type="button" class="btn btn-outline-secondary" id="btnScrollRight" title="Geser ke Kanan">
-                                        <i class="fas fa-chevron-right"></i>
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="badge badge-success px-2 py-1 mr-2"><i class="fas fa-circle mr-1"></i> Hijau: Kosong</span>
+                                    <span class="badge badge-danger px-2 py-1 mr-2"><i class="fas fa-circle mr-1"></i> Merah: Terisi</span>
+                                    <button type="button" class="btn btn-sm btn-dark ml-1" id="btnFullscreen" title="Fullscreen View">
+                                        <i class="fas fa-expand mr-1"></i> Fullscreen
                                     </button>
                                 </div>
                             </div>
-                            <div class="d-flex align-items-center">
-                                <span class="badge badge-success px-2 py-1 mr-2"><i class="fas fa-circle mr-1"></i> Hijau: Kosong</span>
-                                <span class="badge badge-danger px-2 py-1 mr-3"><i class="fas fa-circle mr-1"></i> Merah: Terisi</span>
-                                <small class="text-muted"><i class="fas fa-arrows-alt-h mr-1"></i> Drag / Geser mouse untuk menjelajah</small>
+                            <!-- Row 2: Search Bar -->
+                            <div class="border-top pt-2 mt-1">
+                                <div class="d-flex align-items-center flex-wrap gap-2">
+                                    <span class="font-weight-bold text-secondary mr-2"><i class="fas fa-search mr-1"></i> Cari Lokasi Pallet:</span>
+                                    <div class="input-group input-group-sm mr-2" style="max-width: 200px;">
+                                        <div class="input-group-prepend"><span class="input-group-text"><i class="fas fa-globe"></i></span></div>
+                                        <input type="text" class="form-control" id="searchCountry" placeholder="Country (mis. JAPAN)">
+                                    </div>
+                                    <div class="input-group input-group-sm mr-2" style="max-width: 180px;">
+                                        <div class="input-group-prepend"><span class="input-group-text"><i class="fas fa-tag"></i></span></div>
+                                        <input type="text" class="form-control" id="searchOcf" placeholder="OCF (mis. 1234)">
+                                    </div>
+                                    <div class="input-group input-group-sm mr-2" style="max-width: 200px;">
+                                        <div class="input-group-prepend"><span class="input-group-text"><i class="fas fa-tshirt"></i></span></div>
+                                        <input type="text" class="form-control" id="searchStyle" placeholder="Style (mis. AB1234)">
+                                    </div>
+                                    <button type="button" class="btn btn-sm btn-warning font-weight-bold" id="btnSearch">
+                                        <i class="fas fa-search mr-1"></i> Cari
+                                    </button>
+                                    <small class="text-muted"><i class="fas fa-arrows-alt-h mr-1"></i> Drag untuk menjelajah</small>
+                                </div>
                             </div>
                         </div>
 
@@ -262,7 +386,7 @@
                                                 $summary = $rowSummaries[$rowLetter] ?? null;
                                                 $isRowLocked = $summary && $summary['is_locked'];
                                             @endphp
-                                            <div class="pallet-row-card {{ $isRowLocked ? 'locked-card' : '' }}">
+                                            <div class="pallet-row-card {{ $isRowLocked ? 'locked-card' : '' }}" data-row="{{ $rowLetter }}">
                                                 <!-- Header Row Card -->
                                                 <div class="card-header py-2 bg-light border-bottom">
                                                     <div class="d-flex justify-content-between align-items-center">
@@ -434,7 +558,7 @@
 
     <!-- Modal Detail Pallet & Manajemen Item -->
     <div class="modal fade" id="palletDetailModal" tabindex="-1" role="dialog" aria-hidden="true">
-        <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable" role="document">
             <div class="modal-content">
                 <div class="modal-header bg-primary text-white">
                     <h5 class="modal-title font-weight-bold">
@@ -618,7 +742,7 @@
 
     <!-- Modal Quick Plot Baru -->
     <div class="modal fade" id="quickPlotModal" tabindex="-1" role="dialog" aria-hidden="true">
-        <div class="modal-dialog" role="document">
+        <div class="modal-dialog modal-lg" role="document">
             <div class="modal-content">
                 <div class="modal-header bg-primary text-white">
                     <h5 class="modal-title font-weight-bold">
@@ -679,6 +803,31 @@
                     </div>
                 </form>
             </div>
+        </div>
+    </div>
+
+    <!-- ==================== FULLSCREEN OVERLAY ==================== -->
+    <div id="fullscreenOverlay">
+        <div id="fullscreenTopBar">
+            <span class="fs-title"><i class="fas fa-warehouse mr-2"></i> Visualisasi Pallet — Fullscreen Mode</span>
+            <div class="fs-controls">
+                <!-- Search in fullscreen -->
+                <input type="text" id="fsSearchCountry" class="form-control form-control-sm" placeholder="Country" style="width:130px; background:#3a3f5c; color:#fff; border-color:#5a6080;">
+                <input type="text" id="fsSearchOcf" class="form-control form-control-sm" placeholder="OCF" style="width:110px; background:#3a3f5c; color:#fff; border-color:#5a6080;">
+                <input type="text" id="fsSearchStyle" class="form-control form-control-sm" placeholder="Style" style="width:140px; background:#3a3f5c; color:#fff; border-color:#5a6080;">
+                <button class="btn btn-sm btn-warning" id="fsBtnSearch"><i class="fas fa-search"></i></button>
+                <div class="border-left border-secondary mx-2" style="height:24px;"></div>
+                <!-- Zoom Controls -->
+                <button class="btn btn-sm btn-outline-light" id="fsBtnZoomOut" title="Zoom Out"><i class="fas fa-search-minus"></i></button>
+                <span class="zoom-label" id="fsZoomLabel">100%</span>
+                <button class="btn btn-sm btn-outline-light" id="fsBtnZoomIn" title="Zoom In"><i class="fas fa-search-plus"></i></button>
+                <button class="btn btn-sm btn-outline-light" id="fsBtnZoomReset" title="Reset Zoom"><i class="fas fa-compress-arrows-alt"></i></button>
+                <div class="border-left border-secondary mx-2" style="height:24px;"></div>
+                <button class="btn btn-sm btn-outline-danger" id="fsBtnClose"><i class="fas fa-times mr-1"></i>Tutup</button>
+            </div>
+        </div>
+        <div id="fullscreenBoard">
+            <!-- Board will be mirrored/cloned here dynamically -->
         </div>
     </div>
 
@@ -930,42 +1079,259 @@
         let startX;
         let scrollLeftPos;
 
-        if (boardScroll) {
-            boardScroll.addEventListener('mousedown', (e) => {
-                // Jangan drag jika user mengklik pallet box untuk buka modal atau tombol/link
+        function setupDragScroll(el) {
+            if (!el) return;
+            let _isDown = false, _startX, _scrollLeft;
+            el.addEventListener('mousedown', (e) => {
                 if (e.target.closest('.pallet-box') || e.target.closest('button') || e.target.closest('a')) return;
-                isDown = true;
-                boardScroll.classList.add('active');
-                startX = e.pageX - boardScroll.offsetLeft;
-                scrollLeftPos = boardScroll.scrollLeft;
+                _isDown = true;
+                el.classList.add('active');
+                _startX = e.pageX - el.offsetLeft;
+                _scrollLeft = el.scrollLeft;
             });
-
-            boardScroll.addEventListener('mouseleave', () => {
-                isDown = false;
-                boardScroll.classList.remove('active');
-            });
-
-            boardScroll.addEventListener('mouseup', () => {
-                isDown = false;
-                boardScroll.classList.remove('active');
-            });
-
-            boardScroll.addEventListener('mousemove', (e) => {
-                if (!isDown) return;
+            el.addEventListener('mouseleave', () => { _isDown = false; el.classList.remove('active'); });
+            el.addEventListener('mouseup', () => { _isDown = false; el.classList.remove('active'); });
+            el.addEventListener('mousemove', (e) => {
+                if (!_isDown) return;
                 e.preventDefault();
-                const x = e.pageX - boardScroll.offsetLeft;
-                const walk = (x - startX) * 1.6;
-                boardScroll.scrollLeft = scrollLeftPos - walk;
-            });
-
-            $('#btnScrollLeft').click(function () {
-                boardScroll.scrollBy({ left: -450, behavior: 'smooth' });
-            });
-
-            $('#btnScrollRight').click(function () {
-                boardScroll.scrollBy({ left: 450, behavior: 'smooth' });
+                const x = e.pageX - el.offsetLeft;
+                el.scrollLeft = _scrollLeft - (x - _startX) * 1.6;
             });
         }
+
+        setupDragScroll(boardScroll);
+
+        if (boardScroll) {
+            $('#btnScrollLeft').click(function () { boardScroll.scrollBy({ left: -450, behavior: 'smooth' }); });
+            $('#btnScrollRight').click(function () { boardScroll.scrollBy({ left: 450, behavior: 'smooth' }); });
+        }
+
+        // ==========================================
+        // --- Pallet Search Feature ---
+        // ==========================================
+        // Build search index from DOM data attributes on pallet boxes
+        // Each pallet box has title with style/country info; we also embed data on row cards
+        @php
+            $palletRowMetaList = collect($rowSummaries ?? [])->map(function($s, $row) {
+                return [
+                    'row'       => $row,
+                    'country'   => strtolower($s['country'] ?? ''),
+                    'style'     => strtolower($s['style'] ?? ''),
+                    'ocf'       => strtolower($s['ocf'] ?? ''),
+                    'is_locked' => !empty($s['is_locked']),
+                ];
+            })->values()->all();
+        @endphp
+        const palletRowMeta = @json($palletRowMetaList);
+
+        function runPalletSearch(country, ocf, style) {
+            const qCountry = (country || '').trim().toLowerCase();
+            const qOcf = (ocf || '').trim().toLowerCase();
+            const qStyle = (style || '').trim().toLowerCase();
+
+            if (!qCountry && !qOcf && !qStyle) {
+                clearPalletSearch();
+                return;
+            }
+
+            let matched = [];
+            palletRowMeta.forEach(function(meta) {
+                let ok = true;
+                if (qCountry && !meta.country.includes(qCountry)) ok = false;
+                if (qOcf && !meta.ocf.includes(qOcf)) ok = false;
+                if (qStyle && !meta.style.includes(qStyle)) ok = false;
+                if (ok && meta.is_locked) matched.push(meta.row);
+            });
+
+            // Highlight/dim row cards
+            document.querySelectorAll('.pallet-row-card').forEach(function(card) {
+                const row = card.getAttribute('data-row');
+                if (!row) return;
+                card.classList.remove('search-match', 'search-dim');
+                if (matched.includes(row)) {
+                    card.classList.add('search-match');
+                } else {
+                    card.classList.add('search-dim');
+                }
+            });
+
+            // Show results panel
+            const panel = document.getElementById('searchResultsPanel');
+            const tagsEl = document.getElementById('searchResultTags');
+            const infoEl = document.getElementById('searchResultInfo');
+            panel.classList.add('active');
+
+            if (matched.length === 0) {
+                tagsEl.innerHTML = '<span class="text-muted">Tidak ada pallet yang cocok.</span>';
+                infoEl.textContent = 'Coba kata kunci lain.';
+            } else {
+                let tagHtml = matched.map(function(row) {
+                    const meta = palletRowMeta.find(m => m.row === row);
+                    return `<span class="search-result-tag" onclick="scrollToRow('${row}')" title="Scroll ke Row ${row}">
+                        <i class="fas fa-map-marker-alt mr-1"></i> ROW ${row}
+                        <small class="ml-1 opacity-75">${meta ? meta.style + (meta.ocf ? ' / OCF:' + meta.ocf.toUpperCase() : '') : ''}</small>
+                    </span>`;
+                }).join('');
+                tagsEl.innerHTML = tagHtml;
+                infoEl.textContent = `Ditemukan ${matched.length} Row pallet yang cocok. Klik tag untuk scroll ke lokasi.`;
+            }
+
+            // Also highlight in fullscreen if open
+            syncFullscreenHighlight(matched);
+        }
+
+        function clearPalletSearch() {
+            document.querySelectorAll('.pallet-row-card').forEach(function(card) {
+                card.classList.remove('search-match', 'search-dim');
+            });
+            document.getElementById('searchResultsPanel').classList.remove('active');
+            document.getElementById('searchResultTags').innerHTML = '';
+        }
+
+        function scrollToRow(rowLetter) {
+            const card = document.querySelector(`.pallet-row-card[data-row="${rowLetter}"]`);
+            if (card && boardScroll) {
+                const offset = card.offsetLeft - 20;
+                boardScroll.scrollTo({ left: offset, behavior: 'smooth' });
+            }
+        }
+
+        $('#btnSearch').click(function() {
+            runPalletSearch($('#searchCountry').val(), $('#searchOcf').val(), $('#searchStyle').val());
+        });
+        $('#searchCountry, #searchOcf, #searchStyle').on('keypress', function(e) {
+            if (e.which === 13) $('#btnSearch').click();
+        });
+        $('#btnClearSearch').click(function() {
+            clearPalletSearch();
+            $('#searchCountry, #searchOcf, #searchStyle').val('');
+        });
+
+        // ==========================================
+        // --- Fullscreen Mode ---
+        // ==========================================
+        let fsZoom = 1.0;
+        const FS_ZOOM_STEP = 0.1;
+        const FS_ZOOM_MIN = 0.3;
+        const FS_ZOOM_MAX = 2.0;
+        let fsBoardScroll = null;
+
+        function openFullscreen() {
+            const overlay = document.getElementById('fullscreenOverlay');
+            const fsBoard = document.getElementById('fullscreenBoard');
+
+            // Clone the entire pallet board
+            const originalBoard = document.getElementById('palletBoardScroll');
+            const clone = originalBoard.cloneNode(true);
+            clone.id = 'palletBoardScrollFs';
+            // Re-bind click events on cloned pallet boxes
+            clone.querySelectorAll('.pallet-box').forEach(function(box) {
+                const onclick = box.getAttribute('onclick');
+                if (onclick) {
+                    box.addEventListener('click', function() {
+                        eval(onclick);
+                    });
+                    box.removeAttribute('onclick');
+                }
+            });
+
+            fsBoard.innerHTML = '';
+            const wrapper = document.createElement('div');
+            wrapper.className = 'pallet-board-wrapper';
+            wrapper.style.minHeight = '100%';
+            wrapper.appendChild(clone);
+            fsBoard.appendChild(wrapper);
+
+            fsBoardScroll = clone;
+            setupDragScroll(fsBoardScroll);
+
+            fsZoom = 1.0;
+            applyFsZoom();
+
+            overlay.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeFullscreen() {
+            const overlay = document.getElementById('fullscreenOverlay');
+            overlay.classList.remove('active');
+            document.body.style.overflow = '';
+            document.getElementById('fullscreenBoard').innerHTML = '';
+            fsBoardScroll = null;
+        }
+
+        function applyFsZoom() {
+            if (!fsBoardScroll) return;
+            fsBoardScroll.style.transform = `scale(${fsZoom})`;
+            fsBoardScroll.style.transformOrigin = 'top left';
+            document.getElementById('fsZoomLabel').textContent = Math.round(fsZoom * 100) + '%';
+        }
+
+        function syncFullscreenHighlight(matchedRows) {
+            const fsBoard = document.getElementById('fullscreenBoard');
+            if (!fsBoard || !fsBoard.querySelector('.pallet-row-card')) return;
+            fsBoard.querySelectorAll('.pallet-row-card').forEach(function(card) {
+                const row = card.getAttribute('data-row');
+                card.classList.remove('search-match', 'search-dim');
+                if (matchedRows && matchedRows.length > 0) {
+                    if (matchedRows.includes(row)) card.classList.add('search-match');
+                    else card.classList.add('search-dim');
+                }
+            });
+        }
+
+        document.getElementById('btnFullscreen').addEventListener('click', openFullscreen);
+        document.getElementById('fsBtnClose').addEventListener('click', closeFullscreen);
+
+        document.getElementById('fsBtnZoomIn').addEventListener('click', function() {
+            fsZoom = Math.min(FS_ZOOM_MAX, Math.round((fsZoom + FS_ZOOM_STEP) * 10) / 10);
+            applyFsZoom();
+        });
+        document.getElementById('fsBtnZoomOut').addEventListener('click', function() {
+            fsZoom = Math.max(FS_ZOOM_MIN, Math.round((fsZoom - FS_ZOOM_STEP) * 10) / 10);
+            applyFsZoom();
+        });
+        document.getElementById('fsBtnZoomReset').addEventListener('click', function() {
+            fsZoom = 1.0;
+            applyFsZoom();
+        });
+
+        // Mouse wheel zoom in fullscreen
+        document.getElementById('fullscreenBoard').addEventListener('wheel', function(e) {
+            if (e.ctrlKey) {
+                e.preventDefault();
+                if (e.deltaY < 0) {
+                    fsZoom = Math.min(FS_ZOOM_MAX, Math.round((fsZoom + FS_ZOOM_STEP) * 10) / 10);
+                } else {
+                    fsZoom = Math.max(FS_ZOOM_MIN, Math.round((fsZoom - FS_ZOOM_STEP) * 10) / 10);
+                }
+                applyFsZoom();
+            }
+        }, { passive: false });
+
+        // Fullscreen search
+        document.getElementById('fsBtnSearch').addEventListener('click', function() {
+            const country = document.getElementById('fsSearchCountry').value;
+            const ocf = document.getElementById('fsSearchOcf').value;
+            const style = document.getElementById('fsSearchStyle').value;
+            runPalletSearch(country, ocf, style);
+            // Also sync the normal search inputs
+            $('#searchCountry').val(country);
+            $('#searchOcf').val(ocf);
+            $('#searchStyle').val(style);
+        });
+        ['fsSearchCountry', 'fsSearchOcf', 'fsSearchStyle'].forEach(function(id) {
+            document.getElementById(id).addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') document.getElementById('fsBtnSearch').click();
+            });
+        });
+
+        // Close fullscreen with Escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && document.getElementById('fullscreenOverlay').classList.contains('active')) {
+                closeFullscreen();
+            }
+        });
     </script>
 </body>
 </html>

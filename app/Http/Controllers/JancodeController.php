@@ -204,7 +204,7 @@ class JancodeController extends Controller
     public function previewAiImport(Request $request, \App\Services\JancodeImportService $service)
     {
         $request->validate([
-            'file' => 'required|file|mimes:xlsx|max:5120'
+            'file' => 'required|file|mimes:xlsx,xls|max:15360'
         ]);
 
         try {
@@ -215,14 +215,15 @@ class JancodeController extends Controller
             // Tandai duplikat terhadap data eksisting
             $existingKeys = Jancode::select('ocf', 'style', 'color', 'size', 'jancode')
                 ->get()
-                ->map(fn($item) => strtolower("{$item->ocf}|{$item->style}|{$item->color}|{$item->size}|{$item->jancode}"))
+                ->map(fn($item) => strtolower(trim("{$item->ocf}|{$item->style}|{$item->color}|{$item->size}|{$item->jancode}")))
                 ->flip()
                 ->toArray();
 
             foreach ($preview['items'] as &$item) {
-                $key = strtolower("{$item['ocf']}|{$item['style']}|{$item['color']}|{$item['size']}|{$item['jan_code']}");
+                $key = strtolower(trim("{$item['ocf']}|{$item['style']}|{$item['color']}|{$item['size']}|{$item['jan_code']}"));
                 $item['is_duplicate'] = isset($existingKeys[$key]);
             }
+            unset($item);
 
             return response()->json([
                 'success'          => true,
@@ -230,6 +231,7 @@ class JancodeController extends Controller
                 'original_filename'=> $originalName,
             ]);
         } catch (\Throwable $e) {
+            Log::error('AI Import Error: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
             return response()->json([
                 'success' => false,
                 'message' => 'Gagal memproses file Excel: ' . $e->getMessage()
@@ -299,12 +301,25 @@ class JancodeController extends Controller
                 $qtyPerCarton = (int)($item['qty_per_carton'] ?? 0);
                 $totalPcs     = $packingQty * $qtyPerCarton;
 
+                $cartonFrom   = isset($item['carton_no_from']) && $item['carton_no_from'] !== '' ? (int)$item['carton_no_from'] : null;
+                $cartonTo     = isset($item['carton_no_to']) && $item['carton_no_to'] !== '' ? (int)$item['carton_no_to'] : null;
+                $sourceRow    = isset($item['source_row']) ? (int)$item['source_row'] : null;
+                $nwPerCtn     = isset($item['nw_per_carton']) && $item['nw_per_carton'] !== '' ? (float)$item['nw_per_carton'] : null;
+                $ttlNw        = isset($item['ttl_nw']) && $item['ttl_nw'] !== '' ? (float)$item['ttl_nw'] : null;
+                $gwPerCtn     = isset($item['gw_per_carton']) && $item['gw_per_carton'] !== '' ? (float)$item['gw_per_carton'] : null;
+                $ttlGw        = isset($item['ttl_gw']) && $item['ttl_gw'] !== '' ? (float)$item['ttl_gw'] : null;
+                $measCm       = $item['measurement_cm'] ?? null;
+                $cbm          = isset($item['cbm']) && $item['cbm'] !== '' ? (float)$item['cbm'] : null;
+
                 if ($existing) {
                     $receiveQty = (int)($existing->receive_qty_carton ?? 0);
                     $existing->update([
                         'import_batch_id'         => $batch->id,
+                        'source_row'              => $sourceRow,
                         'country'                 => $item['country'],
                         'buyer'                   => $item['buyer'],
+                        'carton_no_from'          => $cartonFrom,
+                        'carton_no_to'            => $cartonTo,
                         'qty_per_carton'          => $qtyPerCarton,
                         'packing_list_qty_carton' => $packingQty,
                         'qty'                     => $packingQty,
@@ -312,15 +327,24 @@ class JancodeController extends Controller
                         'cpo'                     => $item['ocf'],
                         'balance'                 => max(0, $packingQty - $receiveQty),
                         'total_qty_pcs'           => $totalPcs,
+                        'nw_per_carton'           => $nwPerCtn,
+                        'ttl_nw'                  => $ttlNw,
+                        'gw_per_carton'           => $gwPerCtn,
+                        'ttl_gw'                  => $ttlGw,
+                        'measurement_cm'          => $measCm,
+                        'cbm'                     => $cbm,
                     ]);
                     $updatedCount++;
                 } else {
                     Jancode::create([
                         'import_batch_id'         => $batch->id,
+                        'source_row'              => $sourceRow,
                         'country'                 => $item['country'],
                         'buyer'                   => $item['buyer'],
                         'ocf'                     => $item['ocf'],
                         'style'                   => $item['style'],
+                        'carton_no_from'          => $cartonFrom,
+                        'carton_no_to'            => $cartonTo,
                         'color'                   => $item['color'],
                         'size'                    => $item['size'],
                         'qty_per_carton'          => $qtyPerCarton,
@@ -329,6 +353,12 @@ class JancodeController extends Controller
                         'receive_qty_carton'      => 0,
                         'balance'                 => $packingQty,
                         'total_qty_pcs'           => $totalPcs,
+                        'nw_per_carton'           => $nwPerCtn,
+                        'ttl_nw'                  => $ttlNw,
+                        'gw_per_carton'           => $gwPerCtn,
+                        'ttl_gw'                  => $ttlGw,
+                        'measurement_cm'          => $measCm,
+                        'cbm'                     => $cbm,
                         'qty'                     => $packingQty,
                         'destination'             => $item['country'],
                         'cpo'                     => $item['ocf'],

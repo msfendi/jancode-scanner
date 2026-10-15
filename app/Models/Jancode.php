@@ -13,10 +13,13 @@ class Jancode extends Model
 
     protected $fillable = [
         'import_batch_id',
+        'source_row',
         'country',
         'buyer',
         'ocf',
         'style',
+        'carton_no_from',
+        'carton_no_to',
         'color',
         'size',
         'qty_per_carton',
@@ -25,6 +28,12 @@ class Jancode extends Model
         'receive_qty_carton',
         'balance',
         'total_qty_pcs',
+        'nw_per_carton',
+        'ttl_nw',
+        'gw_per_carton',
+        'ttl_gw',
+        'measurement_cm',
+        'cbm',
         // Legacy column compatibility
         'qty',
         'destination',

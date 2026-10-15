@@ -18,16 +18,19 @@ class JancodeImportService
         // Out of scope: Sheet kedua diabaikan, hanya ambil sheet pertama
         $sheet = $spreadsheet->getSheet(0);
 
-        // 1. Ekstrak Header
+        // 1. Ekstrak Header metadata secara dinamis (BUYER, STYLE, DESTINATION/COUNTRY, CPO/OCD)
         $header = $this->extractHeader($sheet);
 
-        // 2. Pre-processing: Deteksi merge cells & forward fill
-        $preprocessed = $this->preprocessRows($sheet);
+        // 2. Deteksi layout kolom tabel secara dinamis (tanpa mengandalkan huruf kolom tetap)
+        $layout = $this->detectTableLayout($sheet);
 
-        // 3. Ekstraksi deterministik (Ground Truth Engine)
-        $deterministicResult = $this->deterministicExtract($header, $preprocessed['rows']);
+        // 3. Pre-processing: Deteksi merge cells & forward fill berdasarkan layout dinamis
+        $preprocessed = $this->preprocessRows($sheet, $layout);
 
-        // 4. AI Calling (Opsional / AI-Assisted jika API key tersedia)
+        // 4. Ekstraksi deterministik (Ground Truth Engine)
+        $deterministicResult = $this->deterministicExtract($header, $preprocessed['rows'], $layout);
+
+        // 5. AI Calling (Opsional / AI-Assisted jika API key tersedia)
         $finalResult = $deterministicResult;
         if (config('services.gemini.api_key') || env('GEMINI_API_KEY') || env('OPENAI_API_KEY')) {
             try {
@@ -48,6 +51,7 @@ class JancodeImportService
 
         return [
             'header'            => $header,
+            'layout'            => $layout,
             'items'             => $finalResult['items'],
             'skipped'           => $finalResult['skipped'],
             'total_items'       => count($finalResult['items']),
@@ -55,45 +59,94 @@ class JancodeImportService
             'skipped_count'     => count($finalResult['skipped']),
             'carton_match'      => ($totalCarton === $deterministicCarton),
             'expected_carton'   => $deterministicCarton,
+            'ai_mode'           => (bool)(config('services.gemini.api_key') || env('GEMINI_API_KEY') || env('OPENAI_API_KEY')),
         ];
     }
 
     /**
-     * Ekstrak Header: BUYER, STYLE, DESTINATION, CPO.
+     * Helper aman membaca nilai sel agar tidak crash jika ada formula error / #VALUE!
+     */
+    private function getCellValue($sheet, string $colOrCoord, ?int $row = null): mixed
+    {
+        $coord = $row !== null ? "{$colOrCoord}{$row}" : $colOrCoord;
+        try {
+            $cell = $sheet->getCell($coord);
+            if (!$cell) return null;
+            return $cell->getCalculatedValue();
+        } catch (\Throwable $e) {
+            try {
+                return $sheet->getCell($coord)->getValue();
+            } catch (\Throwable $e2) {
+                return null;
+            }
+        }
+    }
+
+    /**
+     * Helper aman membaca string teks sel
+     */
+    private function getCellString($sheet, string $colOrCoord, ?int $row = null): string
+    {
+        $val = $this->getCellValue($sheet, $colOrCoord, $row);
+        return trim((string)($val ?? ''));
+    }
+
+    /**
+     * Ekstrak Header: BUYER, STYLE, DESTINATION/COUNTRY, CPO/OCD/OCF secara dinamis.
+     * Mencari label pada baris 1-30 di kolom manapun, lalu mengambil nilainya dari sel tersebut
+     * atau sel di kanannya (termasuk jika dipisahkan tanda titik dua / merge).
      */
     private function extractHeader($sheet): array
     {
-        $highestRow = min(15, $sheet->getHighestRow());
+        $highestRow = min(30, $sheet->getHighestRow());
+        $highestColIndex = min(25, Coordinate::columnIndexFromString($sheet->getHighestColumn()));
+
         $buyer = '';
         $style = '';
         $country = '';
         $ocf = '';
 
         for ($row = 1; $row <= $highestRow; $row++) {
-            $label = strtoupper(trim((string)$sheet->getCell("A{$row}")->getValue()));
-            $val = trim((string)$sheet->getCell("D{$row}")->getCalculatedValue());
+            for ($col = 1; $col <= $highestColIndex; $col++) {
+                $colLetter = Coordinate::stringFromColumnIndex($col);
+                $cellVal = $this->getCellString($sheet, $colLetter, $row);
+                if ($cellVal === '') continue;
 
-            if (str_contains($label, 'BUYER')) {
-                $buyer = $val;
-            } elseif (str_contains($label, 'STYLE')) {
-                $style = $val;
-            } elseif (str_contains($label, 'DESTINATION')) {
-                $country = $val;
-            } elseif (str_contains($label, 'CPO')) {
-                // Ambil angka sebelum " - " (contoh: 26139 - 266C0127-B5 -> 26139)
-                $parts = explode('-', $val);
-                $ocf = trim($parts[0] ?? $val);
+                $upper = strtoupper($cellVal);
+
+                // Helper ambil nilai di sebelah kanan (kolom berikutnya)
+                $getNextVal = function() use ($sheet, $col, $row, $highestColIndex) {
+                    for ($next = $col + 1; $next <= min($highestColIndex, $col + 4); $next++) {
+                        $nextLetter = Coordinate::stringFromColumnIndex($next);
+                        $val = $this->getCellString($sheet, $nextLetter, $row);
+                        if ($val !== '') return $val;
+                    }
+                    return '';
+                };
+
+                // Helper bersihkan prefix label mis. "BUYER : MUJI" -> "MUJI"
+                $cleanLabel = function($val) {
+                    $parts = preg_split('/[:\-]/', $val, 2);
+                    return isset($parts[1]) ? trim($parts[1]) : '';
+                };
+
+                if (str_contains($upper, 'BUYER') && !$buyer) {
+                    $val = $cleanLabel($cellVal) ?: $getNextVal();
+                    if ($val) $buyer = $val;
+                } elseif (str_contains($upper, 'STYLE') && !$style) {
+                    $val = $cleanLabel($cellVal) ?: $getNextVal();
+                    if ($val) $style = $val;
+                } elseif ((str_contains($upper, 'DESTINATION') || str_contains($upper, 'COUNTRY')) && !$country) {
+                    $val = $cleanLabel($cellVal) ?: $getNextVal();
+                    if ($val) $country = strtoupper(trim($val));
+                } elseif ((str_contains($upper, 'CPO') || str_contains($upper, 'OCD') || str_contains($upper, 'ORDER NO') || str_contains($upper, 'OCF')) && !$ocf) {
+                    $val = $cleanLabel($cellVal) ?: $getNextVal();
+                    if ($val) {
+                        $parts = explode('-', $val);
+                        $ocf = trim($parts[0] ?? $val);
+                    }
+                }
             }
-        }
-
-        // Fallback default jika posisi tepat di D5..D8
-        if (!$buyer) $buyer = trim((string)$sheet->getCell('D5')->getCalculatedValue());
-        if (!$style) $style = trim((string)$sheet->getCell('D6')->getCalculatedValue());
-        if (!$country) $country = trim((string)$sheet->getCell('D7')->getCalculatedValue());
-        if (!$ocf) {
-            $cpoVal = trim((string)$sheet->getCell('D8')->getCalculatedValue());
-            $parts = explode('-', $cpoVal);
-            $ocf = trim($parts[0] ?? $cpoVal);
         }
 
         return [
@@ -105,14 +158,219 @@ class JancodeImportService
     }
 
     /**
-     * Membaca merge cell dan menyusun baris terstruktur dengan forward fill color.
+     * Deteksi posisi kolom tabel secara dinamis dari baris header tabel.
+     * Tidak lagi bergantung pada huruf kolom statis (A, D, E, F, G..L, N).
      */
-    private function preprocessRows($sheet): array
+    private function detectTableLayout($sheet): array
+    {
+        $highestRow = min(35, $sheet->getHighestRow());
+        $highestColIndex = Coordinate::columnIndexFromString($sheet->getHighestColumn());
+
+        $bestHeaderRow = null;
+        $bestScore = 0;
+
+        // Cari baris yang paling banyak mengandung kata kunci header packing list (mulai dari baris 2)
+        for ($row = 2; $row <= $highestRow; $row++) {
+            $score = 0;
+            for ($col = 1; $col <= $highestColIndex; $col++) {
+                $colLetter = Coordinate::stringFromColumnIndex($col);
+                $val = strtoupper($this->getCellString($sheet, $colLetter, $row));
+                if ($val !== '') {
+                    if (str_contains($val, 'JAN') || str_contains($val, 'BARCODE') || str_contains($val, 'EAN')) $score += 10;
+                    if (str_contains($val, 'COLOR') || str_contains($val, 'COLOUR') || str_contains($val, 'WARNA')) $score += 8;
+                    if (str_contains($val, 'CARTON') || str_contains($val, 'CTN')) $score += 6;
+                    if (str_contains($val, 'TOTAL CARTON') || str_contains($val, 'TTL CTN') || str_contains($val, 'CARTON QTY')) $score += 8;
+                    if (str_contains($val, 'TOTAL PCS') || str_contains($val, 'TTL PCS')) $score += 6;
+                    if (in_array($val, ['XS', 'S', 'M', 'L', 'XL', '2XL', 'XXL', '3XL', 'FREE'])) $score += 4;
+                    if (str_contains($val, 'KETERANGAN') || str_contains($val, 'REMARK') || str_contains($val, 'TYPE')) $score += 4;
+                }
+            }
+
+            if ($score > $bestScore) {
+                $bestScore = $score;
+                $bestHeaderRow = $row;
+            }
+        }
+
+        $headerRow = $bestHeaderRow ?: 11;
+        $prevRow = max(1, $headerRow - 1);
+
+        $layout = [
+            'header_row'        => $headerRow,
+            'data_start_row'    => $headerRow + 1,
+            'carton_from_col'   => null,
+            'carton_to_col'     => null,
+            'color_col'         => null,
+            'jan_col'           => null,
+            'keterangan_col'    => null, // OPTIONAL: Bisa null jika tidak ada kolom Keterangan!
+            'size_cols'         => [],   // [colLetter => sizeName]
+            'single_size_col'   => null, // Jika size ditaruh di 1 kolom teks
+            'total_carton_col'  => null,
+            'total_pcs_col'     => null,
+            'qty_per_carton_col'=> null,
+            'nw_col'            => null,
+            'ttl_nw_col'        => null,
+            'gw_col'            => null,
+            'ttl_gw_col'        => null,
+            'measurement_col'   => null,
+            'cbm_col'           => null,
+        ];
+
+        $standardSizes = ['XS', 'S', 'M', 'L', 'XL', '2XL', 'XXL', '3XL', 'XXXL', '4XL', '28', '29', '30', '31', '32', '33', '34', '36', '38', '40', 'FREE', 'ALL'];
+
+        // Telusuri kolom-kolom pada headerRow
+        for ($col = 1; $col <= $highestColIndex; $col++) {
+            $colLetter = Coordinate::stringFromColumnIndex($col);
+            $val = strtoupper($this->getCellString($sheet, $colLetter, $headerRow));
+            $topVal = strtoupper($this->getCellString($sheet, $colLetter, $prevRow));
+
+            // 1. JAN CODE
+            if (str_contains($val, 'JAN') || str_contains($val, 'BARCODE') || str_contains($val, 'EAN')) {
+                if (!$layout['jan_col']) $layout['jan_col'] = $colLetter;
+                continue;
+            }
+
+            // 2. COLOR
+            if (str_contains($val, 'COLOR') || str_contains($val, 'COLOUR') || str_contains($val, 'WARNA')) {
+                if (!$layout['color_col']) $layout['color_col'] = $colLetter;
+                continue;
+            }
+
+            // 3. KETERANGAN (Opsional)
+            if (str_contains($val, 'KETERANGAN') || str_contains($val, 'REMARK') || str_contains($val, 'PACKING TYPE') || $val === 'TYPE') {
+                if (!$layout['keterangan_col']) $layout['keterangan_col'] = $colLetter;
+                continue;
+            }
+
+            // 4. TOTAL CARTON
+            if (
+                str_contains($val, 'TOTAL CARTON') ||
+                str_contains($val, 'TOTAL CTN') ||
+                str_contains($val, 'TTL CTN') ||
+                str_contains($val, 'CARTON QTY') ||
+                str_contains($val, 'QTY CTN') ||
+                ($val === 'TOTAL' && str_contains($topVal, 'CARTON'))
+            ) {
+                if (!$layout['total_carton_col']) $layout['total_carton_col'] = $colLetter;
+                continue;
+            }
+
+            // 5. TOTAL PCS
+            if (
+                str_contains($val, 'TOTAL PCS') ||
+                str_contains($val, 'TTL PCS') ||
+                str_contains($val, 'TOTAL QTY') ||
+                str_contains($val, 'QTY PCS') ||
+                ($val === 'TOTAL' && str_contains($topVal, 'PCS'))
+            ) {
+                if (!$layout['total_pcs_col']) $layout['total_pcs_col'] = $colLetter;
+                continue;
+            }
+
+            // 6. QTY / CTN (Pcs per karton)
+            if (
+                str_contains($val, 'PCS/CTN') ||
+                str_contains($val, 'QTY/CTN') ||
+                str_contains($val, 'PCS PER CARTON') ||
+                str_contains($val, 'QTY PER CARTON') ||
+                str_contains($val, 'TOTAL PCS/CTN')
+            ) {
+                if (!$layout['qty_per_carton_col']) $layout['qty_per_carton_col'] = $colLetter;
+                continue;
+            }
+
+            // 7. SIZE BREAKDOWN atau SINGLE SIZE
+            if (in_array($val, $standardSizes) || (is_numeric($val) && (int)$val >= 20 && (int)$val <= 60)) {
+                $layout['size_cols'][$colLetter] = $val;
+                continue;
+            }
+
+            if ($val === 'SIZE' || str_contains($val, 'UKURAN')) {
+                $layout['single_size_col'] = $colLetter;
+                continue;
+            }
+
+            if (str_contains($topVal, 'SIZE') || str_contains($topVal, 'BREAKDOWN')) {
+                if ($val !== '' && !str_contains($val, 'TOTAL') && !str_contains($val, 'CARTON')) {
+                    $layout['size_cols'][$colLetter] = $val;
+                    continue;
+                }
+            }
+
+            // 8. CARTON NUMBERING (From / To)
+            if (str_contains($val, 'CARTON') || str_contains($val, 'CTN') || str_contains($val, 'CTNS') || str_contains($val, 'BOX')) {
+                if (!$layout['carton_from_col'] && !str_contains($val, 'TOTAL') && !str_contains($val, 'QTY')) {
+                    $layout['carton_from_col'] = $colLetter;
+                    continue;
+                }
+            }
+            if ($val === 'TO' || str_contains($val, 'CTN TO') || str_contains($val, 'CARTON TO')) {
+                if (!$layout['carton_to_col']) $layout['carton_to_col'] = $colLetter;
+                continue;
+            }
+
+            // 9. WEIGHTS & MEASUREMENTS
+            if (str_contains($val, 'N.W') || str_contains($val, 'NW') || str_contains($val, 'NET WEIGHT')) {
+                if (str_contains($val, 'TTL') || str_contains($val, 'TOTAL')) {
+                    $layout['ttl_nw_col'] = $colLetter;
+                } else {
+                    $layout['nw_col'] = $colLetter;
+                }
+                continue;
+            }
+            if (str_contains($val, 'G.W') || str_contains($val, 'GW') || str_contains($val, 'GROSS WEIGHT')) {
+                if (str_contains($val, 'TTL') || str_contains($val, 'TOTAL')) {
+                    $layout['ttl_gw_col'] = $colLetter;
+                } else {
+                    $layout['gw_col'] = $colLetter;
+                }
+                continue;
+            }
+            if (str_contains($val, 'MEAS') || str_contains($val, 'DIMENSION')) {
+                $layout['measurement_col'] = $colLetter;
+                continue;
+            }
+            if (str_contains($val, 'CBM') || str_contains($val, 'M3') || str_contains($val, 'VOLUME')) {
+                $layout['cbm_col'] = $colLetter;
+                continue;
+            }
+        }
+
+        // Fallback default cerdas jika header tidak memakai label teks baku
+        if (!$layout['carton_from_col']) $layout['carton_from_col'] = 'A';
+        if (!$layout['carton_to_col']) $layout['carton_to_col'] = 'C';
+        if (!$layout['color_col']) $layout['color_col'] = 'D';
+        if (!$layout['jan_col']) $layout['jan_col'] = 'E';
+        if (!$layout['total_carton_col']) $layout['total_carton_col'] = 'N';
+
+        // Jika size_cols kosong, coba periksa kolom default G..L pada headerRow
+        if (empty($layout['size_cols']) && !$layout['single_size_col']) {
+            for ($col = 'G'; $col <= 'L'; $col++) {
+                $val = strtoupper($this->getCellString($sheet, $col, $headerRow));
+                if ($val !== '') {
+                    $layout['size_cols'][$col] = $val;
+                }
+            }
+        }
+
+        return $layout;
+    }
+
+    /**
+     * Membaca merge cell dan menyusun baris terstruktur berdasarkan layout kolom dinamis.
+     */
+    private function preprocessRows($sheet, array $layout): array
     {
         $mergeRanges = $sheet->getMergeCells();
         $mergedRowMap = [];   // [col][row] => is_multi_row_merged
         $mergedValueMap = []; // [col][row] => cell_value_from_top_left
         $cartonGroupMap = []; // [row] => "startRow-endRow"
+
+        $cartonColumns = array_filter([
+            $layout['carton_from_col'],
+            $layout['carton_to_col'],
+            $layout['total_carton_col']
+        ]);
 
         foreach ($mergeRanges as $range) {
             [$start, $end] = Coordinate::splitRange($range)[0];
@@ -121,7 +379,7 @@ class JancodeImportService
             $endCol = preg_replace('/[0-9]/', '', $end);
             $endRow = (int) preg_replace('/[^0-9]/', '', $end);
 
-            $topVal = trim((string)$sheet->getCell("{$startCol}{$startRow}")->getCalculatedValue());
+            $topVal = $this->getCellString($sheet, "{$startCol}{$startRow}");
             $startColIndex = Coordinate::columnIndexFromString($startCol);
             $endColIndex = Coordinate::columnIndexFromString($endCol);
 
@@ -133,20 +391,11 @@ class JancodeImportService
                     }
                     if ($endRow > $startRow) {
                         $mergedRowMap[$colLetter][$r] = true;
-                        if (in_array($colLetter, ['A', 'B', 'C', 'N'])) {
+                        if (in_array($colLetter, $cartonColumns)) {
                             $cartonGroupMap[$r] = "{$startRow}-{$endRow}";
                         }
                     }
                 }
-            }
-        }
-
-        // Baca size headers (G11:L11)
-        $sizeHeaders = [];
-        for ($col = 'G'; $col <= 'L'; $col++) {
-            $val = strtoupper(trim((string)$sheet->getCell("{$col}11")->getCalculatedValue()));
-            if ($val) {
-                $sizeHeaders[$col] = $val;
             }
         }
 
@@ -156,66 +405,111 @@ class JancodeImportService
         $currentKeterangan = '';
         $structuredTextLines = [];
 
-        for ($row = 12; $row <= $highestRow; $row++) {
-            // 1. Resolve COLOR (Kolom D) dengan Merge Map + Forward Fill
-            $rawColor = $mergedValueMap['D'][$row] ?? trim((string)$sheet->getCell("D{$row}")->getCalculatedValue());
+        $startRow = $layout['data_start_row'];
+        $colorCol = $layout['color_col'] ?: 'D';
+        $janCol = $layout['jan_col'] ?: 'E';
+        $ketCol = $layout['keterangan_col']; // Boleh null jika tidak ada kolom Keterangan!
+        $totalCtnCol = $layout['total_carton_col'] ?: 'N';
+        $ctnFromCol = $layout['carton_from_col'] ?: 'A';
+        $ctnToCol = $layout['carton_to_col'] ?: 'C';
+        $sizeHeaders = $layout['size_cols'];
+        $singleSizeCol = $layout['single_size_col'];
+
+        for ($row = $startRow; $row <= $highestRow; $row++) {
+            // 1. Resolve COLOR dengan Merge Map + Forward Fill
+            $rawColor = $mergedValueMap[$colorCol][$row] ?? $this->getCellString($sheet, $colorCol, $row);
             if (!empty($rawColor)) {
                 $upperColor = strtoupper(trim($rawColor));
-                // Abaikan jika sel D berisi baris ringkasan/total
                 if (!str_contains($upperColor, 'TOTAL') && !str_contains($upperColor, 'GRAND') && !str_contains($upperColor, 'QTY')) {
                     $currentColor = $upperColor;
                 }
             }
 
-            // 2. Resolve KETERANGAN (Kolom F) dengan Merge Map + Forward Fill
-            $rawKeterangan = $mergedValueMap['F'][$row] ?? trim((string)$sheet->getCell("F{$row}")->getCalculatedValue());
-            if (!empty($rawKeterangan)) {
-                $upperKet = strtoupper(trim($rawKeterangan));
-                if (str_contains($upperKet, 'SOLID')) {
-                    $currentKeterangan = 'SOLID';
-                } elseif (str_contains($upperKet, 'ASSORT')) {
-                    $currentKeterangan = 'ASSORT PACK';
-                } else {
-                    $currentKeterangan = $upperKet;
+            // 2. Resolve KETERANGAN (jika ada kolomnya di Excel)
+            if ($ketCol) {
+                $rawKeterangan = $mergedValueMap[$ketCol][$row] ?? $this->getCellString($sheet, $ketCol, $row);
+                if (!empty($rawKeterangan)) {
+                    $upperKet = strtoupper(trim($rawKeterangan));
+                    if (str_contains($upperKet, 'SOLID')) {
+                        $currentKeterangan = 'SOLID';
+                    } elseif (str_contains($upperKet, 'ASSORT')) {
+                        $currentKeterangan = 'ASSORT PACK';
+                    } else {
+                        $currentKeterangan = $upperKet;
+                    }
+                }
+            } else {
+                $currentKeterangan = ''; // Tidak ada kolom keterangan di template ini
+            }
+
+            // 3. Flag carton_merged: true jika sel nomor karton atau total karton masuk merge range multi-baris
+            $cartonMerged = false;
+            foreach ($cartonColumns as $cCol) {
+                if (!empty($mergedRowMap[$cCol][$row])) {
+                    $cartonMerged = true;
+                    break;
                 }
             }
 
-            // Flag carton_merged: true jika sel A, B, C, atau N berada dalam merged range multi-baris
-            $cartonMerged = !empty($mergedRowMap['A'][$row]) ||
-                            !empty($mergedRowMap['B'][$row]) ||
-                            !empty($mergedRowMap['C'][$row]) ||
-                            !empty($mergedRowMap['N'][$row]);
-
-            $janCode = trim((string)$sheet->getCell("E{$row}")->getCalculatedValue());
-            if (empty($janCode) && !empty($mergedValueMap['E'][$row])) {
-                $janCode = trim($mergedValueMap['E'][$row]);
+            // 4. JAN CODE
+            $janCode = $this->getCellString($sheet, $janCol, $row);
+            if (empty($janCode) && !empty($mergedValueMap[$janCol][$row])) {
+                $janCode = trim($mergedValueMap[$janCol][$row]);
             }
 
-            $totalCartonVal = $sheet->getCell("N{$row}")->getCalculatedValue();
-            if ($totalCartonVal === null && !empty($mergedValueMap['N'][$row])) {
-                $totalCartonVal = $mergedValueMap['N'][$row];
+            // 5. TOTAL CARTON
+            $totalCartonVal = $this->getCellValue($sheet, $totalCtnCol, $row);
+            if ($totalCartonVal === null && !empty($mergedValueMap[$totalCtnCol][$row])) {
+                $totalCartonVal = $mergedValueMap[$totalCtnCol][$row];
             }
 
-            // Kumpulkan cells breakdown size
+            // 6. BREAKDOWN SIZE atau SINGLE SIZE
             $sizesFilled = [];
-            foreach ($sizeHeaders as $col => $sizeName) {
-                $val = (int) $sheet->getCell("{$col}{$row}")->getCalculatedValue();
-                if ($val > 0) {
-                    $sizesFilled[$sizeName] = $val;
+            if (!empty($sizeHeaders)) {
+                foreach ($sizeHeaders as $col => $sizeName) {
+                    $val = (int) $this->getCellValue($sheet, $col, $row);
+                    if ($val > 0) {
+                        $sizesFilled[$sizeName] = $val;
+                    }
+                }
+            } elseif ($singleSizeCol) {
+                $sVal = $this->getCellString($sheet, $singleSizeCol, $row);
+                if ($sVal !== '') {
+                    $sizesFilled[$sVal] = 1;
                 }
             }
 
-            // Simpan data mentah baris
+            // 7. Simpan data mentah baris & atribut fisik karton
+            $colAVal = $this->getCellString($sheet, $ctnFromCol, $row);
+            $colCVal = $ctnToCol ? $this->getCellString($sheet, $ctnToCol, $row) : '';
+            $cartonFromNum = preg_replace('/[^0-9]/', '', $colAVal);
+            $cartonToNum = preg_replace('/[^0-9]/', '', $colCVal);
+
+            $nwVal = $layout['nw_col'] ? $this->getCellValue($sheet, $layout['nw_col'], $row) : null;
+            $ttlNwVal = $layout['ttl_nw_col'] ? $this->getCellValue($sheet, $layout['ttl_nw_col'], $row) : null;
+            $gwVal = $layout['gw_col'] ? $this->getCellValue($sheet, $layout['gw_col'], $row) : null;
+            $ttlGwVal = $layout['ttl_gw_col'] ? $this->getCellValue($sheet, $layout['ttl_gw_col'], $row) : null;
+            $measVal = $layout['measurement_col'] ? $this->getCellString($sheet, $layout['measurement_col'], $row) : null;
+            $cbmVal = $layout['cbm_col'] ? $this->getCellValue($sheet, $layout['cbm_col'], $row) : null;
+
             $rowData = [
                 'row'             => $row,
                 'carton_merged'   => $cartonMerged,
                 'carton_group'    => $cartonGroupMap[$row] ?? null,
+                'carton_no_from'  => $cartonFromNum !== '' ? (int)$cartonFromNum : null,
+                'carton_no_to'    => $cartonToNum !== '' ? (int)$cartonToNum : null,
                 'color_inherited' => $currentColor,
                 'jan_code'        => $janCode,
                 'keterangan'      => $currentKeterangan,
                 'sizes_filled'    => $sizesFilled,
                 'total_carton'    => is_numeric($totalCartonVal) ? (int)$totalCartonVal : null,
-                'col_a'           => trim((string)$sheet->getCell("A{$row}")->getCalculatedValue()),
+                'nw_per_carton'   => is_numeric($nwVal) ? (float)$nwVal : null,
+                'ttl_nw'          => is_numeric($ttlNwVal) ? (float)$ttlNwVal : null,
+                'gw_per_carton'   => is_numeric($gwVal) ? (float)$gwVal : null,
+                'ttl_gw'          => is_numeric($ttlGwVal) ? (float)$ttlGwVal : null,
+                'measurement_cm'  => $measVal ?: null,
+                'cbm'             => is_numeric($cbmVal) ? (float)$cbmVal : null,
+                'col_a'           => $colAVal,
                 'col_d'           => $rawColor,
             ];
 
@@ -244,12 +538,15 @@ class JancodeImportService
 
     /**
      * Mesin ekstraksi deterministik berdasarkan aturan PRD (R1 - R6).
+     * Mampu mendeteksi SOLID secara akurat meskipun kolom KETERANGAN tidak ada.
      */
-    public function deterministicExtract(array $header, array $rows): array
+    public function deterministicExtract(array $header, array $rows, array $layout = []): array
     {
         $items = [];
         $skipped = [];
         $processedCartonGroups = [];
+
+        $hasKeteranganCol = !empty($layout['keterangan_col']);
 
         foreach ($rows as $r) {
             $rowNum = $r['row'];
@@ -269,7 +566,8 @@ class JancodeImportService
                 str_contains($colA, 'TOTAL') ||
                 str_contains($colA, 'QTY') ||
                 str_contains($colA, 'GRAND TOTAL') ||
-                str_contains($keterangan, 'TOTAL')
+                str_contains($keterangan, 'TOTAL') ||
+                str_contains(strtoupper($r['color_inherited']), 'TOTAL')
             ) {
                 $skipped[] = [
                     'source_row'    => (string)$rowNum,
@@ -278,7 +576,7 @@ class JancodeImportService
                     'jan_code'      => $cleanJan ?: $jan,
                     'color'         => $r['color_inherited'],
                     'size'          => '-',
-                    'keterangan'    => $keterangan,
+                    'keterangan'    => $keterangan ?: 'TOTAL',
                     'total_carton'  => $r['total_carton'],
                     'carton_merged' => (bool)$r['carton_merged'],
                     'raw_data'      => $r,
@@ -287,18 +585,15 @@ class JancodeImportService
                 continue;
             }
 
-            // PENTING: Deteksi Karton Gabungan / Merge Qty / Assort yang memakai satu carton
-            // "yang gagal seperti assort atau broken yang dia ada merge qty better diinput di table untuk failed input,
-            // tapi berarti kolom jancode/color/size nya diisi dua data yang berbeda, bisa pakai koma bisa pakai json,
-            // dianggap jadi satu row data dalam satu qty."
-            if ($groupKey && ($r['carton_merged'] || $keterangan === 'ASSORT PACK' || str_contains($keterangan, 'ASSORT'))) {
+            // Deteksi Karton Gabungan / Merge Qty / Assort yang memakai satu carton
+            $isAssortByKet = ($keterangan === 'ASSORT PACK' || str_contains($keterangan, 'ASSORT'));
+
+            if ($groupKey && ($r['carton_merged'] || $isAssortByKet)) {
                 if (isset($processedCartonGroups[$groupKey])) {
-                    // Sudah diproses bersama baris sebelumnya dalam merge group yang sama
                     continue;
                 }
                 $processedCartonGroups[$groupKey] = true;
 
-                // Kumpulkan seluruh sub-baris dalam merge carton block ini
                 $groupRows = array_values(array_filter($rows, fn($item) => ($item['carton_group'] ?? null) === $groupKey));
 
                 $jans = [];
@@ -342,10 +637,9 @@ class JancodeImportService
                 }
 
                 $jans = array_unique($jans);
-                $cartonQty = $cartonQty ?: 1; // Default 1 karton jika cell merge
-                $isAssort = ($keterangan === 'ASSORT PACK' || str_contains($keterangan, 'ASSORT'));
-                $reasonCode = $isAssort ? 'ASSORT' : 'MERGED_CARTON';
-                $reasonLabel = $isAssort
+                $cartonQty = $cartonQty ?: 1;
+                $reasonCode = $isAssortByKet ? 'ASSORT' : 'MERGED_CARTON';
+                $reasonLabel = $isAssortByKet
                     ? 'ASSORT PACK: Multiple size/color dalam satu karton gabungan'
                     : 'Broken: Qty karton di-merge (carton berisi multiple item/color/size)';
 
@@ -356,7 +650,7 @@ class JancodeImportService
                     'jan_code'      => implode(', ', $jans),
                     'color'         => implode(', ', $colors),
                     'size'          => implode(', ', $sizes),
-                    'keterangan'    => $keterangan,
+                    'keterangan'    => $keterangan ?: 'MERGED',
                     'total_carton'  => $cartonQty,
                     'carton_merged' => true,
                     'raw_data'      => $subRowsDetails,
@@ -365,8 +659,8 @@ class JancodeImportService
                 continue;
             }
 
-            // R1: Hanya SOLID
-            if ($keterangan === 'ASSORT PACK' || str_contains($keterangan, 'ASSORT')) {
+            // Jika kolom KETERANGAN ada dan berisi ASSORT
+            if ($isAssortByKet) {
                 $skipped[] = [
                     'source_row'    => (string)$rowNum,
                     'reason'        => 'ASSORT',
@@ -383,11 +677,12 @@ class JancodeImportService
                 continue;
             }
 
-            if ($keterangan !== 'SOLID') {
+            // Jika kolom KETERANGAN ada dan bernilai selain SOLID
+            if ($hasKeteranganCol && $keterangan !== '' && $keterangan !== 'SOLID') {
                 $skipped[] = [
                     'source_row'    => (string)$rowNum,
                     'reason'        => 'OTHER',
-                    'reason_label'  => 'Keterangan bukan SOLID',
+                    'reason_label'  => 'Keterangan bukan SOLID (' . $keterangan . ')',
                     'jan_code'      => $cleanJan ?: $jan,
                     'color'         => $r['color_inherited'],
                     'size'          => implode(', ', array_map(fn($k, $v) => "$k ($v pcs)", array_keys($r['sizes_filled']), $r['sizes_filled'])),
@@ -409,7 +704,7 @@ class JancodeImportService
                     'jan_code'      => $cleanJan ?: $jan,
                     'color'         => $r['color_inherited'],
                     'size'          => implode(', ', array_map(fn($k, $v) => "$k ($v pcs)", array_keys($r['sizes_filled']), $r['sizes_filled'])),
-                    'keterangan'    => $keterangan,
+                    'keterangan'    => $keterangan ?: 'MERGED',
                     'total_carton'  => $r['total_carton'],
                     'carton_merged' => true,
                     'raw_data'      => $r,
@@ -427,7 +722,7 @@ class JancodeImportService
                     'jan_code'      => $cleanJan ?: ($jan ?: '-'),
                     'color'         => $r['color_inherited'],
                     'size'          => implode(', ', array_map(fn($k, $v) => "$k ($v pcs)", array_keys($r['sizes_filled']), $r['sizes_filled'])),
-                    'keterangan'    => $keterangan,
+                    'keterangan'    => $keterangan ?: '-',
                     'total_carton'  => $r['total_carton'],
                     'carton_merged' => false,
                     'raw_data'      => $r,
@@ -436,7 +731,7 @@ class JancodeImportService
                 continue;
             }
 
-            // R4: Tepat satu size terisi
+            // R4: Validasi Size (Mampu mendeteksi ASSORT berdasarkan isi size tanpa kolom keterangan)
             $sizeCount = count($r['sizes_filled']);
             if ($sizeCount === 0) {
                 $skipped[] = [
@@ -446,27 +741,29 @@ class JancodeImportService
                     'jan_code'      => $cleanJan,
                     'color'         => $r['color_inherited'],
                     'size'          => '-',
-                    'keterangan'    => $keterangan,
+                    'keterangan'    => $keterangan ?: '-',
                     'total_carton'  => $r['total_carton'],
                     'carton_merged' => false,
                     'raw_data'      => $r,
-                    'notes'         => 'Kolom size G..L kosong',
+                    'notes'         => 'Kolom size kosong',
                 ];
                 continue;
             }
+
+            // JIKA TERISI LEBIH DARI 1 SIZE DALAM 1 KARTON -> OTOMATIS ASSORT!
             if ($sizeCount > 1) {
                 $skipped[] = [
                     'source_row'    => (string)$rowNum,
-                    'reason'        => 'MULTI_SIZE',
-                    'reason_label'  => 'Lebih dari satu size terisi dalam satu baris',
+                    'reason'        => 'ASSORT',
+                    'reason_label'  => 'ASSORT PACK: Lebih dari satu size terisi dalam satu karton',
                     'jan_code'      => $cleanJan,
                     'color'         => $r['color_inherited'],
                     'size'          => implode(', ', array_map(fn($k, $v) => "$k ($v pcs)", array_keys($r['sizes_filled']), $r['sizes_filled'])),
-                    'keterangan'    => $keterangan,
+                    'keterangan'    => $keterangan ?: 'ASSORT (Multi-size)',
                     'total_carton'  => $r['total_carton'],
                     'carton_merged' => false,
                     'raw_data'      => $r,
-                    'notes'         => "Terisi {$sizeCount} size berbeda",
+                    'notes'         => "Terisi {$sizeCount} size berbeda dalam satu baris karton",
                 ];
                 continue;
             }
@@ -483,11 +780,11 @@ class JancodeImportService
                     'jan_code'      => $cleanJan,
                     'color'         => $r['color_inherited'],
                     'size'          => $sizeName,
-                    'keterangan'    => $keterangan,
+                    'keterangan'    => $keterangan ?: 'SOLID',
                     'total_carton'  => 0,
                     'carton_merged' => false,
                     'raw_data'      => $r,
-                    'notes'         => 'Nilai kolom N kosong atau <= 0',
+                    'notes'         => 'Nilai carton kosong atau <= 0',
                 ];
                 continue;
             }
@@ -496,13 +793,15 @@ class JancodeImportService
             $color = preg_replace('/\s+/', ' ', trim($r['color_inherited']));
             $pcsPerCarton = (int)($r['sizes_filled'][$sizeName] ?? 0);
 
-            // Valid Item
+            // Valid Item (PASTI SOLID)
             $items[] = [
                 'source_row'              => $rowNum,
                 'country'                 => $header['country'],
                 'buyer'                   => $header['buyer'],
                 'ocf'                     => $header['ocf'],
                 'style'                   => $header['style'],
+                'carton_no_from'          => $r['carton_no_from'] ?? null,
+                'carton_no_to'            => $r['carton_no_to'] ?? null,
                 'color'                   => $color,
                 'size'                    => $sizeName,
                 'qty_per_carton'          => $pcsPerCarton,
@@ -511,6 +810,12 @@ class JancodeImportService
                 'receive_qty_carton'      => 0,
                 'balance'                 => $carton,
                 'total_qty_pcs'           => $carton * $pcsPerCarton,
+                'nw_per_carton'           => $r['nw_per_carton'] ?? null,
+                'ttl_nw'                  => $r['ttl_nw'] ?? null,
+                'gw_per_carton'           => $r['gw_per_carton'] ?? null,
+                'ttl_gw'                  => $r['ttl_gw'] ?? null,
+                'measurement_cm'          => $r['measurement_cm'] ?? null,
+                'cbm'                     => $r['cbm'] ?? null,
             ];
         }
 
@@ -537,12 +842,12 @@ dan color_inherited (warna dari sel merge di atasnya).
 TUGAS: ekstrak data master JAN code dengan aturan berikut.
 1. Ambil dari header: buyer, style, country (label DESTINATION), ocf (label CPO).
    ocf = bagian angka sebelum " - " pada nilai CPO.
-2. HANYA import baris dengan KETERANGAN = "SOLID". Abaikan semua baris "ASSORT PACK".
+2. HANYA import baris SOLID (satu JAN, satu size tunggal, bukan assort). Abaikan baris ASSORT PACK.
 3. JANGAN import baris dengan carton_merged = true (carton dipakai bersama beberapa baris).
 4. JANGAN import baris TOTAL, QTY, TOTAL ASSORT PACK, TOTAL SOLID ALL COLOUR, GRAND TOTAL.
 5. Baris valid harus punya JAN 13 digit, tepat satu size terisi (kolom breakdown size),
    dan TOTAL CARTON bilangan bulat > 0. Jika tidak, masukkan ke skipped.
-6. size = judul kolom size yang terisi (XS, S, M, L, XL, 2XL).
+6. size = nama size tunggal yang terisi (XS, S, M, L, XL, 2XL, dll.).
 7. color = nilai color_inherited, trim spasi, huruf besar, format "KODE: NAMA".
 8. packing_list_qty_carton = nilai TOTAL CARTON. Jangan menghitung ulang, jangan menebak.
 9. Jangan mengarang data. Jika ragu pada sebuah baris, masukkan ke skipped dengan alasan.
@@ -626,6 +931,8 @@ PROMPT;
                         'buyer'                   => $aiResult['header']['buyer'] ?? $header['buyer'],
                         'ocf'                     => $aiResult['header']['ocf'] ?? $header['ocf'],
                         'style'                   => $aiResult['header']['style'] ?? $header['style'],
+                        'carton_no_from'          => $matched['carton_no_from'] ?? null,
+                        'carton_no_to'            => $matched['carton_no_to'] ?? null,
                         'color'                   => $aiItem['color'] ?? $matched['color'],
                         'size'                    => $aiItem['size'] ?? $matched['size'],
                         'qty_per_carton'          => $pcsPerCarton,
@@ -634,6 +941,12 @@ PROMPT;
                         'receive_qty_carton'      => 0,
                         'balance'                 => $packingCarton,
                         'total_qty_pcs'           => $packingCarton * $pcsPerCarton,
+                        'nw_per_carton'           => $matched['nw_per_carton'] ?? null,
+                        'ttl_nw'                  => $matched['ttl_nw'] ?? null,
+                        'gw_per_carton'           => $matched['gw_per_carton'] ?? null,
+                        'ttl_gw'                  => $matched['ttl_gw'] ?? null,
+                        'measurement_cm'          => $matched['measurement_cm'] ?? null,
+                        'cbm'                     => $matched['cbm'] ?? null,
                     ];
                 }
             }

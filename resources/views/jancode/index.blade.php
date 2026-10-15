@@ -92,78 +92,82 @@
             <!-- Jancode Modal -->
 
             <div class="modal fade" id="ajaxModel" aria-hidden="true">
-                <div class="modal-dialog">
+                <div class="modal-dialog modal-lg">
                     <div class="modal-content">
-                        <div class="modal-header">
-                            <h4 class="modal-title" id="modelHeading"></h4>
-                            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <div class="modal-header bg-primary text-white">
+                            <h5 class="modal-title font-weight-bold" id="modelHeading"></h5>
+                            <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
                                 <span aria-hidden="true">&times;</span>
                             </button>
                         </div>
-                        <div class="modal-body">
+                        <div class="modal-body p-4">
                             <form id="jancodeForm" name="jancodeForm" class="form-horizontal">
                                 <input type="hidden" name="id" id="jancode_id">
-                                <div class="form-group">
-                                    <label for="jancode" class="col-sm-12 control-label">Jancode</label>
-                                    <div class="col-sm-12">
-                                        <input type="text" class="form-control" id="jancode" name="jancode"
-                                            placeholder="Enter Jancode" value="" required>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label for="jancode" class="font-weight-bold text-dark">JAN Code</label>
+                                            <input type="text" class="form-control" id="jancode" name="jancode"
+                                                placeholder="13 Digit JAN Barcode" value="" required>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label for="size" class="font-weight-bold text-dark">Size</label>
+                                            <input type="text" class="form-control" id="size" name="size"
+                                                placeholder="Contoh: S, M, L, XL" value="" required>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label class="font-weight-bold text-dark">Packing List Carton Qty</label>
+                                            <input type="number" id="qty" name="qty" required placeholder="Jumlah Karton"
+                                                class="form-control">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label class="font-weight-bold text-dark">Destination / Country</label>
+                                            <input type="text" id="destination" name="destination" required
+                                                placeholder="Contoh: THAILAND" class="form-control">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label class="font-weight-bold text-dark">Buyer</label>
+                                            <input type="text" id="buyer" name="buyer" required placeholder="Contoh: MUJI"
+                                                class="form-control">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label class="font-weight-bold text-dark">Style</label>
+                                            <input type="text" id="style" name="style" required placeholder="Contoh: AB307A7S"
+                                                class="form-control">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label class="font-weight-bold text-dark">CPO / OCD</label>
+                                            <input type="text" id="cpo" name="cpo" required placeholder="Contoh: 26139"
+                                                class="form-control">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label class="font-weight-bold text-dark">Status Void</label>
+                                            <select name="void" id="void" class="form-control">
+                                                <option value="0">False (Aktif)</option>
+                                                <option value="1">True (Void)</option>
+                                            </select>
+                                        </div>
                                     </div>
                                 </div>
-                                <div class="form-group">
-                                    <label for="size" class="col-sm-12 control-label">Size</label>
-                                    <div class="col-sm-12">
-                                        <input type="text" class="form-control" id="size" name="size"
-                                            placeholder="Enter Size" value="" required>
-                                    </div>
-                                </div>
-                                <div class="form-group">
-                                    <label class="col-sm-12 control-label">Qty</label>
-                                    <div class="col-sm-12">
-                                        <input type="number" id="qty" name="qty" required placeholder="Enter Qty"
-                                            class="form-control">
-                                    </div>
-                                </div>
-                                <div class="form-group">
-                                    <label class="col-sm-12 control-label">Destination</label>
-                                    <div class="col-sm-12">
-                                        <input type="text" id="destination" name="destination" required
-                                            placeholder="Enter Destination" class="form-control">
-                                    </div>
-                                </div>
-                                <div class="form-group">
-                                    <label class="col-sm-12 control-label">Buyer</label>
-                                    <div class="col-sm-12">
-                                        <input type="text" id="buyer" name="buyer" required placeholder="Enter Buyer"
-                                            class="form-control">
-                                    </div>
-                                </div>
-                                <div class="form-group">
-                                    <label class="col-sm-12 control-label">Style</label>
-                                    <div class="col-sm-12">
-                                        <input type="text" id="style" name="style" required placeholder="Enter Style"
-                                            class="form-control">
-                                    </div>
-                                </div>
-                                <div class="form-group">
-                                    <label class="col-sm-12 control-label">CPO</label>
-                                    <div class="col-sm-12">
-                                        <input type="text" id="cpo" name="cpo" required placeholder="Enter CPO"
-                                            class="form-control">
-                                    </div>
-                                </div>
-                                <div class="form-group">
-                                    <label class="col-sm-12 control-label">Void</label>
-                                    <div class="col-sm-12">
-                                        <select name="void" id="void" class="form-control">
-                                            <option value="0">False</option>
-                                            <option value="1">True</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div class="col-sm-offset-2 col-sm-10 mt-3">
-                                    <button type="submit" class="btn btn-primary" id="saveBtn" value="create">Save
-                                        changes</button>
+                                <div class="text-right mt-3">
+                                    <button type="button" class="btn btn-secondary mr-2" data-dismiss="modal">Batal</button>
+                                    <button type="submit" class="btn btn-primary" id="saveBtn" value="create">
+                                        <i class="fas fa-save mr-1"></i> Simpan
+                                    </button>
                                 </div>
                             </form>
                         </div>
@@ -171,9 +175,9 @@
                 </div>
             </div>
 
-            <!-- AI Import Modal -->
+            <!-- AI Import Modal (Wide) -->
             <div class="modal fade" id="aiImportModal" tabindex="-1" role="dialog" aria-hidden="true" data-backdrop="static">
-                <div class="modal-dialog modal-xl" role="document">
+                <div class="modal-dialog modal-xl modal-dialog-scrollable" style="max-width: 95vw;" role="document">
                     <div class="modal-content">
                         <div class="modal-header bg-primary text-white">
                             <h5 class="modal-title font-weight-bold">
@@ -191,16 +195,16 @@
                                         <i class="fas fa-info-circle fa-2x mr-3 text-info"></i>
                                         <div>
                                             <strong>Ekstraksi Otomatis AI (Format Garment Baru):</strong><br>
-                                            Sistem akan membaca file packing list <code>.xlsx</code> asli, mendeteksi carton merge, forward-fill warna vertikal, menyaring hanya baris <strong>SOLID tunggal</strong>, dan mengabaikan ASSORT PACK serta carton campuran sesuai aturan PRD.
+                                            Sistem akan membaca file packing list <code>.xlsx / .xls</code> asli, mendeteksi carton merge, forward-fill warna vertikal, menyaring hanya baris <strong>SOLID tunggal</strong>, dan mengabaikan ASSORT PACK serta carton campuran sesuai aturan PRD.
                                         </div>
                                     </div>
                                 </div>
                                 <form id="aiUploadForm" enctype="multipart/form-data">
                                     <div class="form-group">
-                                        <label class="font-weight-bold text-dark">Pilih File Excel Packing List (.xlsx)</label>
+                                        <label class="font-weight-bold text-dark">Pilih File Excel Packing List (.xlsx / .xls)</label>
                                         <div class="custom-file">
-                                            <input type="file" name="file" class="custom-file-input" id="aiExcelFile" accept=".xlsx" required>
-                                            <label class="custom-file-label" for="aiExcelFile">Pilih file .xlsx (Maks 5MB)...</label>
+                                            <input type="file" name="file" class="custom-file-input" id="aiExcelFile" accept=".xlsx,.xls" required>
+                                            <label class="custom-file-label" for="aiExcelFile">Pilih file .xlsx / .xls (Maks 15MB)...</label>
                                         </div>
                                     </div>
                                     <div class="text-right">
@@ -218,7 +222,7 @@
                                     <span class="sr-only">Loading...</span>
                                 </div>
                                 <h5 class="mt-3 font-weight-bold text-gray-800" id="aiLoadingText">Membaca file Excel & menganalisis merge carton...</h5>
-                                <p class="text-muted small">Menjalankan ekstraksi AI dan validasi deterministik (R1 - R6)...</p>
+                                <p class="text-muted small">Menjalankan ekstraksi dan validasi deterministik (R1 - R6)...</p>
                             </div>
 
                             <!-- Step 2: Preview Area -->
@@ -227,7 +231,7 @@
                                 <div id="cartonMismatchAlert" class="alert alert-warning border-left-warning d-none">
                                     <i class="fas fa-exclamation-triangle mr-2"></i>
                                     <strong>Peringatan Verifikasi Total Carton:</strong>
-                                    Hasil ekstraksi AI tidak sepenuhnya sinkron dengan hitungan carton deterministik. Harap tinjau dengan seksama sebelum konfirmasi.
+                                    Hasil ekstraksi tidak sepenuhnya sinkron dengan hitungan carton deterministik. Harap tinjau dengan seksama sebelum konfirmasi.
                                 </div>
 
                                 <!-- Summary Cards -->
@@ -235,7 +239,10 @@
                                     <div class="col-md-3">
                                         <div class="card border-left-primary shadow-sm h-100 py-2">
                                             <div class="card-body py-2">
-                                                <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Buyer / Country</div>
+                                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                                    <span class="text-xs font-weight-bold text-primary text-uppercase">Buyer / Country</span>
+                                                    <span id="previewEngineMode"></span>
+                                                </div>
                                                 <div class="h6 mb-0 font-weight-bold text-gray-800" id="previewBuyerCountry">-</div>
                                             </div>
                                         </div>
@@ -291,14 +298,17 @@
                                             <table class="table table-bordered table-sm table-hover mb-0" id="tablePreviewValid">
                                                 <thead class="thead-light sticky-top">
                                                     <tr>
-                                                        <th width="50">Row</th>
+                                                        <th width="45">Row</th>
+                                                        <th width="90">Carton No</th>
                                                         <th>Color</th>
                                                         <th>JAN Code</th>
-                                                        <th>Size</th>
-                                                        <th width="90" class="text-right">Karton</th>
-                                                        <th width="80" class="text-right">Pcs/Ctn</th>
-                                                        <th width="90" class="text-right">Total Pcs</th>
-                                                        <th width="85" class="text-center">Status</th>
+                                                        <th width="65">Size</th>
+                                                        <th width="80" class="text-right">Karton</th>
+                                                        <th width="75" class="text-right">Pcs/Ctn</th>
+                                                        <th width="85" class="text-right">Total Pcs</th>
+                                                        <th width="105">NW / GW (kg)</th>
+                                                        <th width="115">Dimensi / CBM</th>
+                                                        <th width="80" class="text-center">Status</th>
                                                         <th width="45" class="text-center">Hapus</th>
                                                     </tr>
                                                 </thead>
@@ -818,7 +828,7 @@
                 $('#aiUploadSection').removeClass('d-none');
                 $('#btnAiConfirmSave').addClass('d-none');
                 $('#aiUploadForm').trigger('reset');
-                $('#aiExcelFile').next('.custom-file-label').html('Pilih file .xlsx (Maks 5MB)...');
+                $('#aiExcelFile').next('.custom-file-label').html('Pilih file .xlsx / .xls (Maks 15MB)...');
                 aiParsedData = null;
             });
 
@@ -859,6 +869,13 @@
             function renderAiPreview(data) {
                 $('#previewBuyerCountry').text((data.header.buyer || '-') + ' / ' + (data.header.country || '-'));
                 $('#previewStyleOcf').text((data.header.style || '-') + ' / ' + (data.header.ocf || '-'));
+
+                if (data.ai_mode) {
+                    $('#previewEngineMode').html('<span class="badge badge-success"><i class="fas fa-robot mr-1"></i> AI Active</span>');
+                } else {
+                    $('#previewEngineMode').html('<span class="badge badge-info"><i class="fas fa-cogs mr-1"></i> Rule Engine</span>');
+                }
+
                 updateSummaryCounters();
 
                 if (!data.carton_match) {
@@ -911,14 +928,29 @@
                         const packingCarton = parseInt(item.packing_list_qty_carton) || 0;
                         const totalPcs = item.total_qty_pcs || (packingCarton * pcsPerCarton);
 
+                        const cartonNo = item.carton_no_from 
+                            ? (item.carton_no_to && item.carton_no_to !== item.carton_no_from 
+                                ? `${item.carton_no_from} - ${item.carton_no_to}` 
+                                : item.carton_no_from)
+                            : '-';
+                        const nwGw = (item.nw_per_carton != null || item.gw_per_carton != null)
+                            ? `${item.nw_per_carton != null ? item.nw_per_carton : '-'} / ${item.gw_per_carton != null ? item.gw_per_carton : '-'}`
+                            : '-';
+                        const dimCbm = (item.measurement_cm || item.cbm != null)
+                            ? `${item.measurement_cm || '-'}${item.cbm != null ? ' (' + item.cbm + ')' : ''}`
+                            : '-';
+
                         html += `<tr data-index="${idx}">
                             <td class="align-middle text-muted">${item.source_row}</td>
+                            <td class="align-middle font-weight-bold text-dark">${cartonNo}</td>
                             <td class="align-middle font-weight-bold">${item.color}</td>
                             <td class="align-middle font-mono">${item.jan_code}</td>
                             <td class="align-middle"><span class="badge badge-primary px-2">${item.size}</span></td>
                             <td class="align-middle text-right font-weight-bold text-primary">${packingCarton}</td>
                             <td class="align-middle text-right font-weight-bold text-dark">${pcsPerCarton}</td>
                             <td class="align-middle text-right font-weight-bold text-success">${totalPcs.toLocaleString()}</td>
+                            <td class="align-middle small text-muted">${nwGw}</td>
+                            <td class="align-middle small text-muted">${dimCbm}</td>
                             <td class="align-middle text-center">${statusBadge}</td>
                             <td class="align-middle text-center">
                                 <button type="button" class="btn btn-outline-danger btn-xs btn-remove-preview-row" data-index="${idx}" title="Hapus baris ini">
