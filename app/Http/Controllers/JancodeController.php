@@ -15,65 +15,18 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Maatwebsite\Excel\Facades\Excel;
-use Yajra\DataTables\Facades\DataTables;
 use RealRashid\SweetAlert\Facades\Alert;
 
 class JancodeController extends Controller
 {
+    /**
+     * Halaman Import Packing List.
+     *
+     * Pintu masuk alur: operator mengupload file Excel packing list
+     * (PROFORMA / ACTUAL). Setiap sheet disimpan sebagai satu revisi.
+     */
     public function index(Request $request)
     {
-        if ($request->ajax()) {
-            $data = Jancode::latest()->get();
-
-            // Pre-load scan counts in one query
-            $scanCounts = JancodeLogs::selectRaw('jancode_id, COUNT(*) as total')
-                ->whereNotNull('jancode_id')
-                ->groupBy('jancode_id')
-                ->pluck('total', 'jancode_id');
-
-            return Datatables::of($data)
-                ->addIndexColumn()
-                ->addColumn('country', function ($row) {
-                    return $row->country ?: ($row->destination ?: '-');
-                })
-                ->addColumn('ocf', function ($row) {
-                    return $row->ocf ?: ($row->cpo ?: '-');
-                })
-                ->addColumn('packing_qty', function ($row) {
-                    return $row->packing_list_qty_carton ?: ($row->qty ?: 0);
-                })
-                ->addColumn('qty_per_carton', function ($row) {
-                    return $row->qty_per_carton ?: 0;
-                })
-                ->addColumn('total_qty_pcs', function ($row) {
-                    $pcs = $row->total_qty_pcs ?: (($row->packing_list_qty_carton ?: $row->qty ?: 0) * ($row->qty_per_carton ?: 0));
-                    return number_format($pcs);
-                })
-                ->addColumn('received_qty', function ($row) use ($scanCounts) {
-                    return $row->receive_qty_carton ?: ($scanCounts[$row->id] ?? 0);
-                })
-                ->addColumn('balance', function ($row) use ($scanCounts) {
-                    $packing = $row->packing_list_qty_carton ?: ($row->qty ?: 0);
-                    $received = $row->receive_qty_carton ?: ($scanCounts[$row->id] ?? 0);
-                    $balance = $packing - $received;
-                    if ($balance < 0) {
-                        return '<span class="badge badge-danger">' . $balance . '</span>';
-                    } elseif ($balance === 0) {
-                        return '<span class="badge badge-success">0 ✓</span>';
-                    }
-                    return '<span class="badge badge-warning text-dark">' . $balance . '</span>';
-                })
-                ->addColumn('action', function ($row) {
-                    $btn  = '<a href="javascript:void(0)" data-id="' . $row->id . '" data-jancode="' . $row->jancode . '" class="btn btn-info btn-sm btn-circle detailScan" title="Detail Scan"><i class="fas fa-search"></i></a> ';
-                    $btn .= '<a href="' . route('jancode.exportScanLogs', $row->id) . '" class="btn btn-success btn-sm btn-circle" title="Export Log"><i class="fas fa-file-excel"></i></a> ';
-                    $btn .= '<a href="javascript:void(0)" data-id="' . $row->id . '" class="edit btn btn-primary btn-sm btn-circle editJancode" title="Edit"><i class="fas fa-edit"></i></a> ';
-                    $btn .= '<a href="javascript:void(0)" data-id="' . $row->id . '" class="btn btn-danger btn-sm btn-circle deleteJancode" title="Delete"><i class="fas fa-trash"></i></a>';
-                    return $btn;
-                })
-                ->rawColumns(['action', 'balance'])
-                ->make(true);
-        }
-
         return view('jancode.index');
     }
 
@@ -386,47 +339,14 @@ class JancodeController extends Controller
 
     /**
      * Riwayat Import Batch (seluruh revisi).
+     *
+     * Sudah digantikan oleh halaman Manage Packing List: setiap packing list
+     * menampilkan seluruh revisi beserta baris broken-nya pada detail revisi.
+     * URL lama tetap dipertahankan sebagai redirect agar bookmark tidak rusak.
      */
     public function importBatches(Request $request)
     {
-        if ($request->ajax()) {
-            $batches = ImportBatch::with('importedBy')
-                ->orderByDesc('id')
-                ->get()
-                ->map(function ($b) {
-                    return [
-                        'id'                => $b->id,
-                        'batch_number'      => $b->batch_number,
-                        'batch_name'        => $b->batch_name,
-                        'doc_type'          => $b->doc_type ?: 'proforma',
-                        'group_label'       => $b->group_label ?: '-',
-                        'group_key'         => $b->group_key,
-                        'revision_no'       => $b->revision_no ?: 1,
-                        'is_active'         => (bool)$b->is_active,
-                        'destination'       => $b->destination,
-                        'warehouse'         => $b->warehouse,
-                        'style_number'      => $b->style_number,
-                        'total_carton'      => $b->total_carton,
-                        'original_filename' => $b->original_filename,
-                        'sheet_name'        => $b->sheet_name,
-                        'supplier_name'     => $b->supplier_name,
-                        'ocf_number'        => $b->ocf_number,
-                        'import_date'       => $b->import_date ? $b->import_date->format('d/m/Y') : '-',
-                        'status'            => $b->status,
-                        'total_rows'        => $b->total_rows,
-                        'valid_rows'        => $b->valid_rows,
-                        'invalid_rows'      => $b->invalid_rows,
-                        'processed_items'   => $b->processed_items,
-                        'imported_by'       => $b->importedBy ? $b->importedBy->name : '-',
-                        'import_notes'      => $b->import_notes,
-                        'created_at'        => $b->created_at->format('d/m/Y H:i'),
-                    ];
-                });
-
-            return response()->json(['data' => $batches]);
-        }
-
-        return view('jancode.import-batches');
+        return redirect()->route('jancode.packingLists');
     }
 
     /**

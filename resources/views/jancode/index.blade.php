@@ -3,181 +3,122 @@
 @include('layout.header')
 
 <body id="page-top">
-    <!-- Page Wrapper -->
     @include('sweetalert::alert')
     <div id="wrapper">
         @include('layout.sidebar')
-        <!-- Content Wrapper -->
         <div id="content-wrapper" class="d-flex flex-column">
 
-            <!-- Main Content -->
             <div id="content">
                 @include('layout.navbar')
-                <!-- Begin Page Content -->
                 <div class="container-fluid">
 
                     <!-- Page Heading -->
                     <div class="d-sm-flex align-items-center justify-content-between mb-4">
-                        <h1 class="h3 mb-0 text-gray-800">Jancode List</h1>
                         <div>
-                            {{-- <a href="javascript:void(0)"
-                                class="d-none d-sm-inline-block btn btn-sm btn-primary shadow-sm" id="createNewJancode">
-                                <i class="fas fa-plus fa-sm text-white-50"></i> Create Jancode
-                            </a>
-                            <a href="{{ route('jancode.exportTemplate') }}"
-                                class="d-none d-sm-inline-block btn btn-sm btn-info shadow-sm">
-                                <i class="fas fa-download fa-sm text-white-50"></i> Download Template
-                            </a> --}}
-                            <a href="{{ route('jancode.packingLists') }}"
-                                class="d-none d-sm-inline-block btn btn-sm btn-info shadow-sm">
-                                <i class="fas fa-clipboard-list fa-sm mr-1"></i> Packing List
-                            </a>
-                            <button class="d-none d-sm-inline-block btn btn-sm btn-primary shadow-sm"
-                                data-toggle="modal" data-target="#aiImportModal">
-                                <i class="fas fa-robot fa-sm text-white-50"></i> AI Import Packing List
-                            </button>
-                            <a href="{{ route('jancode.importBatches') }}"
-                                class="d-none d-sm-inline-block btn btn-sm btn-outline-secondary shadow-sm ml-2">
-                                <i class="fas fa-history fa-sm mr-1"></i> Riwayat Import
-                            </a>
-                            {{-- <button class="d-none d-sm-inline-block btn btn-sm btn-success shadow-sm"
-                                data-toggle="modal" data-target="#importModal">
-                                <i class="fas fa-file-excel fa-sm text-white-50"></i> Import Excel
-                            </button>
-                            <button class="d-none d-sm-inline-block btn btn-sm btn-warning shadow-sm"
-                                data-toggle="modal" data-target="#importNewFormatModal">
-                                <i class="fas fa-file-excel fa-sm text-white-50"></i> Import Excel (New)
-                            </button> --}}
+                            <h1 class="h3 mb-0 text-gray-800">
+                                <i class="fas fa-file-import text-primary mr-1"></i> Import Packing List
+                            </h1>
+                            <p class="mb-0 text-muted small">
+                                Langkah <strong>1</strong>: upload file Excel packing list. Setiap sheet disimpan
+                                sebagai satu <strong>revisi</strong>.
+                            </p>
+                        </div>
+                        <a href="{{ route('jancode.packingLists') }}" class="btn btn-sm btn-primary shadow-sm">
+                            <i class="fas fa-tasks fa-sm mr-1"></i> Manage Packing List
+                        </a>
+                    </div>
+
+                    @include('layout.workflow-steps', ['current' => 'import'])
+
+                    <!-- Penjelasan alur -->
+                    <div class="alert alert-info border-left-info shadow-sm mb-4">
+                        <div class="d-flex">
+                            <i class="fas fa-info-circle fa-2x mr-3 text-info"></i>
+                            <div class="small">
+                                <strong>Bagaimana cara kerjanya?</strong>
+                                <ol class="mb-0 pl-3 mt-1">
+                                    <li>Upload file packing list <code>.xlsx / .xls</code> (PROFORMA atau ACTUAL).</li>
+                                    <li>Sistem membaca seluruh sheet, mendeteksi revisi, dan menyaring hanya baris <strong>SOLID</strong>.</li>
+                                    <li>Baris yang tidak valid (assort / carton merge / total) dipisahkan sebagai <strong>baris broken</strong>.</li>
+                                    <li>Setelah disimpan, revisi terbaru otomatis menjadi <strong>aktif</strong> dan siap di-scan.</li>
+                                </ol>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- DataTales Example -->
+                    <!-- Upload Card -->
                     <div class="card shadow mb-4">
                         <div class="card-header py-3">
-                            <h6 class="m-0 font-weight-bold text-primary">Data Master Jancode (Struktur Baru)</h6>
+                            <h6 class="m-0 font-weight-bold text-primary">
+                                <i class="fas fa-cloud-upload-alt mr-1"></i> 1. Upload File Packing List
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div id="importDropzone" class="import-dropzone text-center rounded p-5 mb-3"
+                                role="button" tabindex="0"
+                                data-toggle="modal" data-target="#aiImportModal">
+                                <i class="fas fa-file-excel fa-3x text-success mb-3"></i>
+                                <h5 class="font-weight-bold text-gray-800 mb-1">Tarik &amp; lepas file di sini</h5>
+                                <p class="text-muted mb-3">atau klik untuk memilih file Excel</p>
+                                <span class="btn btn-primary">
+                                    <i class="fas fa-folder-open mr-1"></i> Pilih File Excel
+                                </span>
+                                <div class="small text-muted mt-2">Format didukung: .xlsx / .xls (maks 15MB)</div>
+                            </div>
+                            <div class="d-flex flex-wrap align-items-center justify-content-between">
+                                <small class="text-muted">
+                                    <i class="fas fa-robot mr-1 text-primary"></i>
+                                    Import dibantu AI: deteksi otomatis merge carton, warna, size, dan revisi.
+                                </small>
+                                <button class="btn btn-sm btn-outline-primary mt-2 mt-md-0"
+                                    data-toggle="modal" data-target="#aiImportModal">
+                                    <i class="fas fa-magic mr-1"></i> Mulai Import
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recent Packing Lists -->
+                    <div class="card shadow mb-4">
+                        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                            <h6 class="m-0 font-weight-bold text-primary">
+                                <i class="fas fa-clock mr-1"></i> Packing List Terbaru
+                            </h6>
+                            <button class="btn btn-sm btn-outline-secondary" id="btnReloadRecent">
+                                <i class="fas fa-sync-alt mr-1"></i> Refresh
+                            </button>
                         </div>
                         <div class="card-body">
                             <div class="table-responsive">
-                                <table class="table table-bordered table-sm data-table" width="100%" cellspacing="0">
-                                    <thead>
+                                <table class="table table-bordered table-sm table-hover" id="tableRecentPackingLists" width="100%">
+                                    <thead class="thead-light">
                                         <tr>
-                                            <th>No</th>
-                                            <th>Country</th>
-                                            <th>Buyer</th>
-                                            <th>OCF</th>
-                                            <th>Style</th>
-                                            <th>Color</th>
-                                            <th>Size</th>
-                                            <th>JAN Code</th>
-                                            <th>Packing List (Carton)</th>
-                                            <th>Pcs/Ctn</th>
-                                            <th>Total Pcs</th>
-                                            <th>Received</th>
-                                            <th>Balance</th>
-                                            <th>Void</th>
-                                            <th width="140px">Action</th>
+                                            <th class="text-center">Tipe</th>
+                                            <th>Packing List</th>
+                                            <th class="text-center">Revisi</th>
+                                            <th class="text-right">Total Carton</th>
+                                            <th class="text-center">Valid</th>
+                                            <th class="text-center">Broken</th>
+                                            <th>File</th>
+                                            <th>Tanggal</th>
+                                            <th class="text-center" width="120">Aksi</th>
                                         </tr>
                                     </thead>
-                                    <tbody>
-                                    </tbody>
+                                    <tbody></tbody>
                                 </table>
+                            </div>
+                            <div class="text-right mt-2">
+                                <a href="{{ route('jancode.packingLists') }}" class="btn btn-sm btn-link">
+                                    Lihat semua packing list <i class="fas fa-arrow-right ml-1"></i>
+                                </a>
                             </div>
                         </div>
                     </div>
 
                 </div>
-                <!-- /.container-fluid -->
-
             </div>
-            <!-- End of Main Content -->
 
             @include('layout.footer')
-
-            <!-- Jancode Modal -->
-
-            <div class="modal fade" id="ajaxModel" aria-hidden="true">
-                <div class="modal-dialog modal-lg">
-                    <div class="modal-content">
-                        <div class="modal-header bg-primary text-white">
-                            <h5 class="modal-title font-weight-bold" id="modelHeading"></h5>
-                            <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
-                                <span aria-hidden="true">&times;</span>
-                            </button>
-                        </div>
-                        <div class="modal-body p-4">
-                            <form id="jancodeForm" name="jancodeForm" class="form-horizontal">
-                                <input type="hidden" name="id" id="jancode_id">
-                                <div class="row">
-                                    <div class="col-md-6">
-                                        <div class="form-group">
-                                            <label for="jancode" class="font-weight-bold text-dark">JAN Code</label>
-                                            <input type="text" class="form-control" id="jancode" name="jancode"
-                                                placeholder="13 Digit JAN Barcode" value="" required>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <div class="form-group">
-                                            <label for="size" class="font-weight-bold text-dark">Size</label>
-                                            <input type="text" class="form-control" id="size" name="size"
-                                                placeholder="Contoh: S, M, L, XL" value="" required>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <div class="form-group">
-                                            <label class="font-weight-bold text-dark">Packing List Carton Qty</label>
-                                            <input type="number" id="qty" name="qty" required placeholder="Jumlah Karton"
-                                                class="form-control">
-                                        </div>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <div class="form-group">
-                                            <label class="font-weight-bold text-dark">Destination / Country</label>
-                                            <input type="text" id="destination" name="destination" required
-                                                placeholder="Contoh: THAILAND" class="form-control">
-                                        </div>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <div class="form-group">
-                                            <label class="font-weight-bold text-dark">Buyer</label>
-                                            <input type="text" id="buyer" name="buyer" required placeholder="Contoh: MUJI"
-                                                class="form-control">
-                                        </div>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <div class="form-group">
-                                            <label class="font-weight-bold text-dark">Style</label>
-                                            <input type="text" id="style" name="style" required placeholder="Contoh: AB307A7S"
-                                                class="form-control">
-                                        </div>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <div class="form-group">
-                                            <label class="font-weight-bold text-dark">CPO / OCD</label>
-                                            <input type="text" id="cpo" name="cpo" required placeholder="Contoh: 26139"
-                                                class="form-control">
-                                        </div>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <div class="form-group">
-                                            <label class="font-weight-bold text-dark">Status Void</label>
-                                            <select name="void" id="void" class="form-control">
-                                                <option value="0">False (Aktif)</option>
-                                                <option value="1">True (Void)</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="text-right mt-3">
-                                    <button type="button" class="btn btn-secondary mr-2" data-dismiss="modal">Batal</button>
-                                    <button type="submit" class="btn btn-primary" id="saveBtn" value="create">
-                                        <i class="fas fa-save mr-1"></i> Simpan
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-            </div>
 
             <!-- AI Import Modal (Wide) -->
             <div class="modal fade" id="aiImportModal" tabindex="-1" role="dialog" aria-hidden="true" data-backdrop="static">
@@ -372,159 +313,28 @@
                 </div>
             </div>
 
-            <!-- Import Modal -->
-            <div class="modal fade" id="importModal" tabindex="-1" aria-hidden="true">
-                <div class="modal-dialog">
-                    <form id="importForm" action="{{ route('jancode.import') }}" method="POST"
-                        enctype="multipart/form-data">
-                        @csrf
-                        <div class="modal-content">
-                            <div class="modal-header">
-                                <h5 class="modal-title">Import Excel</h5>
-                                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                                    <span aria-hidden="true">&times;</span>
-                                </button>
-                            </div>
-                            <div class="modal-body">
-                                <div class="form-group">
-                                    <label>Upload Excel File</label>
-                                    <input type="file" name="file" class="form-control" required>
-                                </div>
-                            </div>
-                            <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
-                                <button type="submit" class="btn btn-primary">Import</button>
-                            </div>
-                        </div>
-                    </form>
-                </div>
-            </div>
-
-            <!-- Import New Format Modal -->
-            <div class="modal fade" id="importNewFormatModal" tabindex="-1" aria-hidden="true">
-                <div class="modal-dialog">
-                    <form id="importNewFormatForm" action="{{ route('jancode.importNewFormat') }}" method="POST"
-                        enctype="multipart/form-data">
-                        @csrf
-                        <div class="modal-content">
-                            <div class="modal-header">
-                                <h5 class="modal-title">Import Excel (New Format)</h5>
-                                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                                    <span aria-hidden="true">&times;</span>
-                                </button>
-                            </div>
-                            <div class="modal-body">
-                                <div class="form-group">
-                                    <label>Upload Excel File</label>
-                                    <input type="file" name="file" class="form-control" required>
-                                </div>
-                            </div>
-                            <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
-                                <button type="submit" class="btn btn-warning">Import (New)</button>
-                            </div>
-                        </div>
-                    </form>
-                </div>
-            </div>
-
-            <!-- Detail Scan Modal -->
-            <div class="modal fade" id="detailScanModal" tabindex="-1" aria-hidden="true">
-                <div class="modal-dialog modal-lg">
-                    <div class="modal-content">
-                        <div class="modal-header bg-info text-white">
-                            <h5 class="modal-title"><i class="fas fa-search mr-1"></i> Detail Scan - <span
-                                    id="detail-jancode"></span></h5>
-                            <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
-                                <span aria-hidden="true">&times;</span>
-                            </button>
-                        </div>
-                        <div class="modal-body">
-                            <!-- Product Info -->
-                            {{-- <div class="col-md-12">
-                                <div class="row mb-12">
-                                    <div class="col-md-4">
-                                        <small class="text-muted">Description</small>
-                                        <p class="font-weight-bold mb-0" id="detail-desc">-</p>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <small class="text-muted">Size</small>
-                                        <p class="font-weight-bold mb-0" id="detail-size">-</p>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <small class="text-muted">Color</small>
-                                        <p class="font-weight-bold mb-0" id="detail-color">-</p>
-                                    </div>
-                                </div>
-                                <div class="row mb-12">
-                                    <div class="col-md-2">
-                                        <small class="text-muted">Qty Master</small>
-                                        <p class="font-weight-bold mb-0" id="detail-qty">-</p>
-                                    </div>
-                                    <div class="col-md-2">
-                                        <small class="text-muted">Balance</small>
-                                        <p class="font-weight-bold mb-0" id="detail-balance">-</p>
-                                    </div>
-                                    <div class="col-md-2">
-                                        <small class="text-muted">Total Scanned</small>
-                                        <p class="font-weight-bold mb-0" id="detail-total">-</p>
-                                    </div>
-                                </div>
-                            </div> --}}
-                            <div class="row text-center">
-                                <div class="col-md-4">
-                                    <div>
-                                        <small class="text-muted">Destination / Buyer</small>
-                                        <p class="font-weight-bold mb-0" id="detail-desc">-</p>
-                                    </div>
-                                    <div>
-                                        <small class="text-muted">Qty Master</small>
-                                        <h3 class="font-weight-bold mb-0 text-primary" id="detail-qty">-</h3>
-                                    </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <div>
-                                        <small class="text-muted">Size</small>
-                                        <p class="font-weight-bold mb-4" id="detail-size">-</p>
-                                    </div>
-                                    <div>
-                                        <small class="text-muted">Total Scanned</small>
-                                        <h3 class="font-weight-bold mb-0 text-success" id="detail-total">-</h3>
-                                    </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <div>
-                                        <small class="text-muted">Style / CPO</small>
-                                        <p class="font-weight-bold mb-4" id="detail-color">-</p>
-                                    </div>
-                                    <div>
-                                        <small class="text-muted">Balance</small>
-                                        <h3 class="font-weight-bold mb-0 text-danger" id="detail-balance">-</h3>
-                                    </div>
-                                </div>
-                            </div>
-                            <hr>
-                            <!-- Session List -->
-                            <div id="detail-sessions">
-                                <p class="text-center text-muted py-3">Loading...</p>
-                            </div>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
         </div>
     </div>
-    <!-- End of Page Wrapper -->
 
     <!-- Page level plugins -->
     <script src="{{asset('vendor/datatables/jquery.dataTables.min.js')}}"></script>
     <script src="{{asset('vendor/datatables/dataTables.bootstrap4.min.js')}}"></script>
 
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <style>
+        .import-dropzone {
+            border: 2px dashed #c2cbe2;
+            background-color: #f8f9fc;
+            cursor: pointer;
+            transition: all .15s ease-in-out;
+        }
+        .import-dropzone:hover,
+        .import-dropzone.dragover {
+            border-color: #4e73df;
+            background-color: #eef2ff;
+        }
+    </style>
 
     <script type="text/javascript">
         $(function () {
@@ -535,301 +345,86 @@
                 }
             });
 
-            // --- DataTables Initialization ---
-            const table = $('.data-table').DataTable({
+            // --- DataTables: Packing List Terbaru ---
+            const table = $('#tableRecentPackingLists').DataTable({
                 processing: true,
-                serverSide: true,
-                ajax: "{{ route('jancode.index') }}",
+                ajax: {
+                    url: "{{ route('jancode.packingLists') }}",
+                    type: "GET",
+                    dataType: "json",
+                    dataSrc: "data",
+                },
                 columns: [
-                    { data: 'DT_RowIndex', name: 'DT_RowIndex', orderable: false, searchable: false },
-                    { data: 'country', name: 'country' },
-                    { data: 'buyer', name: 'buyer' },
-                    { data: 'ocf', name: 'ocf' },
-                    { data: 'style', name: 'style' },
-                    { data: 'color', name: 'color' },
-                    { data: 'size', name: 'size' },
-                    { data: 'jancode', name: 'jancode' },
-                    { data: 'packing_qty', name: 'packing_list_qty_carton' },
-                    { data: 'qty_per_carton', name: 'qty_per_carton' },
-                    { data: 'total_qty_pcs', name: 'total_qty_pcs' },
-                    { data: 'received_qty', name: 'receive_qty_carton', searchable: false },
-                    { data: 'balance', name: 'balance', searchable: false },
-                    { data: 'void', name: 'void', render: function (data) { return data == 1 ? '<span class="badge badge-danger">True</span>' : '<span class="badge badge-success">False</span>'; } },
-                    { data: 'action', name: 'action', orderable: false, searchable: false },
-                ]
-            });
-
-            // --- Show Create Modal ---
-            $('#createNewJancode').click(function () {
-                $('#saveBtn').val("create-jancode").html('Save changes');
-                $('#jancode_id').val('');
-                $('#jancodeForm').trigger("reset");
-                $('#modelHeading').html("Create New Jancode");
-                $('#ajaxModel').modal('show');
-            });
-
-            // --- Show Edit Modal ---
-            $('body').on('click', '.editJancode', function () {
-                const jancode_id = $(this).data('id');
-                const editUrl = "{{ route('jancode.edit', ':id') }}".replace(':id', jancode_id);
-                $.get(editUrl, function (data) {
-                    $('#modelHeading').html("Edit Jancode");
-                    $('#saveBtn').val("edit-jancode").html('Save changes');
-                    $('#ajaxModel').modal('show');
-                    $('#jancode_id').val(data.id);
-                    $('#jancode').val(data.jancode);
-                    $('#size').val(data.size);
-                    $('#qty').val(data.qty);
-                    $('#destination').val(data.destination);
-                    $('#buyer').val(data.buyer);
-                    $('#style').val(data.style);
-                    $('#cpo').val(data.cpo);
-                    $('#void').val(data.void);
-                });
-            });
-
-            // --- Create/Edit Form Submit ---
-            $('#jancodeForm').submit(function (e) {
-                e.preventDefault();
-                const formData = new FormData(this);
-
-                Swal.fire({
-                    title: 'Saving Data...',
-                    text: 'Please wait while we save your changes.',
-                    allowOutsideClick: false,
-                    didOpen: () => Swal.showLoading()
-                });
-
-                $.ajax({
-                    data: formData,
-                    url: "{{ route('jancode.store') }}",
-                    type: "POST",
-                    processData: false,
-                    contentType: false,
-                    success: function (response) {
-                        $('#jancodeForm').trigger("reset");
-                        $('#ajaxModel').modal('hide');
-                        table.draw();
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'Success!',
-                            text: response.success,
-                            confirmButtonText: 'OK'
-                        });
+                    {
+                        data: 'doc_type', className: 'text-center',
+                        render: d => d === 'actual'
+                            ? '<span class="badge badge-success">ACTUAL</span>'
+                            : '<span class="badge badge-primary">PROFORMA</span>'
                     },
-                    error: function (xhr) {
-                        const errorMsg = xhr.responseJSON ? xhr.responseJSON.message : 'An error occurred while saving.';
-                        Swal.fire({
-                            icon: 'error',
-                            title: 'Error!',
-                            text: errorMsg,
-                            confirmButtonText: 'Try Again'
-                        });
-                    }
-                });
-            });
-
-            // --- Delete Action ---
-            $('body').on('click', '.deleteJancode', function () {
-                const jancode_id = $(this).data("id");
-
-                Swal.fire({
-                    title: 'Are you sure?',
-                    text: "You won't be able to revert this!",
-                    icon: 'warning',
-                    showCancelButton: true,
-                    confirmButtonColor: '#d33',
-                    cancelButtonColor: '#3085d6',
-                    confirmButtonText: 'Yes, delete it!'
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        Swal.fire({
-                            title: 'Deleting Data...',
-                            allowOutsideClick: false,
-                            didOpen: () => Swal.showLoading()
-                        });
-
-                        const formData = new FormData();
-                        formData.append('_token', $('meta[name="csrf-token"]').attr('content'));
-                        formData.append('_method', 'DELETE');
-
-                        $.ajax({
-                            type: "POST",
-                            url: "{{ route('jancode.index') }}" + '/' + jancode_id,
-                            data: formData,
-                            processData: false,
-                            contentType: false,
-                            success: function (response) {
-                                table.draw();
-                                Swal.fire('Deleted!', response.success, 'success');
-                            },
-                            error: function (xhr) {
-                                Swal.fire('Error!', 'Failed to delete data.', 'error');
-                            }
-                        });
-                    }
-                });
-            });
-
-            // --- Import Form Submit ---
-            $('#importForm').on('submit', function (e) {
-                e.preventDefault();
-                const formData = new FormData(this);
-
-                Swal.fire({
-                    title: 'Importing Data...',
-                    text: 'Please wait while we process the Excel file.',
-                    allowOutsideClick: false,
-                    didOpen: () => Swal.showLoading()
-                });
-
-                $.ajax({
-                    url: $(this).attr('action'),
-                    type: 'POST',
-                    data: formData,
-                    processData: false,
-                    contentType: false,
-                    success: function (response) {
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'Success!',
-                            text: response.message,
-                            confirmButtonText: 'OK'
-                        }).then(() => {
-                            table.draw();
-                            $('#importForm')[0].reset();
-                            $('#importModal').modal('hide');
-                        });
+                    {
+                        data: null,
+                        render: (d) => `<strong>${d.group_label || '-'}</strong>
+                            <br><small class="text-muted">Buyer: ${d.supplier_name || '-'}</small>`
                     },
-                    error: function (xhr) {
-                        const errorMsg = xhr.responseJSON ? xhr.responseJSON.message : 'An error occurred during import.';
-                        Swal.fire({
-                            icon: 'error',
-                            title: 'Import Failed',
-                            text: errorMsg,
-                            confirmButtonText: 'Try Again'
-                        });
-                    }
-                });
-            });
-
-            // --- Import New Format Form Submit ---
-            $('#importNewFormatForm').on('submit', function (e) {
-                e.preventDefault();
-                const formData = new FormData(this);
-
-                Swal.fire({
-                    title: 'Importing Data...',
-                    text: 'Please wait while we process the Excel file.',
-                    allowOutsideClick: false,
-                    didOpen: () => Swal.showLoading()
-                });
-
-                $.ajax({
-                    url: $(this).attr('action'),
-                    type: 'POST',
-                    data: formData,
-                    processData: false,
-                    contentType: false,
-                    success: function (response) {
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'Success!',
-                            text: response.message,
-                            confirmButtonText: 'OK'
-                        }).then(() => {
-                            table.draw();
-                            $('#importNewFormatForm')[0].reset();
-                            $('#importNewFormatModal').modal('hide');
-                        });
+                    {
+                        data: null, className: 'text-center',
+                        render: d => `<span class="badge badge-dark">Rev.${d.revision_no}</span>
+                            <br><small class="text-muted">${d.revision_count} revisi</small>`
                     },
-                    error: function (xhr) {
-                        const errorMsg = xhr.responseJSON ? xhr.responseJSON.message : 'An error occurred during import.';
-                        Swal.fire({
-                            icon: 'error',
-                            title: 'Import Failed',
-                            text: errorMsg,
-                            confirmButtonText: 'Try Again'
-                        });
-                    }
-                });
+                    { data: 'total_carton', className: 'text-right font-weight-bold text-primary' },
+                    { data: 'valid_rows', className: 'text-center text-success font-weight-bold' },
+                    {
+                        data: 'skipped_rows', className: 'text-center',
+                        render: d => d > 0 ? `<span class="text-danger font-weight-bold">${d}</span>` : `<span class="text-muted">0</span>`
+                    },
+                    { data: 'original_filename', render: d => d ? `<small class="text-muted">${d}</small>` : '-' },
+                    { data: 'import_date' },
+                    {
+                        data: null, orderable: false, className: 'text-center',
+                        render: (d) => {
+                            const detail = `{{ url('/jancode/import-batches') }}/${d.id}`;
+                            return `<a href="${detail}" class="btn btn-info btn-sm btn-circle" title="Detail & Riwayat Revisi"><i class="fas fa-eye"></i></a>
+                                <a href="{{ route('scanner.index') }}?packing_list=${d.id}" class="btn btn-success btn-sm btn-circle ml-1" title="Scan packing list ini"><i class="fas fa-barcode"></i></a>`;
+                        }
+                    },
+                ],
+                order: [[7, 'desc']],
+                pageLength: 5,
+                lengthChange: false,
+                language: {
+                    processing: '<i class="fas fa-spinner fa-spin mr-1"></i> Memuat data packing list...',
+                    search: 'Cari:',
+                    info: 'Menampilkan _START_ - _END_ dari _TOTAL_ packing list',
+                    infoEmpty: 'Belum ada data',
+                    zeroRecords: 'Tidak ada packing list yang cocok',
+                    emptyTable: '<div class="text-muted py-2"><i class="fas fa-inbox fa-2x d-block mb-2"></i>Belum ada packing list. Silakan import file Excel terlebih dahulu.</div>',
+                    paginate: { previous: 'Sebelumnya', next: 'Berikutnya' },
+                },
             });
 
-            // --- Detail Scan Action ---
-            $('body').on('click', '.detailScan', function () {
-                const jancode_id = $(this).data('id');
-                const jancode = $(this).data('jancode');
-
-                $('#detail-jancode').text(jancode);
-                $('#detail-sessions').html('<p class="text-center text-muted py-3"><i class="fas fa-spinner fa-spin"></i> Loading...</p>');
-                $('#detailScanModal').modal('show');
-
-                const scanLogUrl = "{{ route('jancode.scanLogs', ':id') }}".replace(':id', jancode_id);
-
-                $.get(scanLogUrl, function (data) {
-                    $('#detail-desc').text((data.destination || '-') + ' / ' + (data.buyer || '-'));
-                    $('#detail-size').text(data.size || '-');
-                    $('#detail-color').text((data.style || '-') + ' / ' + (data.cpo || '-'));
-                    $('#detail-qty').text(data.qty);
-                    $('#detail-balance').text(data.balance);
-                    $('#detail-total').text(data.total_scans);
-
-                    if (data.logs.length === 0 && (!data.batches || data.batches.length === 0)) {
-                        $('#detail-sessions').html(
-                            '<div class="text-center text-muted py-4">' +
-                            '<i class="fas fa-inbox fa-2x mb-2"></i>' +
-                            '<p>Belum ada aktivitas scan untuk jancode ini</p>' +
-                            '</div>'
-                        );
-                        return;
-                    }
-
-                    let html = '';
-
-                    // 1. Tabel Riwayat Batch Submit
-                    if (data.batches && data.batches.length > 0) {
-                        html += '<h6 class="font-weight-bold text-primary mb-2"><i class="fas fa-layer-group mr-1"></i> Riwayat Batch Scan Submit:</h6>';
-                        html += '<div class="table-responsive mb-3" style="max-height:200px; overflow-y:auto;">';
-                        html += '  <table class="table table-sm table-bordered table-hover mb-0">';
-                        html += '    <thead class="thead-light"><tr><th>Batch No</th><th>Waktu Submit</th><th class="text-right">Qty Di-Scan</th><th class="text-right">Akumulasi Receive</th><th class="text-right">Sisa Balance</th><th>Operator</th></tr></thead>';
-                        html += '    <tbody>';
-                        data.batches.forEach(function (b) {
-                            html += `<tr>
-                                <td><span class="badge badge-dark font-mono">${b.batch_no}</span></td>
-                                <td><small class="text-muted">${b.created_at}</small></td>
-                                <td class="text-right font-weight-bold text-success">+${b.scanned_qty} ctn</td>
-                                <td class="text-right font-weight-bold text-primary">${b.receive_qty} ctn</td>
-                                <td class="text-right font-weight-bold ${b.balance > 0 ? 'text-warning' : 'text-success'}">${b.balance} ctn</td>
-                                <td><small>${b.user_name}</small></td>
-                            </tr>`;
-                        });
-                        html += '    </tbody>';
-                        html += '  </table>';
-                        html += '</div>';
-                    }
-
-                    // 2. Tabel Log Scan Individual
-                    if (data.logs && data.logs.length > 0) {
-                        html += '<h6 class="font-weight-bold text-secondary mb-2"><i class="fas fa-barcode mr-1"></i> Log Scan Fisik (Per Karton):</h6>';
-                        html += '<div class="table-responsive" style="max-height:220px; overflow-y:auto;">';
-                        html += '  <table class="table table-sm table-bordered table-striped mb-0">';
-                        html += '    <thead class="thead-light"><tr><th width="60">No</th><th>Waktu Scan</th><th>Scanned By</th></tr></thead>';
-                        html += '    <tbody>';
-                        data.logs.forEach(function (log) {
-                            html += '<tr><td>' + log.no + '</td><td>' + log.created_at + '</td><td>' + log.user_name + '</td></tr>';
-                        });
-                        html += '    </tbody>';
-                        html += '  </table>';
-                        html += '</div>';
-                    }
-
-                    $('#detail-sessions').html(html);
-                }).fail(function () {
-                    $('#detail-sessions').html(
-                        '<div class="text-center text-danger py-3"><i class="fas fa-exclamation-triangle"></i> Gagal memuat data scan</div>'
-                    );
-                });
+            $('#btnReloadRecent').click(function () {
+                table.ajax.reload(null, false);
             });
+
+            // --- Dropzone ---
+            const dz = document.getElementById('importDropzone');
+
+            ['dragenter', 'dragover'].forEach(function (evt) {
+                dz.addEventListener(evt, function (e) { e.preventDefault(); dz.classList.add('dragover'); });
+            });
+            ['dragleave', 'drop'].forEach(function (evt) {
+                dz.addEventListener(evt, function (e) { e.preventDefault(); dz.classList.remove('dragover'); });
+            });
+            dz.addEventListener('drop', function (e) {
+                const files = e.dataTransfer && e.dataTransfer.files;
+                if (files && files.length) {
+                    const input = document.getElementById('aiExcelFile');
+                    input.files = files;
+                    $(input).trigger('change');
+                    $('#aiImportModal').modal('show');
+                }
+            });
+
             // ==========================================
             // --- AI Import Interactive Workflow ---
             // ==========================================
@@ -975,17 +570,17 @@
                     html = '<tr><td colspan="12" class="text-center text-muted py-3">Tidak ada baris valid pada packing list ini.</td></tr>';
                 } else {
                     items.forEach(function (item, idx) {
-                        const statusBadge = item.is_duplicate 
-                            ? '<span class="badge badge-warning text-dark"><i class="fas fa-sync-alt mr-1"></i> Update</span>' 
+                        const statusBadge = item.is_duplicate
+                            ? '<span class="badge badge-warning text-dark"><i class="fas fa-sync-alt mr-1"></i> Update</span>'
                             : '<span class="badge badge-success"><i class="fas fa-plus mr-1"></i> Baru</span>';
 
                         const pcsPerCarton = parseInt(item.qty_per_carton) || 0;
                         const packingCarton = parseInt(item.packing_list_qty_carton) || 0;
                         const totalPcs = item.total_qty_pcs || (packingCarton * pcsPerCarton);
 
-                        const cartonNo = item.carton_no_from 
-                            ? (item.carton_no_to && item.carton_no_to !== item.carton_no_from 
-                                ? `${item.carton_no_from} - ${item.carton_no_to}` 
+                        const cartonNo = item.carton_no_from
+                            ? (item.carton_no_to && item.carton_no_to !== item.carton_no_from
+                                ? `${item.carton_no_from} - ${item.carton_no_to}`
                                 : item.carton_no_from)
                             : '-';
                         const nwGw = (item.nw_per_carton != null || item.gw_per_carton != null)
@@ -1156,4 +751,5 @@
         });
     </script>
 
+</body>
 </html>

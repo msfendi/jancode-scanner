@@ -34,13 +34,12 @@
                             </a>
                             @endif
                             <a href="{{ route('jancode.packingLists') }}" class="btn btn-sm btn-outline-primary shadow-sm ml-1">
-                                <i class="fas fa-clipboard-list fa-sm mr-1"></i> Packing List Aktif
-                            </a>
-                            <a href="{{ route('jancode.importBatches') }}" class="btn btn-sm btn-secondary shadow-sm ml-1">
-                                <i class="fas fa-arrow-left fa-sm mr-1"></i> Riwayat Import
+                                <i class="fas fa-tasks fa-sm mr-1"></i> Manage Packing List
                             </a>
                         </div>
                     </div>
+
+                    @include('layout.workflow-steps', ['current' => 'manage'])
 
                     {{-- Summary Cards --}}
                     <div class="row mb-4">

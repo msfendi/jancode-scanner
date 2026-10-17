@@ -37,6 +37,8 @@
                         </div>
                     </div>
 
+                    @include('layout.workflow-steps', ['current' => 'scan'])
+
                     <!-- Pilih Packing List -->
                     <div class="card shadow mb-4">
                         <div class="card-header py-3">
@@ -181,9 +183,18 @@
                             <h6 class="m-0 font-weight-bold text-primary">
                                 <i class="fas fa-list-ol mr-1"></i> Daftar Jancode pada Packing List (<span id="rows-done">0</span>/<span id="rows-total">0</span> selesai)
                             </h6>
-                            <button class="btn btn-sm btn-outline-secondary" id="btn-refresh-rows" type="button">
-                                <i class="fas fa-sync-alt mr-1"></i> Refresh
-                            </button>
+                            <div class="d-flex align-items-center">
+                                <small class="text-muted mr-3 d-none d-md-inline">
+                                    <i class="fas fa-clock mr-1"></i> Terakhir diperbarui: <span id="rows-updated">-</span>
+                                </small>
+                                <div class="custom-control custom-switch mr-3">
+                                    <input type="checkbox" class="custom-control-input" id="auto-refresh-toggle" checked>
+                                    <label class="custom-control-label small text-muted" for="auto-refresh-toggle">Auto-refresh</label>
+                                </div>
+                                <button class="btn btn-sm btn-outline-secondary" id="btn-refresh-rows" type="button">
+                                    <i class="fas fa-sync-alt mr-1"></i> Refresh
+                                </button>
+                            </div>
                         </div>
                         <div class="card-body p-0">
                             <div class="table-responsive" style="max-height: 420px; overflow-y: auto;">
@@ -393,6 +404,12 @@
 
                     updateCounters(res.counters || {});
                     renderRows(res.rows || []);
+                    markRowsUpdated();
+                }
+
+                function markRowsUpdated() {
+                    const now = new Date();
+                    $('#rows-updated').text(now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
                 }
 
                 function updateCounters(c) {
@@ -479,6 +496,43 @@
                         renderState(res);
                     });
                 }
+
+                // ── Auto-refresh (polling) ─────────────────────────────────
+                // Memperbarui daftar jancode secara berkala agar progres & balance
+                // selalu sinkron, tanpa mengganggu operator saat sedang scan.
+                const AUTO_REFRESH_MS = 15000;
+                let autoRefreshTimer = null;
+
+                function startAutoRefresh() {
+                    stopAutoRefresh();
+                    autoRefreshTimer = setInterval(pollRows, AUTO_REFRESH_MS);
+                }
+
+                function stopAutoRefresh() {
+                    if (autoRefreshTimer) { clearInterval(autoRefreshTimer); autoRefreshTimer = null; }
+                }
+
+                function pollRows() {
+                    if (!loadedBatchId) return;
+                    if (isScanning || scanQueue.length > 0) return;   // sedang scan
+                    if (document.hidden) return;                        // tab tidak aktif
+                    if (Swal.isVisible()) return;                       // ada dialog
+                    if ($('#row-filter').val()) return;                 // sedang memfilter
+                    refreshRows();
+                }
+
+                $('#auto-refresh-toggle').on('change', function () {
+                    if ($(this).is(':checked')) { startAutoRefresh(); } else { stopAutoRefresh(); }
+                });
+
+                // Saat tab kembali aktif, langsung sinkronkan sekali
+                document.addEventListener('visibilitychange', function () {
+                    if (!document.hidden && $('#auto-refresh-toggle').is(':checked')) {
+                        pollRows();
+                    }
+                });
+
+                startAutoRefresh();
 
                 // ── Log helper ─────────────────────────────────────────────
                 function escapeHtml(str) { return $('<div>').text(str || '').html(); }

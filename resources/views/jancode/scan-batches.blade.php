@@ -11,19 +11,25 @@
                 @include('layout.navbar')
                 <div class="container-fluid">
                     <div class="d-sm-flex align-items-center justify-content-between mb-4">
-                        <h1 class="h3 mb-0 text-gray-800">Riwayat Batch Scan Jancode</h1>
+                        <div>
+                            <h1 class="h3 mb-0 text-gray-800">
+                                <i class="fas fa-history text-primary mr-1"></i> Riwayat Batch Scan Jancode
+                            </h1>
+                            <p class="mb-0 text-muted small">
+                                Daftar sesi <strong>submit</strong> hasil scanning karton per packing list.
+                            </p>
+                        </div>
                         <div>
                             <a href="{{ route('scanner.index') }}" class="btn btn-sm btn-primary shadow-sm mr-2">
                                 <i class="fas fa-barcode fa-sm mr-1"></i> Buka Scanner
                             </a>
-                            <a href="{{ route('pallet.index') }}" class="btn btn-sm btn-info shadow-sm mr-2">
-                                <i class="fas fa-boxes fa-sm mr-1"></i> Manage Pallet
-                            </a>
-                            <a href="{{ route('jancode.index') }}" class="btn btn-sm btn-secondary shadow-sm">
-                                <i class="fas fa-arrow-left fa-sm mr-1"></i> Master Jancode
+                            <a href="{{ route('jancode.packingLists') }}" class="btn btn-sm btn-outline-primary shadow-sm">
+                                <i class="fas fa-tasks fa-sm mr-1"></i> Manage Packing List
                             </a>
                         </div>
                     </div>
+
+                    @include('layout.workflow-steps', ['current' => 'scan'])
 
                     <div class="card shadow mb-4">
                         <div class="card-header py-3 d-flex justify-content-between align-items-center">

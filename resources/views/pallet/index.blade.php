@@ -228,16 +228,31 @@
                     <!-- Page Heading -->
                     <div class="d-sm-flex align-items-center justify-content-between mb-4">
                         <div>
-                            <h1 class="h3 mb-1 text-gray-800 font-weight-bold">Manage Pallet Location & Placement</h1>
+                            <h1 class="h3 mb-1 text-gray-800 font-weight-bold">Manage Pallet Location &amp; Placement</h1>
                             <p class="text-muted small mb-0">Total 480 Alamat Pallet (Row B–I) &bull; Kapasitas Maks 42 Karton/Pallet &bull; Aturan Kompatibilitas 1 Country & 1 Style/OCF per Row</p>
                         </div>
                         <div>
-                            <a href="{{ route('jancode.index') }}" class="btn btn-sm btn-secondary shadow-sm">
-                                <i class="fas fa-barcode fa-sm text-white-50 mr-1"></i> Master Jancode
+                            <a href="{{ route('scanner.index') }}" class="btn btn-sm btn-success shadow-sm">
+                                <i class="fas fa-barcode fa-sm mr-1"></i> Buka Scanner
                             </a>
                             <button class="btn btn-sm btn-primary shadow-sm" data-toggle="modal" data-target="#quickPlotModal">
                                 <i class="fas fa-plus fa-sm text-white-50 mr-1"></i> Plot Karton Baru
                             </button>
+                        </div>
+                    </div>
+
+                    @include('layout.workflow-steps', ['current' => 'pallet'])
+
+                    <!-- Penjelasan -->
+                    <div class="alert alert-light border shadow-sm mb-4 small">
+                        <div class="d-flex">
+                            <i class="fas fa-lightbulb fa-lg text-warning mr-3"></i>
+                            <div>
+                                Langkah <strong>4</strong>: setelah karton di-<em>scan</em>, tempatkan pada lokasi pallet.
+                                Warna <span class="text-danger font-weight-bold">merah</span> = pallet terisi,
+                                <span class="text-success font-weight-bold">hijau</span> = kosong.
+                                Satu pallet maksimal <strong>42 karton</strong> dengan kompatibilitas <strong>1 Country &amp; 1 Style/OCF</strong> per row.
+                            </div>
                         </div>
                     </div>
 

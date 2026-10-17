@@ -24,27 +24,24 @@
     <!-- Divider -->
     <hr class="sidebar-divider">
 
-    <!-- Heading 1: Master & Inbound -->
+    <!-- Heading 1: Packing List -->
     <div class="sidebar-heading">
-        1. Inbound & Master
+        1. Packing List
     </div>
 
-    <li class="nav-item {{ (request()->is('jancode*') && !request()->routeIs('pallet.*') && !request()->is('scanner*')) ? 'active' : '' }}">
-        <a class="nav-link {{ (request()->is('jancode*') && !request()->routeIs('pallet.*') && !request()->is('scanner*')) ? '' : 'collapsed' }}" href="#" data-toggle="collapse" data-target="#collapseMaster"
-            aria-expanded="{{ (request()->is('jancode*') && !request()->routeIs('pallet.*') && !request()->is('scanner*')) ? 'true' : 'false' }}" aria-controls="collapseMaster">
-            <i class="fas fa-fw fa-boxes"></i>
-            <span>Master Jancode</span>
+    <li class="nav-item {{ request()->is('jancode*') ? 'active' : '' }}">
+        <a class="nav-link {{ request()->is('jancode*') ? '' : 'collapsed' }}" href="#" data-toggle="collapse" data-target="#collapsePackingList"
+            aria-expanded="{{ request()->is('jancode*') ? 'true' : 'false' }}" aria-controls="collapsePackingList">
+            <i class="fas fa-fw fa-clipboard-list"></i>
+            <span>Packing List</span>
         </a>
-        <div id="collapseMaster" class="collapse {{ (request()->is('jancode*') && !request()->routeIs('pallet.*') && !request()->is('scanner*')) ? 'show' : '' }}" aria-labelledby="headingMaster" data-parent="#accordionSidebar">
+        <div id="collapsePackingList" class="collapse {{ request()->is('jancode*') ? 'show' : '' }}" aria-labelledby="headingPackingList" data-parent="#accordionSidebar">
             <div class="bg-white py-2 collapse-inner rounded">
                 <a class="collapse-item {{ request()->routeIs('jancode.index') ? 'active' : '' }}" href="{{ route('jancode.index') }}">
-                    <i class="fas fa-list mr-1"></i> Data Master Jancode
+                    <i class="fas fa-file-import mr-1"></i> Import Packing List
                 </a>
-                <a class="collapse-item {{ request()->routeIs('jancode.packingLists*') ? 'active' : '' }}" href="{{ route('jancode.packingLists') }}">
-                    <i class="fas fa-clipboard-list mr-1"></i> Packing List
-                </a>
-                <a class="collapse-item {{ request()->routeIs('jancode.importBatches*') || request()->routeIs('jancode.importBatchDetail*') ? 'active' : '' }}" href="{{ route('jancode.importBatches') }}">
-                    <i class="fas fa-history mr-1"></i> Riwayat Import Batch
+                <a class="collapse-item {{ request()->routeIs('jancode.packingLists*') || request()->routeIs('jancode.importBatchDetail*') ? 'active' : '' }}" href="{{ route('jancode.packingLists') }}">
+                    <i class="fas fa-tasks mr-1"></i> Manage Packing List
                 </a>
             </div>
         </div>
@@ -53,24 +50,9 @@
     <!-- Divider -->
     <hr class="sidebar-divider">
 
-    <!-- Heading 2: Gudang & Pallet -->
+    <!-- Heading 2: Scan Jancode -->
     <div class="sidebar-heading">
-        2. Gudang & Pallet
-    </div>
-
-    <li class="nav-item {{ request()->is('pallet*') ? 'active' : '' }}">
-        <a class="nav-link" href="{{ route('pallet.index') }}">
-            <i class="fas fa-fw fa-pallet"></i>
-            <span>Manage Pallet Location</span>
-        </a>
-    </li>
-
-    <!-- Divider -->
-    <hr class="sidebar-divider">
-
-    <!-- Heading 3: Operasional Scan -->
-    <div class="sidebar-heading">
-        3. Operasional Scan
+        2. Scan Jancode
     </div>
 
     <li class="nav-item {{ request()->is('scanner*') ? 'active' : '' }}">
@@ -89,6 +71,21 @@
                 </a>
             </div>
         </div>
+    </li>
+
+    <!-- Divider -->
+    <hr class="sidebar-divider">
+
+    <!-- Heading 3: Manage Pallet -->
+    <div class="sidebar-heading">
+        3. Manage Pallet
+    </div>
+
+    <li class="nav-item {{ request()->is('pallet*') ? 'active' : '' }}">
+        <a class="nav-link" href="{{ route('pallet.index') }}">
+            <i class="fas fa-fw fa-pallet"></i>
+            <span>Manage Pallet Location</span>
+        </a>
     </li>
 
     <!-- Divider -->
