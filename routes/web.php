@@ -75,6 +75,7 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/jancode/export-template', [JancodeController::class, 'exportTemplate'])->name('jancode.exportTemplate')->middleware(['auth', 'role:Admin']);
     Route::get('/jancode/import-batches', [JancodeController::class, 'importBatches'])->name('jancode.importBatches')->middleware(['auth', 'role:Admin']);
     Route::get('/jancode/import-batches/{id}', [JancodeController::class, 'importBatchDetail'])->name('jancode.importBatchDetail')->middleware(['auth', 'role:Admin']);
+    Route::get('/jancode/packing-lists', [JancodeController::class, 'packingLists'])->name('jancode.packingLists')->middleware(['auth', 'role:Admin']);
 
     // Pallet Location & Placement
     Route::prefix('pallet')->name('pallet.')->middleware(['auth', 'role:Admin'])->group(function () {
@@ -88,6 +89,9 @@ Route::group(['middleware' => 'auth'], function () {
 
     Route::prefix('scanner')->name('scanner.')->group(function () {
         Route::get('/', [JancodeScanController::class, 'index'])->name('index')->middleware(['auth', 'role:Admin']);
+        Route::get('/packing-lists', [JancodeScanController::class, 'packingLists'])->name('packingLists')->middleware(['auth', 'role:Admin']);
+        Route::post('/load', [JancodeScanController::class, 'load'])->name('load')->middleware(['auth', 'role:Admin']);
+        Route::get('/rows', [JancodeScanController::class, 'rows'])->name('rows')->middleware(['auth', 'role:Admin']);
         Route::get('/search', [JancodeScanController::class, 'search'])->name('search')->middleware(['auth', 'role:Admin']);
         Route::get('/count', [JancodeScanController::class, 'count'])->name('count')->middleware(['auth', 'role:Admin']);
         Route::post('/scan', [JancodeScanController::class, 'scan'])->name('scan')->middleware(['auth', 'role:Admin']);

@@ -13,6 +13,7 @@ use App\Imports\JancodesImport;
 use App\Imports\JancodesNewFormatImport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Maatwebsite\Excel\Facades\Excel;
 use Yajra\DataTables\Facades\DataTables;
 use RealRashid\SweetAlert\Facades\Alert;
@@ -95,7 +96,15 @@ class JancodeController extends Controller
 
         $total = $logs->count();
 
+        // Batch scan yang menyentuh jancode ini (per-jancode lama, atau batch packing list baru)
         $batches = ScanBatch::where('jancode_id', $jancode->id)
+            ->orWhere(function ($q) use ($jancode) {
+                if ($jancode->import_batch_id) {
+                    $q->where('import_batch_id', $jancode->import_batch_id);
+                } else {
+                    $q->whereRaw('1 = 0');
+                }
+            })
             ->with('user')
             ->latest()
             ->get()
@@ -199,7 +208,7 @@ class JancodeController extends Controller
     }
 
     /**
-     * Preview AI-Assisted Import
+     * Preview Import Packing List (PROFORMA / ACTUAL) untuk seluruh sheet.
      */
     public function previewAiImport(Request $request, \App\Services\JancodeImportService $service)
     {
@@ -210,20 +219,41 @@ class JancodeController extends Controller
         try {
             $uploadedFile = $request->file('file');
             $originalName = $uploadedFile->getClientOriginalName();
-            $preview = $service->parseFile($uploadedFile->getRealPath());
+            $preview = $service->parseWorkbook($uploadedFile->getRealPath());
 
-            // Tandai duplikat terhadap data eksisting
-            $existingKeys = Jancode::select('ocf', 'style', 'color', 'size', 'jancode')
-                ->get()
-                ->map(fn($item) => strtolower(trim("{$item->ocf}|{$item->style}|{$item->color}|{$item->size}|{$item->jancode}")))
-                ->flip()
-                ->toArray();
-
-            foreach ($preview['items'] as &$item) {
-                $key = strtolower(trim("{$item['ocf']}|{$item['style']}|{$item['color']}|{$item['size']}|{$item['jan_code']}"));
-                $item['is_duplicate'] = isset($existingKeys[$key]);
+            if (empty($preview['sheets'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Tidak menemukan sheet packing list (judul "PACKING LIST ...") pada file ini.',
+                ], 422);
             }
-            unset($item);
+
+            // Tandai duplikat terhadap data eksisting pada packing list (group) yang sama
+            foreach ($preview['sheets'] as &$sheet) {
+                $groupKey = ImportBatch::buildGroupKey($sheet['header']);
+                $active   = ImportBatch::activeForGroup($groupKey);
+
+                $existingKeys = [];
+                if ($active) {
+                    $existingKeys = Jancode::where('import_batch_id', $active->id)
+                        ->get(['color', 'size', 'jancode'])
+                        ->map(fn($i) => strtolower(trim("{$i->color}|{$i->size}|{$i->jancode}")))
+                        ->flip()
+                        ->toArray();
+                }
+
+                foreach ($sheet['items'] as &$item) {
+                    $key = strtolower(trim("{$item['color']}|{$item['size']}|{$item['jan_code']}"));
+                    $item['is_duplicate'] = isset($existingKeys[$key]);
+                }
+                unset($item);
+
+                $sheet['group_key']       = $groupKey;
+                $sheet['group_label']     = ImportBatch::buildGroupLabel($sheet['header']);
+                $sheet['next_revision']   = ImportBatch::nextRevisionForGroup($groupKey);
+                $sheet['active_batch_no'] = $active->batch_number ?? null;
+            }
+            unset($sheet);
 
             return response()->json([
                 'success'          => true,
@@ -231,7 +261,7 @@ class JancodeController extends Controller
                 'original_filename'=> $originalName,
             ]);
         } catch (\Throwable $e) {
-            Log::error('AI Import Error: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
+            Log::error('Packing list import error: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
             return response()->json([
                 'success' => false,
                 'message' => 'Gagal memproses file Excel: ' . $e->getMessage()
@@ -240,192 +270,145 @@ class JancodeController extends Controller
     }
 
     /**
-     * Confirm and save AI-Assisted Import
+     * Konfirmasi & simpan import packing list.
+     *
+     * Setiap sheet menjadi satu REVISI packing list. Revisi terbaru pada group
+     * (style + ocf/cpo + destination + warehouse) otomatis menjadi ACTIVE.
      */
-    public function confirmAiImport(Request $request)
+    public function confirmAiImport(Request $request, \App\Services\PackingListImportService $importService)
     {
         $request->validate([
-            'items'                          => 'required|array|min:1',
-            'items.*.country'                => 'required|string',
-            'items.*.buyer'                  => 'required|string',
-            'items.*.ocf'                    => 'required|string',
-            'items.*.style'                  => 'required|string',
-            'items.*.color'                  => 'required|string',
-            'items.*.size'                   => 'required|string',
-            'items.*.jan_code'               => 'required|string',
-            'items.*.packing_list_qty_carton'=> 'required|integer|min:1',
-            // Batch metadata (opsional, boleh tidak dikirim)
-            'original_filename'              => 'nullable|string',
-            'supplier_name'                  => 'nullable|string',
-            'batch_name'                     => 'nullable|string',
-            'skipped'                        => 'nullable|array',
+            'sheets'                          => 'nullable|array',
+            'items'                           => 'nullable|array',
+            'items.*.jan_code'                => 'nullable|string',
+            'items.*.packing_list_qty_carton' => 'nullable|integer',
+            'original_filename'               => 'nullable|string',
+            'supplier_name'                   => 'nullable|string',
+            'batch_name'                      => 'nullable|string',
         ]);
 
-        $items      = $request->input('items');
-        $skipped    = $request->input('skipped', []);
-        $header     = collect($items)->first(); // ambil ocf/supplier dari item pertama
+        $sheets = $this->normalizeImportSheets($request);
 
+        if (empty($sheets)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Tidak ada baris data yang bisa diimport.',
+            ], 422);
+        }
+
+        $meta = [
+            'original_filename' => $request->input('original_filename'),
+            'batch_name'        => $request->input('batch_name'),
+            'supplier_name'     => $request->input('supplier_name'),
+            'imported_by'       => auth()->id(),
+        ];
+
+        $created       = [];
         $importedCount = 0;
-        $updatedCount  = 0;
-        $batch         = null;
+        $skippedCount  = 0;
 
-        DB::transaction(function () use ($items, $skipped, $header, $request, &$importedCount, &$updatedCount, &$batch) {
-            // 1. Buat ImportBatch
-            $batch = ImportBatch::create([
-                'batch_number'      => ImportBatch::generateBatchNumber(),
-                'batch_name'        => $request->input('batch_name') ?: ('Import ' . now()->format('d/m/Y H:i')),
-                'original_filename' => $request->input('original_filename'),
-                'supplier_name'     => $request->input('supplier_name') ?: ($header['buyer'] ?? null),
-                'ocf_number'        => $header['ocf'] ?? null,
-                'cpo'               => $header['ocf'] ?? null,
-                'import_date'       => now()->toDateString(),
-                'status'            => 'processing',
-                'total_rows'        => count($items) + count($skipped),
-                'valid_rows'        => count($items),
-                'invalid_rows'      => count($skipped),
-                'total_items'       => count($items),
-                'processed_items'   => 0,
-                'imported_by'       => auth()->id(),
-            ]);
-
-            // 2. Import valid items
-            foreach ($items as $item) {
-                $existing = Jancode::where('ocf', $item['ocf'])
-                    ->where('style', $item['style'])
-                    ->where('color', $item['color'])
-                    ->where('size', $item['size'])
-                    ->where('jancode', $item['jan_code'])
-                    ->first();
-
-                $packingQty   = (int)$item['packing_list_qty_carton'];
-                $qtyPerCarton = (int)($item['qty_per_carton'] ?? 0);
-                $totalPcs     = $packingQty * $qtyPerCarton;
-
-                $cartonFrom   = isset($item['carton_no_from']) && $item['carton_no_from'] !== '' ? (int)$item['carton_no_from'] : null;
-                $cartonTo     = isset($item['carton_no_to']) && $item['carton_no_to'] !== '' ? (int)$item['carton_no_to'] : null;
-                $sourceRow    = isset($item['source_row']) ? (int)$item['source_row'] : null;
-                $nwPerCtn     = isset($item['nw_per_carton']) && $item['nw_per_carton'] !== '' ? (float)$item['nw_per_carton'] : null;
-                $ttlNw        = isset($item['ttl_nw']) && $item['ttl_nw'] !== '' ? (float)$item['ttl_nw'] : null;
-                $gwPerCtn     = isset($item['gw_per_carton']) && $item['gw_per_carton'] !== '' ? (float)$item['gw_per_carton'] : null;
-                $ttlGw        = isset($item['ttl_gw']) && $item['ttl_gw'] !== '' ? (float)$item['ttl_gw'] : null;
-                $measCm       = $item['measurement_cm'] ?? null;
-                $cbm          = isset($item['cbm']) && $item['cbm'] !== '' ? (float)$item['cbm'] : null;
-
-                if ($existing) {
-                    $receiveQty = (int)($existing->receive_qty_carton ?? 0);
-                    $existing->update([
-                        'import_batch_id'         => $batch->id,
-                        'source_row'              => $sourceRow,
-                        'country'                 => $item['country'],
-                        'buyer'                   => $item['buyer'],
-                        'carton_no_from'          => $cartonFrom,
-                        'carton_no_to'            => $cartonTo,
-                        'qty_per_carton'          => $qtyPerCarton,
-                        'packing_list_qty_carton' => $packingQty,
-                        'qty'                     => $packingQty,
-                        'destination'             => $item['country'],
-                        'cpo'                     => $item['ocf'],
-                        'balance'                 => max(0, $packingQty - $receiveQty),
-                        'total_qty_pcs'           => $totalPcs,
-                        'nw_per_carton'           => $nwPerCtn,
-                        'ttl_nw'                  => $ttlNw,
-                        'gw_per_carton'           => $gwPerCtn,
-                        'ttl_gw'                  => $ttlGw,
-                        'measurement_cm'          => $measCm,
-                        'cbm'                     => $cbm,
-                    ]);
-                    $updatedCount++;
-                } else {
-                    Jancode::create([
-                        'import_batch_id'         => $batch->id,
-                        'source_row'              => $sourceRow,
-                        'country'                 => $item['country'],
-                        'buyer'                   => $item['buyer'],
-                        'ocf'                     => $item['ocf'],
-                        'style'                   => $item['style'],
-                        'carton_no_from'          => $cartonFrom,
-                        'carton_no_to'            => $cartonTo,
-                        'color'                   => $item['color'],
-                        'size'                    => $item['size'],
-                        'qty_per_carton'          => $qtyPerCarton,
-                        'jancode'                 => $item['jan_code'],
-                        'packing_list_qty_carton' => $packingQty,
-                        'receive_qty_carton'      => 0,
-                        'balance'                 => $packingQty,
-                        'total_qty_pcs'           => $totalPcs,
-                        'nw_per_carton'           => $nwPerCtn,
-                        'ttl_nw'                  => $ttlNw,
-                        'gw_per_carton'           => $gwPerCtn,
-                        'ttl_gw'                  => $ttlGw,
-                        'measurement_cm'          => $measCm,
-                        'cbm'                     => $cbm,
-                        'qty'                     => $packingQty,
-                        'destination'             => $item['country'],
-                        'cpo'                     => $item['ocf'],
-                        'void'                    => 'false',
-                    ]);
-                    $importedCount++;
+        DB::transaction(function () use ($sheets, $meta, $importService, &$created, &$importedCount, &$skippedCount) {
+            foreach ($sheets as $sheet) {
+                $result = $importService->importSheet($sheet, $meta);
+                if (!$result) {
+                    continue;
                 }
-            }
 
-            // 3. Simpan failed/skipped rows
-            $reasonLabels = ImportFailedRow::$reasonLabels;
-            foreach ($skipped as $skip) {
-                ImportFailedRow::create([
-                    'import_batch_id' => $batch->id,
-                    'source_row'      => (string)($skip['source_row'] ?? ''),
-                    'reason_code'     => $skip['reason'] ?? 'OTHER',
-                    'reason_label'    => $skip['reason_label'] ?? ($reasonLabels[$skip['reason'] ?? 'OTHER'] ?? $skip['reason'] ?? 'Unknown'),
-                    'jan_code'        => $skip['jan_code'] ?? null,
-                    'color'           => $skip['color'] ?? null,
-                    'size'            => $skip['size'] ?? null,
-                    'keterangan'      => $skip['keterangan'] ?? null,
-                    'total_carton'    => isset($skip['total_carton']) ? (int)$skip['total_carton'] : null,
-                    'carton_merged'   => (bool)($skip['carton_merged'] ?? false),
-                    'raw_data'        => isset($skip['raw_data']) ? $skip['raw_data'] : $skip,
-                    'notes'           => $skip['notes'] ?? null,
-                ]);
-            }
+                /** @var ImportBatch $batch */
+                $batch = $result['batch'];
 
-            // 4. Update status batch
-            $status = 'completed';
-            if (count($skipped) > 0 && ($importedCount + $updatedCount) > 0) {
-                $status = 'partial';
-            } elseif (($importedCount + $updatedCount) === 0) {
-                $status = 'failed';
-            }
+                $created[] = [
+                    'batch_id'     => $batch->id,
+                    'batch_number' => $batch->batch_number,
+                    'group_label'  => $batch->group_label,
+                    'doc_type'     => $batch->doc_type,
+                    'revision_no'  => $batch->revision_no,
+                    'imported'     => $result['imported'],
+                    'skipped'      => $result['skipped'],
+                    'total_carton' => $batch->total_carton,
+                ];
 
-            $batch->update([
-                'status'          => $status,
-                'processed_items' => $importedCount + $updatedCount,
-                'import_notes'    => "Baru: {$importedCount}, Update: {$updatedCount}, Gagal: " . count($skipped),
-            ]);
+                $importedCount += $result['imported'];
+                $skippedCount  += $result['skipped'];
+            }
         });
+
+        if (empty($created)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Tidak ada baris valid yang bisa diimport (semua baris broken/invalid).',
+            ], 422);
+        }
 
         return response()->json([
             'success'      => true,
-            'message'      => "Import berhasil: {$importedCount} data baru ditambahkan, {$updatedCount} data diperbarui.",
-            'batch_number' => $batch->batch_number,
-            'batch_id'     => $batch->id,
-            'failed_count' => count($skipped),
+            'message'      => "Import berhasil: {$importedCount} baris valid pada " . count($created) . " packing list. {$skippedCount} baris broken disimpan terpisah.",
+            'batches'      => $created,
+            'batch_number' => $created[0]['batch_number'],
+            'batch_id'     => $created[0]['batch_id'],
+            'failed_count' => $skippedCount,
         ]);
     }
 
     /**
-     * Riwayat Import Batch
+     * Normalisasi payload import menjadi array sheet.
+     */
+    private function normalizeImportSheets(Request $request): array
+    {
+        $sheets = $request->input('sheets');
+        if (is_array($sheets) && !empty($sheets)) {
+            return $sheets;
+        }
+
+        // Backward-compatible: payload lama (items + skipped) tanpa sheets
+        $items   = $request->input('items', []);
+        $skipped = $request->input('skipped', []);
+        if (empty($items) && empty($skipped)) {
+            return [];
+        }
+
+        $first = $items[0] ?? ($skipped[0] ?? []);
+
+        return [[
+            'sheet_name' => $request->input('sheet_name'),
+            'doc_type'   => $request->input('doc_type', 'proforma'),
+            'header'     => [
+                'buyer'     => $first['buyer'] ?? $request->input('supplier_name'),
+                'style'     => $first['style'] ?? null,
+                'country'   => $first['country'] ?? $first['destination'] ?? null,
+                'ocf'       => $first['ocf'] ?? $first['cpo'] ?? null,
+                'warehouse' => $first['warehouse'] ?? null,
+            ],
+            'items'      => $items,
+            'skipped'    => $skipped,
+        ]];
+    }
+
+    /**
+     * Riwayat Import Batch (seluruh revisi).
      */
     public function importBatches(Request $request)
     {
         if ($request->ajax()) {
             $batches = ImportBatch::with('importedBy')
-                ->latest()
+                ->orderByDesc('id')
                 ->get()
                 ->map(function ($b) {
                     return [
                         'id'                => $b->id,
                         'batch_number'      => $b->batch_number,
                         'batch_name'        => $b->batch_name,
+                        'doc_type'          => $b->doc_type ?: 'proforma',
+                        'group_label'       => $b->group_label ?: '-',
+                        'group_key'         => $b->group_key,
+                        'revision_no'       => $b->revision_no ?: 1,
+                        'is_active'         => (bool)$b->is_active,
+                        'destination'       => $b->destination,
+                        'warehouse'         => $b->warehouse,
+                        'style_number'      => $b->style_number,
+                        'total_carton'      => $b->total_carton,
                         'original_filename' => $b->original_filename,
+                        'sheet_name'        => $b->sheet_name,
                         'supplier_name'     => $b->supplier_name,
                         'ocf_number'        => $b->ocf_number,
                         'import_date'       => $b->import_date ? $b->import_date->format('d/m/Y') : '-',
@@ -447,7 +430,52 @@ class JancodeController extends Controller
     }
 
     /**
-     * Detail satu batch: item valid + failed rows
+     * Daftar Packing List (group). Menampilkan revisi aktif tiap group.
+     */
+    public function packingLists(Request $request)
+    {
+        if ($request->ajax()) {
+            $active = ImportBatch::active()->orderByDesc('id')->get();
+
+            $groupKeys = $active->pluck('group_key')->filter()->unique()->values();
+
+            // Hitung jumlah revisi per group
+            $revisionCounts = ImportBatch::whereIn('group_key', $groupKeys)
+                ->selectRaw('group_key, COUNT(*) as total')
+                ->groupBy('group_key')
+                ->pluck('total', 'group_key');
+
+            $data = $active->map(function ($b) use ($revisionCounts) {
+                $failedCount = $b->failedRows()->count();
+                return [
+                    'id'              => $b->id,
+                    'batch_number'    => $b->batch_number,
+                    'doc_type'        => $b->doc_type ?: 'proforma',
+                    'group_label'     => $b->group_label,
+                    'style_number'    => $b->style_number,
+                    'ocf_number'      => $b->ocf_number,
+                    'destination'     => $b->destination,
+                    'warehouse'       => $b->warehouse,
+                    'supplier_name'   => $b->supplier_name,
+                    'revision_no'     => $b->revision_no ?: 1,
+                    'revision_count'  => $revisionCounts[$b->group_key] ?? 1,
+                    'total_carton'    => $b->total_carton,
+                    'valid_rows'      => $b->valid_rows,
+                    'skipped_rows'    => $failedCount,
+                    'import_date'     => $b->import_date ? $b->import_date->format('d/m/Y') : ($b->created_at ? $b->created_at->format('d/m/Y') : '-'),
+                    'original_filename'=> $b->original_filename,
+                ];
+            });
+
+            return response()->json(['data' => $data]);
+        }
+
+        return view('jancode.packing-lists');
+    }
+
+    /**
+     * Detail satu batch (revisi) + riwayat revisi lain pada group yang sama.
+     * Termasuk tabel terpisah untuk baris broken.
      */
     public function importBatchDetail(Request $request, $id)
     {
@@ -478,17 +506,26 @@ class JancodeController extends Controller
                 'buyer'                   => $j->buyer,
                 'ocf'                     => $j->ocf,
                 'style'                   => $j->style,
+                'carton_no_from'          => $j->carton_no_from,
+                'carton_no_to'            => $j->carton_no_to,
                 'color'                   => $j->color,
                 'size'                    => $j->size,
                 'jancode'                 => $j->jancode,
                 'packing_list_qty_carton' => $j->packing_list_qty_carton,
+                'receive_qty_carton'      => $j->receive_qty_carton,
+                'balance'                 => $j->balance,
                 'qty_per_carton'          => $j->qty_per_carton,
                 'total_qty_pcs'           => $j->total_qty_pcs,
             ]);
             return response()->json(['data' => $items]);
         }
 
-        return view('jancode.import-batch-detail', compact('batch'));
+        // Riwayat revisi lain pada group yang sama (termasuk non-aktif)
+        $revisions = ImportBatch::forGroup($batch->group_key)
+            ->orderByDesc('revision_no')
+            ->get(['id', 'batch_number', 'doc_type', 'revision_no', 'is_active', 'valid_rows', 'invalid_rows', 'total_carton', 'created_at', 'original_filename']);
+
+        return view('jancode.import-batch-detail', compact('batch', 'revisions'));
     }
 
     public function exportTemplate()

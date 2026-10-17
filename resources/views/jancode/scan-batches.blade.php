@@ -42,6 +42,7 @@
                                             <th width="40">#</th>
                                             <th>Waktu Submit</th>
                                             <th>Batch No</th>
+                                            <th>Packing List</th>
                                             <th>JAN Code</th>
                                             <th>Color</th>
                                             <th>Size</th>
@@ -81,7 +82,8 @@
                     { data: null, render: (d, t, r, m) => m.row + 1, orderable: false },
                     { data: 'created_at', render: d => `<small class="text-muted">${d}</small>` },
                     { data: 'batch_no', render: d => `<span class="badge badge-dark font-mono px-2 py-1">${d}</span>` },
-                    { data: 'jancode', render: d => `<code>${d}</code>` },
+                    { data: 'packing_list', render: d => `<span class="small font-weight-bold text-primary">${d || '-'}</span>` },
+                    { data: 'jancode', render: d => d && d !== '-' ? `<code>${d}</code>` : '<span class="text-muted">—</span>' },
                     { data: 'color', render: d => `<strong>${d}</strong>` },
                     { data: 'size', render: d => `<span class="badge badge-primary px-2">${d}</span>` },
                     { data: 'style', render: (d, t, r) => `<strong>${d}</strong><br><small class="text-muted">${r.country || '-'}</small>` },

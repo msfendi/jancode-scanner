@@ -40,6 +40,9 @@
                 <a class="collapse-item {{ request()->routeIs('jancode.index') ? 'active' : '' }}" href="{{ route('jancode.index') }}">
                     <i class="fas fa-list mr-1"></i> Data Master Jancode
                 </a>
+                <a class="collapse-item {{ request()->routeIs('jancode.packingLists*') ? 'active' : '' }}" href="{{ route('jancode.packingLists') }}">
+                    <i class="fas fa-clipboard-list mr-1"></i> Packing List
+                </a>
                 <a class="collapse-item {{ request()->routeIs('jancode.importBatches*') || request()->routeIs('jancode.importBatchDetail*') ? 'active' : '' }}" href="{{ route('jancode.importBatches') }}">
                     <i class="fas fa-history mr-1"></i> Riwayat Import Batch
                 </a>

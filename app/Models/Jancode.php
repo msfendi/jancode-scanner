@@ -36,6 +36,7 @@ class Jancode extends Model
         'cbm',
         // Legacy column compatibility
         'qty',
+        'description',
         'destination',
         'cpo',
         'void',

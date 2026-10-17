@@ -10,57 +10,154 @@ use Illuminate\Support\Facades\Log;
 class JancodeImportService
 {
     /**
+     * Batas aman area pemindaian. Beberapa file Excel menyimpan sel dengan
+     * gaya (style) jauh di luar area data sehingga Worksheet::getHighestRow()
+     * / getHighestColumn() melaporkan dimensi raksasa (mis. baris 1.048.576,
+     * kolom WVR). Tanpa clamp, iterasi akan menghabiskan memori.
+     */
+    private const MAX_SCAN_ROW = 5000;
+    private const MAX_SCAN_COL_INDEX = 60;
+
+    /**
      * Parse packing list excel file and return structured preview.
+     * Tetap dipertahankan sebagai alias dari parseWorkbook().
      */
     public function parseFile(string $filePath): array
     {
+        return $this->parseWorkbook($filePath);
+    }
+
+    /**
+     * Parse SELURUH sheet pada workbook. Setiap sheet yang berjudul
+     * "PACKING LIST ..." dianggap satu kandidat packing list (satu revisi).
+     * Sheet non-data (DETAIL ASSORT, PEMBAGIAN, GLOBAL, dsb) otomatis dilewati.
+     */
+    public function parseWorkbook(string $filePath): array
+    {
         $spreadsheet = IOFactory::load($filePath);
-        // Out of scope: Sheet kedua diabaikan, hanya ambil sheet pertama
-        $sheet = $spreadsheet->getSheet(0);
 
-        // 1. Ekstrak Header metadata secara dinamis (BUYER, STYLE, DESTINATION/COUNTRY, CPO/OCD)
-        $header = $this->extractHeader($sheet);
+        $aiMode = (bool) (config('services.gemini.api_key') || env('GEMINI_API_KEY') || env('OPENAI_API_KEY'));
 
-        // 2. Deteksi layout kolom tabel secara dinamis (tanpa mengandalkan huruf kolom tetap)
-        $layout = $this->detectTableLayout($sheet);
+        $sheets       = [];
+        $mergedItems  = [];
+        $mergedSkipped = [];
 
-        // 3. Pre-processing: Deteksi merge cells & forward fill berdasarkan layout dinamis
-        $preprocessed = $this->preprocessRows($sheet, $layout);
+        foreach ($spreadsheet->getAllSheets() as $sheet) {
+            $title = $this->sheetTitle($sheet);
 
-        // 4. Ekstraksi deterministik (Ground Truth Engine)
-        $deterministicResult = $this->deterministicExtract($header, $preprocessed['rows'], $layout);
+            // Hanya proses sheet yang benar-benar packing list
+            if (!str_contains($title, 'PACKING LIST') && !str_contains($title, 'PACKING  LIST')) {
+                continue;
+            }
 
-        // 5. AI Calling (Opsional / AI-Assisted jika API key tersedia)
-        $finalResult = $deterministicResult;
-        if (config('services.gemini.api_key') || env('GEMINI_API_KEY') || env('OPENAI_API_KEY')) {
-            try {
-                $aiResult = $this->callAiParser($header, $preprocessed['structured_text']);
-                if ($aiResult && !empty($aiResult['items'])) {
-                    // Validasi hasil AI terhadap aturan deterministik
-                    $finalResult = $this->validateAiResult($aiResult, $deterministicResult, $header);
+            // 1. Ekstrak Header metadata (BUYER, STYLE, DESTINATION/COUNTRY, CPO/OCD, WAREHOUSE)
+            $header = $this->extractHeader($sheet);
+
+            // 2. Deteksi layout kolom tabel secara dinamis
+            $layout = $this->detectTableLayout($sheet);
+
+            // 3. Pre-processing: Deteksi merge cells & forward fill
+            $preprocessed = $this->preprocessRows($sheet, $layout);
+
+            // 4. Ekstraksi deterministik (Ground Truth Engine)
+            $deterministicResult = $this->deterministicExtract($header, $preprocessed['rows'], $layout);
+
+            // 5. AI Calling (opsional, hanya jika API key tersedia)
+            $finalResult = $deterministicResult;
+            if ($aiMode) {
+                try {
+                    $aiResult = $this->callAiParser($header, $preprocessed['structured_text']);
+                    if ($aiResult && !empty($aiResult['items'])) {
+                        $finalResult = $this->validateAiResult($aiResult, $deterministicResult, $header);
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning('AI parsing error, falling back to deterministic: ' . $e->getMessage());
+                    $finalResult = $deterministicResult;
                 }
-            } catch (\Throwable $e) {
-                Log::warning('AI parsing error, falling back to deterministic: ' . $e->getMessage());
-                $finalResult = $deterministicResult;
+            }
+
+            $docType     = $this->detectDocType($title);
+            $sheetName   = $sheet->getTitle();
+            $items       = $finalResult['items'];
+            $skipped     = $finalResult['skipped'];
+
+            foreach ($items as &$it) {
+                $it['sheet_name'] = $sheetName;
+                $it['doc_type']   = $docType;
+            }
+            unset($it);
+
+            $sheetCarton      = array_sum(array_column($items, 'packing_list_qty_carton'));
+            $expectedCarton   = array_sum(array_column($deterministicResult['items'], 'packing_list_qty_carton'));
+
+            $sheets[] = [
+                'sheet_name'     => $sheetName,
+                'doc_type'       => $docType,
+                'title'          => $title,
+                'header'         => $header,
+                'items'          => $items,
+                'skipped'        => $skipped,
+                'total_items'    => count($items),
+                'total_carton'   => $sheetCarton,
+                'skipped_count'  => count($skipped),
+                'carton_match'   => ($sheetCarton === $expectedCarton),
+                'expected_carton'=> $expectedCarton,
+            ];
+
+            $mergedItems   = array_merge($mergedItems, $items);
+            $mergedSkipped = array_merge($mergedSkipped, $skipped);
+        }
+
+        $firstHeader = $sheets[0]['header'] ?? [
+            'buyer' => 'UNKNOWN', 'style' => 'UNKNOWN', 'country' => 'UNKNOWN',
+            'ocf' => 'UNKNOWN', 'warehouse' => '',
+        ];
+
+        $totalCarton = array_sum(array_column($mergedItems, 'packing_list_qty_carton'));
+        $expected    = 0;
+        foreach ($sheets as $s) {
+            $expected += $s['expected_carton'];
+        }
+
+        return [
+            'header'          => $firstHeader,
+            'layout'          => [],
+            'items'           => $mergedItems,
+            'skipped'         => $mergedSkipped,
+            'sheets'          => $sheets,
+            'total_items'     => count($mergedItems),
+            'total_carton'    => $totalCarton,
+            'skipped_count'   => count($mergedSkipped),
+            'carton_match'    => ($totalCarton === $expected),
+            'expected_carton' => $expected,
+            'ai_mode'         => $aiMode,
+        ];
+    }
+
+    /**
+     * Gabungan teks baris 1-3 (kolom A..N) untuk mendeteksi judul sheet.
+     */
+    private function sheetTitle($sheet): string
+    {
+        $parts = [];
+        for ($row = 1; $row <= 3; $row++) {
+            for ($col = 1; $col <= 14; $col++) {
+                $val = $this->getCellString($sheet, Coordinate::stringFromColumnIndex($col), $row);
+                if ($val !== '') {
+                    $parts[] = $val;
+                }
             }
         }
 
-        // Hitung total carton
-        $totalCarton = array_sum(array_column($finalResult['items'], 'packing_list_qty_carton'));
-        $deterministicCarton = array_sum(array_column($deterministicResult['items'], 'packing_list_qty_carton'));
+        return strtoupper(preg_replace('/\s+/', ' ', implode(' ', $parts)));
+    }
 
-        return [
-            'header'            => $header,
-            'layout'            => $layout,
-            'items'             => $finalResult['items'],
-            'skipped'           => $finalResult['skipped'],
-            'total_items'       => count($finalResult['items']),
-            'total_carton'      => $totalCarton,
-            'skipped_count'     => count($finalResult['skipped']),
-            'carton_match'      => ($totalCarton === $deterministicCarton),
-            'expected_carton'   => $deterministicCarton,
-            'ai_mode'           => (bool)(config('services.gemini.api_key') || env('GEMINI_API_KEY') || env('OPENAI_API_KEY')),
-        ];
+    /**
+     * Tentukan jenis dokumen dari judul sheet: actual atau proforma.
+     */
+    private function detectDocType(string $title): string
+    {
+        return str_contains($title, 'ACTUAL') ? 'actual' : 'proforma';
     }
 
     /**
@@ -105,6 +202,7 @@ class JancodeImportService
         $style = '';
         $country = '';
         $ocf = '';
+        $warehouse = '';
 
         for ($row = 1; $row <= $highestRow; $row++) {
             for ($col = 1; $col <= $highestColIndex; $col++) {
@@ -114,12 +212,15 @@ class JancodeImportService
 
                 $upper = strtoupper($cellVal);
 
-                // Helper ambil nilai di sebelah kanan (kolom berikutnya)
+                // Helper ambil nilai di sebelah kanan (kolom berikutnya).
+                // Lewati sel pemisah seperti ":" atau "-" agar nilai asli terbaca.
                 $getNextVal = function() use ($sheet, $col, $row, $highestColIndex) {
                     for ($next = $col + 1; $next <= min($highestColIndex, $col + 4); $next++) {
                         $nextLetter = Coordinate::stringFromColumnIndex($next);
-                        $val = $this->getCellString($sheet, $nextLetter, $row);
-                        if ($val !== '') return $val;
+                        $val = trim($this->getCellString($sheet, $nextLetter, $row));
+                        if ($val !== '' && $val !== ':' && $val !== '-') {
+                            return $val;
+                        }
                     }
                     return '';
                 };
@@ -142,18 +243,24 @@ class JancodeImportService
                 } elseif ((str_contains($upper, 'CPO') || str_contains($upper, 'OCD') || str_contains($upper, 'ORDER NO') || str_contains($upper, 'OCF')) && !$ocf) {
                     $val = $cleanLabel($cellVal) ?: $getNextVal();
                     if ($val) {
-                        $parts = explode('-', $val);
+                        // Nilai CPO bisa berisi tambahan, mis. "25143 / 266C0067 - B3".
+                        // Ambil hanya nomor utama (sebelum pemisah / atau -).
+                        $parts = preg_split('/[\/\-]/', $val);
                         $ocf = trim($parts[0] ?? $val);
                     }
+                } elseif ((str_contains($upper, 'WAREHOUSE') || str_contains($upper, 'WAREHAOUSE') || str_contains($upper, 'GUDANG')) && !$warehouse) {
+                    $val = $cleanLabel($cellVal) ?: $getNextVal();
+                    if ($val) $warehouse = strtoupper(trim($val));
                 }
             }
         }
 
         return [
-            'buyer'   => $buyer ?: 'UNKNOWN',
-            'style'   => $style ?: 'UNKNOWN',
-            'country' => $country ?: 'UNKNOWN',
-            'ocf'     => $ocf ?: 'UNKNOWN',
+            'buyer'     => $buyer ?: 'UNKNOWN',
+            'style'     => $style ?: 'UNKNOWN',
+            'country'   => $country ?: 'UNKNOWN',
+            'ocf'       => $ocf ?: 'UNKNOWN',
+            'warehouse' => $warehouse,
         ];
     }
 
@@ -164,7 +271,7 @@ class JancodeImportService
     private function detectTableLayout($sheet): array
     {
         $highestRow = min(35, $sheet->getHighestRow());
-        $highestColIndex = Coordinate::columnIndexFromString($sheet->getHighestColumn());
+        $highestColIndex = min(self::MAX_SCAN_COL_INDEX, Coordinate::columnIndexFromString($sheet->getHighestColumn()));
 
         $bestHeaderRow = null;
         $bestScore = 0;
@@ -204,6 +311,7 @@ class JancodeImportService
             'jan_col'           => null,
             'keterangan_col'    => null, // OPTIONAL: Bisa null jika tidak ada kolom Keterangan!
             'size_cols'         => [],   // [colLetter => sizeName]
+            'size_row'          => null, // Baris tempat nama size berada (jika di bawah header)
             'single_size_col'   => null, // Jika size ditaruh di 1 kolom teks
             'total_carton_col'  => null,
             'total_pcs_col'     => null,
@@ -290,13 +398,6 @@ class JancodeImportService
                 continue;
             }
 
-            if (str_contains($topVal, 'SIZE') || str_contains($topVal, 'BREAKDOWN')) {
-                if ($val !== '' && !str_contains($val, 'TOTAL') && !str_contains($val, 'CARTON')) {
-                    $layout['size_cols'][$colLetter] = $val;
-                    continue;
-                }
-            }
-
             // 8. CARTON NUMBERING (From / To)
             if (str_contains($val, 'CARTON') || str_contains($val, 'CTN') || str_contains($val, 'CTNS') || str_contains($val, 'BOX')) {
                 if (!$layout['carton_from_col'] && !str_contains($val, 'TOTAL') && !str_contains($val, 'QTY')) {
@@ -343,13 +444,53 @@ class JancodeImportService
         if (!$layout['jan_col']) $layout['jan_col'] = 'E';
         if (!$layout['total_carton_col']) $layout['total_carton_col'] = 'N';
 
-        // Jika size_cols kosong, coba periksa kolom default G..L pada headerRow
+        // Jika size_cols masih kosong (header "BREAKDOWN SIZE" di-merge 2 baris),
+        // cari baris di bawah headerRow yang memuat nama-nama size.
         if (empty($layout['size_cols']) && !$layout['single_size_col']) {
-            for ($col = 'G'; $col <= 'L'; $col++) {
-                $val = strtoupper($this->getCellString($sheet, $col, $headerRow));
-                if ($val !== '') {
-                    $layout['size_cols'][$col] = $val;
+            $reserved = array_values(array_filter([
+                $layout['jan_col'], $layout['color_col'], $layout['keterangan_col'],
+                $layout['total_carton_col'], $layout['total_pcs_col'],
+                $layout['qty_per_carton_col'], $layout['nw_col'], $layout['ttl_nw_col'],
+                $layout['gw_col'], $layout['ttl_gw_col'], $layout['measurement_col'],
+                $layout['cbm_col'], $layout['carton_from_col'], $layout['carton_to_col'],
+            ]));
+
+            $isSizeToken = function (string $val) use ($standardSizes): bool {
+                return in_array($val, $standardSizes, true)
+                    || (is_numeric($val) && (int) $val >= 20 && (int) $val <= 60);
+            };
+
+            $sizeRow = null;
+            $best = 0;
+            $scanTo = min($headerRow + 2, self::MAX_SCAN_ROW);
+
+            for ($r = $headerRow; $r <= $scanTo; $r++) {
+                $count = 0;
+                for ($col = 1; $col <= $highestColIndex; $col++) {
+                    $colLetter = Coordinate::stringFromColumnIndex($col);
+                    if (in_array($colLetter, $reserved, true)) continue;
+                    $val = strtoupper($this->getCellString($sheet, $colLetter, $r));
+                    if ($val !== '' && $isSizeToken($val)) $count++;
                 }
+                if ($count > $best) {
+                    $best = $count;
+                    $sizeRow = $r;
+                }
+            }
+
+            // Butuh minimal 2 nama size agar tidak salah mengira baris data sebagai header.
+            if ($sizeRow !== null && $best >= 2) {
+                for ($col = 1; $col <= $highestColIndex; $col++) {
+                    $colLetter = Coordinate::stringFromColumnIndex($col);
+                    if (in_array($colLetter, $reserved, true)) continue;
+                    $val = strtoupper($this->getCellString($sheet, $colLetter, $sizeRow));
+                    if ($val !== '' && $isSizeToken($val)) {
+                        $layout['size_cols'][$colLetter] = $val;
+                    }
+                }
+
+                $layout['size_row'] = $sizeRow;
+                $layout['data_start_row'] = max($layout['data_start_row'], $sizeRow + 1);
             }
         }
 
@@ -399,7 +540,7 @@ class JancodeImportService
             }
         }
 
-        $highestRow = $sheet->getHighestRow();
+        $highestRow = min(self::MAX_SCAN_ROW, $sheet->getHighestRow());
         $rows = [];
         $currentColor = '';
         $currentKeterangan = '';

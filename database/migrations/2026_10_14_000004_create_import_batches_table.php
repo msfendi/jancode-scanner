@@ -35,6 +35,7 @@ return new class extends Migration
         // Tabel baris gagal diimport (broken/skipped rows)
         Schema::create('import_failed_rows', function (Blueprint $table) {
             $table->id();
+            $table->unsignedBigInteger('import_batch_id');
             $table->string('source_row', 50)->nullable();       // nomor baris di Excel, e.g. "14-15"
             $table->string('reason_code')->nullable();           // MERGED_CARTON, NO_JAN, ASSORT, dll
             $table->string('reason_label')->nullable();          // label deskriptif

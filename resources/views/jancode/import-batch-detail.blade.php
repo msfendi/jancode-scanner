@@ -12,14 +12,34 @@
                 <div class="container-fluid">
                     <div class="d-sm-flex align-items-center justify-content-between mb-4">
                         <div>
-                            <h1 class="h3 mb-0 text-gray-800">Detail Batch Import</h1>
+                            <h1 class="h3 mb-0 text-gray-800">
+                                {{ $batch->group_label ?: 'Detail Packing List' }}
+                                @if($batch->is_active)
+                                    <span class="badge badge-success align-middle"><i class="fas fa-check mr-1"></i>Aktif</span>
+                                @else
+                                    <span class="badge badge-secondary align-middle">Superseded</span>
+                                @endif
+                            </h1>
                             <p class="mb-0 text-muted small">
-                                <code>{{ $batch->batch_number }}</code> &mdash; {{ $batch->batch_name }}
+                                <code>{{ $batch->batch_number }}</code> &mdash;
+                                <span class="badge badge-{{ $batch->doc_type === 'actual' ? 'success' : 'primary' }}">{{ $batch->doc_type_label }}</span>
+                                <span class="badge badge-dark">Rev.{{ $batch->revision_no }}</span>
+                                @if($batch->sheet_name) &middot; sheet: <strong>{{ $batch->sheet_name }}</strong> @endif
                             </p>
                         </div>
-                        <a href="{{ route('jancode.importBatches') }}" class="d-none d-sm-inline-block btn btn-sm btn-secondary shadow-sm">
-                            <i class="fas fa-arrow-left fa-sm mr-1"></i> Kembali
-                        </a>
+                        <div>
+                            @if($batch->is_active)
+                            <a href="{{ route('scanner.index') }}?packing_list={{ $batch->id }}" class="btn btn-sm btn-success shadow-sm">
+                                <i class="fas fa-barcode fa-sm mr-1"></i> Scan Packing List Ini
+                            </a>
+                            @endif
+                            <a href="{{ route('jancode.packingLists') }}" class="btn btn-sm btn-outline-primary shadow-sm ml-1">
+                                <i class="fas fa-clipboard-list fa-sm mr-1"></i> Packing List Aktif
+                            </a>
+                            <a href="{{ route('jancode.importBatches') }}" class="btn btn-sm btn-secondary shadow-sm ml-1">
+                                <i class="fas fa-arrow-left fa-sm mr-1"></i> Riwayat Import
+                            </a>
+                        </div>
                     </div>
 
                     {{-- Summary Cards --}}
@@ -27,33 +47,36 @@
                         <div class="col-md-2">
                             <div class="card border-left-primary shadow-sm h-100 py-2">
                                 <div class="card-body py-2">
-                                    <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">OCF / Supplier</div>
-                                    <div class="h6 mb-0 font-weight-bold">{{ $batch->ocf_number ?: '-' }}</div>
-                                    <div class="text-muted small">{{ $batch->supplier_name ?: '-' }}</div>
+                                    <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Style / CPO</div>
+                                    <div class="h6 mb-0 font-weight-bold">{{ $batch->style_number ?: '-' }}</div>
+                                    <div class="text-muted small">{{ $batch->ocf_number ?: '-' }}</div>
                                 </div>
                             </div>
                         </div>
                         <div class="col-md-2">
                             <div class="card border-left-info shadow-sm h-100 py-2">
                                 <div class="card-body py-2">
-                                    <div class="text-xs font-weight-bold text-info text-uppercase mb-1">File</div>
-                                    <div class="small text-break">{{ $batch->original_filename ?: '-' }}</div>
+                                    <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Destination / WH</div>
+                                    <div class="h6 mb-0 font-weight-bold">{{ $batch->destination ?: '-' }}</div>
+                                    <div class="text-muted small">{{ $batch->warehouse ?: 'Tanpa warehouse' }}</div>
                                 </div>
                             </div>
                         </div>
                         <div class="col-md-2">
                             <div class="card border-left-success shadow-sm h-100 py-2">
                                 <div class="card-body py-2">
-                                    <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Valid / Processed</div>
-                                    <div class="h5 mb-0 font-weight-bold text-success">{{ $batch->valid_rows }} / {{ $batch->processed_items }}</div>
+                                    <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Baris Valid</div>
+                                    <div class="h5 mb-0 font-weight-bold text-success">{{ $batch->valid_rows }}</div>
+                                    <div class="text-muted small">{{ $batch->total_carton }} carton</div>
                                 </div>
                             </div>
                         </div>
                         <div class="col-md-2">
                             <div class="card border-left-danger shadow-sm h-100 py-2">
                                 <div class="card-body py-2">
-                                    <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">Gagal / Skipped</div>
+                                    <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">Baris Broken</div>
                                     <div class="h5 mb-0 font-weight-bold text-danger">{{ $batch->invalid_rows }}</div>
+                                    <div class="text-muted small">tersimpan terpisah</div>
                                 </div>
                             </div>
                         </div>
@@ -76,10 +99,71 @@
                         <div class="col-md-2">
                             <div class="card border-left-warning shadow-sm h-100 py-2">
                                 <div class="card-body py-2">
-                                    <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">Imported By</div>
-                                    <div class="small font-weight-bold">{{ $batch->importedBy ? $batch->importedBy->name : '-' }}</div>
+                                    <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">File</div>
+                                    <div class="small text-break">{{ $batch->original_filename ?: '-' }}</div>
                                     <div class="text-muted small">{{ $batch->created_at->format('d/m/Y H:i') }}</div>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- Riwayat Revisi --}}
+                    <div class="card shadow-sm mb-4">
+                        <div class="card-header py-3">
+                            <h6 class="m-0 font-weight-bold text-primary">
+                                <i class="fas fa-layer-group mr-1"></i> Riwayat Revisi Packing List ({{ $revisions->count() }})
+                            </h6>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover mb-0">
+                                    <thead class="thead-light">
+                                        <tr>
+                                            <th class="text-center">Revisi</th>
+                                            <th class="text-center">Tipe</th>
+                                            <th>Batch No</th>
+                                            <th>File / Sheet</th>
+                                            <th class="text-center">Valid</th>
+                                            <th class="text-center">Broken</th>
+                                            <th class="text-center">Carton</th>
+                                            <th class="text-center">Status</th>
+                                            <th>Waktu</th>
+                                            <th width="80"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach($revisions as $rev)
+                                        <tr class="{{ $rev->id === $batch->id ? 'table-primary' : '' }}">
+                                            <td class="text-center"><span class="badge badge-dark">Rev.{{ $rev->revision_no }}</span></td>
+                                            <td class="text-center">
+                                                <span class="badge badge-{{ $rev->doc_type === 'actual' ? 'success' : 'primary' }}">{{ strtoupper($rev->doc_type) }}</span>
+                                            </td>
+                                            <td><code>{{ $rev->batch_number }}</code></td>
+                                            <td><small class="text-muted">{{ $rev->original_filename ?: '-' }}</small></td>
+                                            <td class="text-center text-success font-weight-bold">{{ $rev->valid_rows }}</td>
+                                            <td class="text-center text-danger font-weight-bold">{{ $rev->invalid_rows }}</td>
+                                            <td class="text-center font-weight-bold">{{ $rev->total_carton }}</td>
+                                            <td class="text-center">
+                                                @if($rev->is_active)
+                                                    <span class="badge badge-success">Aktif</span>
+                                                @else
+                                                    <span class="badge badge-secondary">Superseded</span>
+                                                @endif
+                                            </td>
+                                            <td><small class="text-muted">{{ $rev->created_at ? $rev->created_at->format('d/m/Y H:i') : '-' }}</small></td>
+                                            <td class="text-center">
+                                                @if($rev->id !== $batch->id)
+                                                    <a href="{{ route('jancode.importBatchDetail', $rev->id) }}" class="btn btn-outline-info btn-sm btn-circle" title="Lihat revisi ini">
+                                                        <i class="fas fa-eye"></i>
+                                                    </a>
+                                                @else
+                                                    <span class="badge badge-light border">Sedang dilihat</span>
+                                                @endif
+                                            </td>
+                                        </tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     </div>
@@ -95,12 +179,12 @@
                     <ul class="nav nav-tabs font-weight-bold mb-0" id="batchDetailTab" role="tablist">
                         <li class="nav-item">
                             <a class="nav-link active text-success" data-toggle="tab" href="#tabItems" role="tab">
-                                <i class="fas fa-check-circle mr-1"></i> Item Valid ({{ $batch->processed_items }})
+                                <i class="fas fa-check-circle mr-1"></i> Baris Valid / SOLID ({{ $batch->valid_rows }})
                             </a>
                         </li>
                         <li class="nav-item">
                             <a class="nav-link text-danger" data-toggle="tab" href="#tabFailed" role="tab">
-                                <i class="fas fa-times-circle mr-1"></i> Baris Gagal / Skipped ({{ $batch->invalid_rows }})
+                                <i class="fas fa-times-circle mr-1"></i> Baris Broken / Skipped ({{ $batch->invalid_rows }})
                             </a>
                         </li>
                     </ul>
@@ -119,12 +203,15 @@
                                                     <th>Buyer</th>
                                                     <th>OCF</th>
                                                     <th>Style</th>
+                                                    <th>Carton No</th>
                                                     <th>Color</th>
                                                     <th>Size</th>
                                                     <th>JAN Code</th>
                                                     <th class="text-right">Carton</th>
                                                     <th class="text-right">Pcs/Ctn</th>
                                                     <th class="text-right">Total Pcs</th>
+                                                    <th class="text-right">Received</th>
+                                                    <th class="text-right">Balance</th>
                                                 </tr>
                                             </thead>
                                             <tbody></tbody>
@@ -140,8 +227,9 @@
                                 <div class="card-body">
                                     <div class="alert alert-warning border-left-warning mb-3">
                                         <i class="fas fa-exclamation-triangle mr-1"></i>
-                                        Baris-baris berikut tidak berhasil diimport karena tidak memenuhi kriteria (broken carton, no JAN, ASSORT, dll).
-                                        Record ini disimpan sebagai referensi.
+                                        Baris berikut <strong>tidak masuk tabel utama</strong> karena qty carton-nya
+                                        di-merge (broken), ASSORT, bukan SOLID, atau tidak lengkap. Data tetap tersimpan
+                                        sebagai referensi di tabel terpisah.
                                     </div>
                                     <div class="table-responsive">
                                         <table class="table table-bordered table-sm table-hover" id="tableFailed" width="100%">
@@ -171,7 +259,6 @@
             </div>
             @include('layout.footer')
 
-    <!-- Page level plugins -->
     <script src="{{ asset('vendor/datatables/jquery.dataTables.min.js') }}"></script>
     <script src="{{ asset('vendor/datatables/dataTables.bootstrap4.min.js') }}"></script>
 
@@ -191,7 +278,6 @@
                 'OTHER':         '<span class="badge badge-secondary">OTHER</span>',
             };
 
-            // Items table
             const tableItems = $('#tableItems').DataTable({
                 processing: true,
                 ajax: { url: baseUrl + '?type=items', dataSrc: 'data' },
@@ -201,17 +287,23 @@
                     { data: 'buyer' },
                     { data: 'ocf' },
                     { data: 'style' },
+                    { data: null, render: d => {
+                        if (!d.carton_no_from) return '-';
+                        return d.carton_no_to && d.carton_no_to !== d.carton_no_from
+                            ? `${d.carton_no_from} - ${d.carton_no_to}` : d.carton_no_from;
+                    } },
                     { data: 'color', render: d => `<small>${d}</small>` },
                     { data: 'size', render: d => `<span class="badge badge-primary">${d}</span>` },
                     { data: 'jancode', render: d => `<code>${d}</code>` },
                     { data: 'packing_list_qty_carton', className: 'text-right font-weight-bold' },
                     { data: 'qty_per_carton', className: 'text-right' },
                     { data: 'total_qty_pcs', className: 'text-right', render: d => (d || 0).toLocaleString() },
+                    { data: 'receive_qty_carton', className: 'text-right text-success font-weight-bold' },
+                    { data: 'balance', className: 'text-right font-weight-bold', render: d => d > 0 ? `<span class="text-warning">${d}</span>` : '<span class="text-success">0</span>' },
                 ],
                 pageLength: 50,
             });
 
-            // Failed rows table
             const tableFailed = $('#tableFailed').DataTable({
                 processing: true,
                 ajax: { url: baseUrl + '?type=failed', dataSrc: 'data' },
@@ -231,7 +323,7 @@
                 pageLength: 50,
             });
 
-            // Load failed table when tab shown
+            // Muat tabel broken saat tab dibuka
             $('a[href="#tabFailed"]').on('shown.bs.tab', function () {
                 tableFailed.ajax.reload(null, false);
             });

@@ -11,6 +11,7 @@ class ScanBatch extends Model
     protected $fillable = [
         'batch_no',
         'jancode_id',
+        'import_batch_id',
         'user_id',
         'scanned_qty',
         'receive_qty',
@@ -22,6 +23,11 @@ class ScanBatch extends Model
     public function jancode()
     {
         return $this->belongsTo(Jancode::class, 'jancode_id');
+    }
+
+    public function importBatch()
+    {
+        return $this->belongsTo(ImportBatch::class, 'import_batch_id');
     }
 
     public function user()

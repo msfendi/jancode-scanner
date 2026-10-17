@@ -28,6 +28,10 @@
                                 class="d-none d-sm-inline-block btn btn-sm btn-info shadow-sm">
                                 <i class="fas fa-download fa-sm text-white-50"></i> Download Template
                             </a> --}}
+                            <a href="{{ route('jancode.packingLists') }}"
+                                class="d-none d-sm-inline-block btn btn-sm btn-info shadow-sm">
+                                <i class="fas fa-clipboard-list fa-sm mr-1"></i> Packing List
+                            </a>
                             <button class="d-none d-sm-inline-block btn btn-sm btn-primary shadow-sm"
                                 data-toggle="modal" data-target="#aiImportModal">
                                 <i class="fas fa-robot fa-sm text-white-50"></i> AI Import Packing List
@@ -227,6 +231,21 @@
 
                             <!-- Step 2: Preview Area -->
                             <div id="aiPreviewSection" class="d-none">
+                                <!-- Sheet (Packing List) Selector -->
+                                <div class="card border-left-dark shadow-sm mb-3" id="aiSheetSelectorCard">
+                                    <div class="card-body py-3">
+                                        <div class="d-flex flex-wrap align-items-center justify-content-between">
+                                            <div class="mb-2 mb-md-0">
+                                                <div class="text-xs font-weight-bold text-dark text-uppercase mb-1">
+                                                    <i class="fas fa-layer-group mr-1"></i> Packing List Terdeteksi
+                                                </div>
+                                                <div id="aiSheetTabs" class="btn-group flex-wrap" role="group" aria-label="Pilih packing list"></div>
+                                            </div>
+                                            <div class="text-right" id="aiSheetInfo"></div>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <!-- Warning banner if mismatch -->
                                 <div id="cartonMismatchAlert" class="alert alert-warning border-left-warning d-none">
                                     <i class="fas fa-exclamation-triangle mr-2"></i>
@@ -346,7 +365,7 @@
                                 <i class="fas fa-undo mr-1"></i> Upload Ulang
                             </button>
                             <button type="button" class="btn btn-success d-none font-weight-bold" id="btnAiConfirmSave">
-                                <i class="fas fa-cloud-upload-alt mr-1"></i> Simpan ke Master Data
+                                <i class="fas fa-cloud-upload-alt mr-1"></i> Simpan Packing List
                             </button>
                         </div>
                     </div>
@@ -814,8 +833,14 @@
             // ==========================================
             // --- AI Import Interactive Workflow ---
             // ==========================================
-            let aiParsedData = null;
+            let aiParsedData = null;          // payload mentah dari server { sheets: [...] }
+            let aiSheets = [];                // daftar sheet (packing list) pada file
+            let aiActiveSheet = 0;            // index sheet yang sedang ditampilkan
             let aiOriginalFilename = null;
+
+            function aiSheet() {
+                return (aiSheets && aiSheets[aiActiveSheet]) ? aiSheets[aiActiveSheet] : null;
+            }
 
             $('#aiExcelFile').on('change', function () {
                 const fileName = $(this).val().split('\\').pop();
@@ -830,6 +855,8 @@
                 $('#aiUploadForm').trigger('reset');
                 $('#aiExcelFile').next('.custom-file-label').html('Pilih file .xlsx / .xls (Maks 15MB)...');
                 aiParsedData = null;
+                aiSheets = [];
+                aiActiveSheet = 0;
             });
 
             $('#aiUploadForm').on('submit', function (e) {
@@ -855,7 +882,9 @@
 
                         aiParsedData = res.data;
                         aiOriginalFilename = res.original_filename || null;
-                        renderAiPreview(aiParsedData);
+                        aiSheets = (res.data && res.data.sheets) ? res.data.sheets : [];
+                        aiActiveSheet = 0;
+                        renderAiPreview();
                     },
                     error: function (xhr) {
                         $('#aiLoadingSection').addClass('d-none');
@@ -866,60 +895,86 @@
                 });
             });
 
-            function renderAiPreview(data) {
-                $('#previewBuyerCountry').text((data.header.buyer || '-') + ' / ' + (data.header.country || '-'));
-                $('#previewStyleOcf').text((data.header.style || '-') + ' / ' + (data.header.ocf || '-'));
-
-                if (data.ai_mode) {
-                    $('#previewEngineMode').html('<span class="badge badge-success"><i class="fas fa-robot mr-1"></i> AI Active</span>');
-                } else {
-                    $('#previewEngineMode').html('<span class="badge badge-info"><i class="fas fa-cogs mr-1"></i> Rule Engine</span>');
+            function renderAiPreview() {
+                if (!aiSheets.length) {
+                    Swal.fire('Error', 'Tidak ada sheet packing list yang terdeteksi.', 'error');
+                    $('#btnAiReset').trigger('click');
+                    return;
                 }
 
-                updateSummaryCounters();
-
-                if (!data.carton_match) {
-                    $('#cartonMismatchAlert').removeClass('d-none');
-                } else {
-                    $('#cartonMismatchAlert').addClass('d-none');
-                }
-
-                // Render Valid Rows
-                renderValidRows();
-
-                // Render Skipped Rows
-                renderSkippedRows(data.skipped || []);
+                renderSheetTabs();
+                renderActiveSheet();
 
                 $('#aiPreviewSection').removeClass('d-none');
                 $('#btnAiConfirmSave').removeClass('d-none');
             }
 
+            function renderSheetTabs() {
+                let html = '';
+                aiSheets.forEach(function (sheet, idx) {
+                    const active = idx === aiActiveSheet;
+                    const docType = (sheet.doc_type || 'proforma').toLowerCase();
+                    const badge = docType === 'actual'
+                        ? '<span class="badge badge-warning text-dark ml-1">ACTUAL</span>'
+                        : '<span class="badge badge-info ml-1">PROFORMA</span>';
+                    const rev = sheet.next_revision ? `<small class="text-muted ml-1">rev ${sheet.next_revision}</small>` : '';
+                    html += `<button type="button" class="btn btn-sm ${active ? 'btn-primary' : 'btn-outline-secondary'} mb-1 mr-1 btn-ai-sheet" data-index="${idx}">
+                        <i class="fas fa-file-alt mr-1"></i> ${sheet.sheet_name || ('Sheet ' + (idx + 1))} ${badge}${rev}
+                    </button>`;
+                });
+                $('#aiSheetTabs').html(html);
+            }
+
+            function renderActiveSheet() {
+                const sheet = aiSheet();
+                if (!sheet) return;
+
+                const header = sheet.header || {};
+                $('#previewBuyerCountry').text((header.buyer || '-') + ' / ' + (header.country || '-'));
+                $('#previewStyleOcf').text((header.style || '-') + ' / ' + (header.ocf || '-'));
+                $('#previewEngineMode').html('<span class="badge badge-info"><i class="fas fa-cogs mr-1"></i> Rule Engine</span>');
+
+                const info = [];
+                info.push('<div class="small text-muted">Group: <strong>' + (sheet.group_label || '-') + '</strong></div>');
+                if (sheet.active_batch_no) {
+                    info.push('<div class="small text-warning font-weight-bold"><i class="fas fa-exclamation-circle mr-1"></i> Menggantikan batch aktif: ' + sheet.active_batch_no + '</div>');
+                } else {
+                    info.push('<div class="small text-success font-weight-bold"><i class="fas fa-check-circle mr-1"></i> Packing list baru (belum ada revisi lain)</div>');
+                }
+                info.push('<div class="small text-muted">File: <strong>' + (aiOriginalFilename || '-') + '</strong></div>');
+                $('#aiSheetInfo').html(info.join(''));
+
+                updateSummaryCounters();
+                renderValidRows();
+                renderSkippedRows(sheet.skipped || []);
+            }
+
             function updateSummaryCounters() {
-                const totalItems = aiParsedData.items.length;
+                const sheet = aiSheet();
+                if (!sheet) return;
+                const items = sheet.items || [];
+                const skipped = sheet.skipped || [];
+
                 let totalCarton = 0;
-                aiParsedData.items.forEach(it => {
+                items.forEach(function (it) {
                     totalCarton += parseInt(it.packing_list_qty_carton) || 0;
                 });
 
-                $('#previewTotalItems').text(totalItems);
+                $('#previewTotalItems').text(items.length);
                 $('#previewTotalCartons').text(totalCarton);
-                $('#previewSkippedCount').text(aiParsedData.skipped.length);
-                $('#badgeValidCount').text(totalItems);
-                $('#badgeSkippedCount').text(aiParsedData.skipped.length);
-
-                if (totalItems === 0) {
-                    $('#btnAiConfirmSave').prop('disabled', true);
-                } else {
-                    $('#btnAiConfirmSave').prop('disabled', false);
-                }
+                $('#previewSkippedCount').text(skipped.length);
+                $('#badgeValidCount').text(items.length);
+                $('#badgeSkippedCount').text(skipped.length);
             }
 
             function renderValidRows() {
+                const sheet = aiSheet();
+                const items = (sheet && sheet.items) ? sheet.items : [];
                 let html = '';
-                if (!aiParsedData.items || aiParsedData.items.length === 0) {
-                    html = '<tr><td colspan="7" class="text-center text-muted py-3">Tidak ada baris valid yang ditemukan.</td></tr>';
+                if (!items || items.length === 0) {
+                    html = '<tr><td colspan="12" class="text-center text-muted py-3">Tidak ada baris valid pada packing list ini.</td></tr>';
                 } else {
-                    aiParsedData.items.forEach(function (item, idx) {
+                    items.forEach(function (item, idx) {
                         const statusBadge = item.is_duplicate 
                             ? '<span class="badge badge-warning text-dark"><i class="fas fa-sync-alt mr-1"></i> Update</span>' 
                             : '<span class="badge badge-success"><i class="fas fa-plus mr-1"></i> Baru</span>';
@@ -1014,26 +1069,38 @@
                 $('#tbodyPreviewSkipped').html(html);
             }
 
+            // Pindah packing list (sheet) pada preview
+            $(document).on('click', '.btn-ai-sheet', function () {
+                aiActiveSheet = parseInt($(this).data('index')) || 0;
+                renderSheetTabs();
+                renderActiveSheet();
+            });
+
             // Hapus baris preview
             $(document).on('click', '.btn-remove-preview-row', function () {
                 const idx = $(this).data('index');
-                if (aiParsedData && aiParsedData.items[idx]) {
-                    aiParsedData.items.splice(idx, 1);
+                const sheet = aiSheet();
+                if (sheet && sheet.items && sheet.items[idx]) {
+                    sheet.items.splice(idx, 1);
                     renderValidRows();
                     updateSummaryCounters();
                 }
             });
 
-            // Konfirmasi & Simpan ke Master Data
+            // Konfirmasi & Simpan Packing List
             $('#btnAiConfirmSave').click(function () {
-                if (!aiParsedData || aiParsedData.items.length === 0) {
+                const totalItems = aiSheets.reduce(function (sum, s) {
+                    return sum + ((s.items && s.items.length) ? s.items.length : 0);
+                }, 0);
+
+                if (totalItems === 0) {
                     Swal.fire('Perhatian', 'Tidak ada baris data untuk diimport.', 'warning');
                     return;
                 }
 
                 Swal.fire({
-                    title: 'Konfirmasi Import Master',
-                    text: `Apakah Anda yakin ingin menyimpan ${aiParsedData.items.length} data master JAN Code ke sistem?`,
+                    title: 'Konfirmasi Import Packing List',
+                    html: `Apakah Anda yakin ingin menyimpan <strong>${aiSheets.length}</strong> packing list (${totalItems} baris jancode) ke sistem?<br><small class="text-muted">Setiap packing list disimpan sebagai revisi baru; revisi terbaru menjadi ACTIVE.</small>`,
                     icon: 'question',
                     showCancelButton: true,
                     confirmButtonText: 'Ya, Simpan',
@@ -1049,19 +1116,21 @@
                             contentType: "application/json",
                             data: JSON.stringify({
                                 _token: $('meta[name="csrf-token"]').attr('content'),
-                                items: aiParsedData.items,
-                                skipped: aiParsedData.skipped || [],
+                                sheets: aiSheets,
                                 original_filename: aiOriginalFilename,
                             }),
                             success: function (res) {
-                                btn.prop('disabled', false).html('<i class="fas fa-cloud-upload-alt mr-1"></i> Simpan ke Master Data');
+                                btn.prop('disabled', false).html('<i class="fas fa-cloud-upload-alt mr-1"></i> Simpan Packing List');
                                 if (res.success) {
                                     let successMsg = res.message;
-                                    if (res.batch_number) {
-                                        successMsg += `\n\nBatch: <strong>${res.batch_number}</strong>`;
-                                        if (res.failed_count > 0) {
-                                            successMsg += `<br>${res.failed_count} baris gagal tersimpan di riwayat import.`;
-                                        }
+                                    if (res.batches && res.batches.length) {
+                                        successMsg += '<hr class="my-2"><div class="text-left small">';
+                                        res.batches.forEach(function (b) {
+                                            successMsg += `<div class="mb-1"><strong>${b.batch_number}</strong> &middot; ${b.group_label} &middot; <span class="badge badge-primary">${(b.doc_type || '').toUpperCase()}</span> rev ${b.revision_no} &middot; ${b.imported} baris`;
+                                            if (b.skipped > 0) { successMsg += ` &middot; <span class="text-warning">${b.skipped} broken</span>`; }
+                                            successMsg += '</div>';
+                                        });
+                                        successMsg += '</div>';
                                     }
                                     Swal.fire({
                                         icon: 'success',
@@ -1076,7 +1145,7 @@
                                 }
                             },
                             error: function (xhr) {
-                                btn.prop('disabled', false).html('<i class="fas fa-cloud-upload-alt mr-1"></i> Simpan ke Master Data');
+                                btn.prop('disabled', false).html('<i class="fas fa-cloud-upload-alt mr-1"></i> Simpan Packing List');
                                 const msg = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : 'Terjadi kegagalan saat menyimpan data.';
                                 Swal.fire('Gagal!', msg, 'error');
                             }
