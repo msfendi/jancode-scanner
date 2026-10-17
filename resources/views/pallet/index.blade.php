@@ -228,7 +228,7 @@
                     <!-- Page Heading -->
                     <div class="d-sm-flex align-items-center justify-content-between mb-4">
                         <div>
-                            <h1 class="h3 mb-1 text-gray-800 font-weight-bold">Manage Pallet Location &amp; Placement</h1>
+                            <h1 class="h4 mb-1 text-gray-800 font-weight-bold">Manage Pallet Location &amp; Placement</h1>
                             <p class="text-muted small mb-0">Total 480 Alamat Pallet (Row B–I) &bull; Kapasitas Maks 42 Karton/Pallet &bull; Aturan Kompatibilitas 1 Country & 1 Style/OCF per Row</p>
                         </div>
                         <div>

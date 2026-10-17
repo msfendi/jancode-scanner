@@ -13,9 +13,9 @@
                 <div class="container-fluid">
 
                     <!-- Page Heading -->
-                    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+                    <div class="d-sm-flex align-items-center justify-content-between mb-3">
                         <div>
-                            <h1 class="h3 mb-0 text-gray-800">
+                            <h1 class="h4 mb-0 text-gray-800">
                                 <i class="fas fa-file-import text-primary mr-1"></i> Import Packing List
                             </h1>
                             <p class="mb-0 text-muted small">
@@ -31,56 +31,219 @@
                     @include('layout.workflow-steps', ['current' => 'import'])
 
                     <!-- Penjelasan alur -->
-                    <div class="alert alert-info border-left-info shadow-sm mb-4">
-                        <div class="d-flex">
-                            <i class="fas fa-info-circle fa-2x mr-3 text-info"></i>
+                    <div class="alert alert-info border-left-info shadow-sm mb-3 py-2">
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-info-circle fa-lg mr-3 text-info"></i>
                             <div class="small">
-                                <strong>Bagaimana cara kerjanya?</strong>
-                                <ol class="mb-0 pl-3 mt-1">
-                                    <li>Upload file packing list <code>.xlsx / .xls</code> (PROFORMA atau ACTUAL).</li>
-                                    <li>Sistem membaca seluruh sheet, mendeteksi revisi, dan menyaring hanya baris <strong>SOLID</strong>.</li>
-                                    <li>Baris yang tidak valid (assort / carton merge / total) dipisahkan sebagai <strong>baris broken</strong>.</li>
-                                    <li>Setelah disimpan, revisi terbaru otomatis menjadi <strong>aktif</strong> dan siap di-scan.</li>
-                                </ol>
+                                <strong>Cara kerja:</strong>
+                                Upload file &rarr; sistem membaca seluruh sheet &amp; mendeteksi revisi &rarr;
+                                hanya baris <strong>SOLID</strong> yang masuk, baris lain disimpan sebagai
+                                <strong>broken</strong> &rarr; setelah disimpan, revisi terbaru otomatis jadi
+                                <strong>aktif</strong> dan siap di-scan.
                             </div>
                         </div>
                     </div>
 
-                    <!-- Upload Card -->
-                    <div class="card shadow mb-4">
-                        <div class="card-header py-3">
+                    <!-- 1. Upload Card -->
+                    <div class="card shadow mb-4" id="aiUploadCard">
+                        <div class="card-header py-2">
                             <h6 class="m-0 font-weight-bold text-primary">
                                 <i class="fas fa-cloud-upload-alt mr-1"></i> 1. Upload File Packing List
                             </h6>
                         </div>
                         <div class="card-body">
-                            <div id="importDropzone" class="import-dropzone text-center rounded p-5 mb-3"
-                                role="button" tabindex="0"
-                                data-toggle="modal" data-target="#aiImportModal">
-                                <i class="fas fa-file-excel fa-3x text-success mb-3"></i>
-                                <h5 class="font-weight-bold text-gray-800 mb-1">Tarik &amp; lepas file di sini</h5>
-                                <p class="text-muted mb-3">atau klik untuk memilih file Excel</p>
-                                <span class="btn btn-primary">
-                                    <i class="fas fa-folder-open mr-1"></i> Pilih File Excel
-                                </span>
-                                <div class="small text-muted mt-2">Format didukung: .xlsx / .xls (maks 15MB)</div>
-                            </div>
-                            <div class="d-flex flex-wrap align-items-center justify-content-between">
-                                <small class="text-muted">
-                                    <i class="fas fa-robot mr-1 text-primary"></i>
-                                    Import dibantu AI: deteksi otomatis merge carton, warna, size, dan revisi.
-                                </small>
-                                <button class="btn btn-sm btn-outline-primary mt-2 mt-md-0"
-                                    data-toggle="modal" data-target="#aiImportModal">
-                                    <i class="fas fa-magic mr-1"></i> Mulai Import
+                            <form id="aiUploadForm" enctype="multipart/form-data">
+                                <!-- Upload State -->
+                                <div id="aiUploadSection">
+                                    <div id="importDropzone" class="import-dropzone text-center rounded p-4"
+                                        role="button" tabindex="0">
+                                        <i class="fas fa-file-excel fa-2x text-success mb-2"></i>
+                                        <div class="font-weight-bold text-gray-800">Tarik &amp; lepas file di sini</div>
+                                        <div class="text-muted small mb-2">atau klik untuk memilih file Excel</div>
+                                        <span class="btn btn-sm btn-primary">
+                                            <i class="fas fa-folder-open mr-1"></i> Pilih File Excel
+                                        </span>
+                                        <div class="small text-muted mt-2">Format didukung: .xlsx / .xls (maks 15MB)</div>
+                                    </div>
+                                    <input type="file" name="file" id="aiExcelFile" accept=".xlsx,.xls" class="d-none">
+
+                                    <div id="aiFileSelected" class="d-none align-items-center justify-content-between border rounded p-2 bg-light">
+                                        <div class="text-truncate">
+                                            <i class="fas fa-file-excel text-success mr-1"></i>
+                                            <span class="font-weight-bold small" id="aiSelectedName">-</span>
+                                        </div>
+                                        <div class="text-nowrap">
+                                            <button type="button" class="btn btn-sm btn-outline-secondary" id="btnChooseAnother">
+                                                Ganti File
+                                            </button>
+                                            <button type="submit" class="btn btn-sm btn-primary font-weight-bold" id="btnProcessAi">
+                                                <i class="fas fa-magic mr-1"></i> Mulai Import
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Processing State -->
+                                <div id="aiLoadingSection" class="text-center py-4 d-none">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="sr-only">Loading...</span>
+                                    </div>
+                                    <div class="mt-2 font-weight-bold text-gray-800">Membaca &amp; menganalisis file Excel...</div>
+                                    <div class="text-muted small">Mendeteksi revisi &amp; menyaring baris SOLID. Mohon tunggu.</div>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- 2. Preview & Konfirmasi (muncul setelah file diproses) -->
+                    <div class="card shadow mb-4 d-none" id="aiPreviewCard">
+                        <div class="card-header py-2 d-flex justify-content-between align-items-center">
+                            <h6 class="m-0 font-weight-bold text-primary">
+                                <i class="fas fa-clipboard-check mr-1"></i> 2. Preview &amp; Konfirmasi
+                            </h6>
+                            <div>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" id="btnAiReset">
+                                    <i class="fas fa-undo mr-1"></i> Upload Ulang
                                 </button>
+                                <button type="button" class="btn btn-sm btn-success font-weight-bold d-none" id="btnAiConfirmSave">
+                                    <i class="fas fa-cloud-upload-alt mr-1"></i> Simpan Packing List
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <!-- Sheet (Packing List) Selector -->
+                            <div class="card border-left-dark shadow-sm mb-3">
+                                <div class="card-body py-2">
+                                    <div class="d-flex flex-wrap align-items-center justify-content-between">
+                                        <div class="mb-2 mb-md-0">
+                                            <div class="text-xs font-weight-bold text-dark text-uppercase mb-1">
+                                                <i class="fas fa-layer-group mr-1"></i> Packing List Terdeteksi
+                                            </div>
+                                            <div id="aiSheetTabs" class="btn-group flex-wrap" role="group" aria-label="Pilih packing list"></div>
+                                        </div>
+                                        <div class="text-right" id="aiSheetInfo"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Warning banner if mismatch -->
+                            <div id="cartonMismatchAlert" class="alert alert-warning border-left-warning d-none py-2">
+                                <i class="fas fa-exclamation-triangle mr-2"></i>
+                                <strong>Peringatan Verifikasi Total Carton:</strong>
+                                Hasil ekstraksi tidak sepenuhnya sinkron dengan hitungan carton deterministik. Harap tinjau dengan seksama sebelum konfirmasi.
+                            </div>
+
+                            <!-- Summary Cards -->
+                            <div class="row mb-3">
+                                <div class="col-md-3">
+                                    <div class="card border-left-primary shadow-sm h-100 py-2">
+                                        <div class="card-body py-1">
+                                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                                <span class="text-xs font-weight-bold text-primary text-uppercase">Buyer / Country</span>
+                                                <span id="previewEngineMode"></span>
+                                            </div>
+                                            <div class="font-weight-bold text-gray-800" id="previewBuyerCountry">-</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="card border-left-info shadow-sm h-100 py-2">
+                                        <div class="card-body py-1">
+                                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Style / OCF</div>
+                                            <div class="font-weight-bold text-gray-800" id="previewStyleOcf">-</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="card border-left-success shadow-sm h-100 py-2">
+                                        <div class="card-body py-1">
+                                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Valid Import (Carton)</div>
+                                            <div class="font-weight-bold text-gray-800">
+                                                <span id="previewTotalItems">0</span> Baris (<span id="previewTotalCartons">0</span> Carton)
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="card border-left-secondary shadow-sm h-100 py-2">
+                                        <div class="card-body py-1">
+                                            <div class="text-xs font-weight-bold text-secondary text-uppercase mb-1">Baris Dilewati (Skipped)</div>
+                                            <div class="font-weight-bold text-gray-800">
+                                                <span id="previewSkippedCount">0</span> Baris
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Tabs: Valid vs Skipped -->
+                            <ul class="nav nav-tabs font-weight-bold small mb-3" id="aiTab" role="tablist">
+                                <li class="nav-item">
+                                    <a class="nav-link active text-success py-2" id="valid-tab" data-toggle="tab" href="#validRowsTab" role="tab">
+                                        <i class="fas fa-check-circle mr-1"></i> Baris Valid (<span id="badgeValidCount">0</span>)
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link text-secondary py-2" id="skipped-tab" data-toggle="tab" href="#skippedRowsTab" role="tab">
+                                        <i class="fas fa-times-circle mr-1"></i> Baris Dilewati (<span id="badgeSkippedCount">0</span>)
+                                    </a>
+                                </li>
+                            </ul>
+
+                            <div class="tab-content" id="aiTabContent">
+                                <!-- Tab 1: Valid Rows -->
+                                <div class="tab-pane fade show active" id="validRowsTab" role="tabpanel">
+                                    <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                                        <table class="table table-bordered table-sm table-hover mb-0" id="tablePreviewValid">
+                                            <thead class="thead-light sticky-top">
+                                                <tr>
+                                                    <th width="45">Row</th>
+                                                    <th width="90">Carton No</th>
+                                                    <th>Color</th>
+                                                    <th>JAN Code</th>
+                                                    <th width="65">Size</th>
+                                                    <th width="80" class="text-right">Karton</th>
+                                                    <th width="75" class="text-right">Pcs/Ctn</th>
+                                                    <th width="85" class="text-right">Total Pcs</th>
+                                                    <th width="105">NW / GW (kg)</th>
+                                                    <th width="115">Dimensi / CBM</th>
+                                                    <th width="80" class="text-center">Status</th>
+                                                    <th width="45" class="text-center">Hapus</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="tbodyPreviewValid">
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                <!-- Tab 2: Skipped Rows -->
+                                <div class="tab-pane fade" id="skippedRowsTab" role="tabpanel">
+                                    <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                                        <table class="table table-bordered table-sm mb-0">
+                                            <thead class="thead-light sticky-top">
+                                                <tr>
+                                                    <th width="85">Row Excel</th>
+                                                    <th width="130">Alasan</th>
+                                                    <th>Color</th>
+                                                    <th>JAN Code</th>
+                                                    <th>Size</th>
+                                                    <th width="85" class="text-right">Carton</th>
+                                                    <th>Catatan / Keterangan</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="tbodyPreviewSkipped">
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Recent Packing Lists -->
-                    <div class="card shadow mb-4">
-                        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                    <!-- Packing List Terbaru (disembunyikan saat preview tampil) -->
+                    <div class="card shadow mb-4" id="aiRecentCard">
+                        <div class="card-header py-2 d-flex justify-content-between align-items-center">
                             <h6 class="m-0 font-weight-bold text-primary">
                                 <i class="fas fa-clock mr-1"></i> Packing List Terbaru
                             </h6>
@@ -119,199 +282,6 @@
             </div>
 
             @include('layout.footer')
-
-            <!-- AI Import Modal (Wide) -->
-            <div class="modal fade" id="aiImportModal" tabindex="-1" role="dialog" aria-hidden="true" data-backdrop="static">
-                <div class="modal-dialog modal-xl modal-dialog-scrollable" style="max-width: 95vw;" role="document">
-                    <div class="modal-content">
-                        <div class="modal-header bg-primary text-white">
-                            <h5 class="modal-title font-weight-bold">
-                                <i class="fas fa-robot mr-2"></i> AI-Assisted Import Master Packing List
-                            </h5>
-                            <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
-                                <span aria-hidden="true">&times;</span>
-                            </button>
-                        </div>
-                        <div class="modal-body p-4">
-                            <!-- Step 1: Upload Area -->
-                            <div id="aiUploadSection">
-                                <div class="alert alert-info border-left-info shadow-sm mb-4">
-                                    <div class="d-flex align-items-center">
-                                        <i class="fas fa-info-circle fa-2x mr-3 text-info"></i>
-                                        <div>
-                                            <strong>Ekstraksi Otomatis AI (Format Garment Baru):</strong><br>
-                                            Sistem akan membaca file packing list <code>.xlsx / .xls</code> asli, mendeteksi carton merge, forward-fill warna vertikal, menyaring hanya baris <strong>SOLID tunggal</strong>, dan mengabaikan ASSORT PACK serta carton campuran sesuai aturan PRD.
-                                        </div>
-                                    </div>
-                                </div>
-                                <form id="aiUploadForm" enctype="multipart/form-data">
-                                    <div class="form-group">
-                                        <label class="font-weight-bold text-dark">Pilih File Excel Packing List (.xlsx / .xls)</label>
-                                        <div class="custom-file">
-                                            <input type="file" name="file" class="custom-file-input" id="aiExcelFile" accept=".xlsx,.xls" required>
-                                            <label class="custom-file-label" for="aiExcelFile">Pilih file .xlsx / .xls (Maks 15MB)...</label>
-                                        </div>
-                                    </div>
-                                    <div class="text-right">
-                                        <button type="button" class="btn btn-secondary mr-2" data-dismiss="modal">Tutup</button>
-                                        <button type="submit" class="btn btn-primary" id="btnProcessAi">
-                                            <i class="fas fa-magic mr-1"></i> Mulai Analisis AI
-                                        </button>
-                                    </div>
-                                </form>
-                            </div>
-
-                            <!-- Processing State -->
-                            <div id="aiLoadingSection" class="text-center py-5 d-none">
-                                <div class="spinner-border text-primary" style="width: 3.5rem; height: 3.5rem;" role="status">
-                                    <span class="sr-only">Loading...</span>
-                                </div>
-                                <h5 class="mt-3 font-weight-bold text-gray-800" id="aiLoadingText">Membaca file Excel & menganalisis merge carton...</h5>
-                                <p class="text-muted small">Menjalankan ekstraksi dan validasi deterministik (R1 - R6)...</p>
-                            </div>
-
-                            <!-- Step 2: Preview Area -->
-                            <div id="aiPreviewSection" class="d-none">
-                                <!-- Sheet (Packing List) Selector -->
-                                <div class="card border-left-dark shadow-sm mb-3" id="aiSheetSelectorCard">
-                                    <div class="card-body py-3">
-                                        <div class="d-flex flex-wrap align-items-center justify-content-between">
-                                            <div class="mb-2 mb-md-0">
-                                                <div class="text-xs font-weight-bold text-dark text-uppercase mb-1">
-                                                    <i class="fas fa-layer-group mr-1"></i> Packing List Terdeteksi
-                                                </div>
-                                                <div id="aiSheetTabs" class="btn-group flex-wrap" role="group" aria-label="Pilih packing list"></div>
-                                            </div>
-                                            <div class="text-right" id="aiSheetInfo"></div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Warning banner if mismatch -->
-                                <div id="cartonMismatchAlert" class="alert alert-warning border-left-warning d-none">
-                                    <i class="fas fa-exclamation-triangle mr-2"></i>
-                                    <strong>Peringatan Verifikasi Total Carton:</strong>
-                                    Hasil ekstraksi tidak sepenuhnya sinkron dengan hitungan carton deterministik. Harap tinjau dengan seksama sebelum konfirmasi.
-                                </div>
-
-                                <!-- Summary Cards -->
-                                <div class="row mb-3">
-                                    <div class="col-md-3">
-                                        <div class="card border-left-primary shadow-sm h-100 py-2">
-                                            <div class="card-body py-2">
-                                                <div class="d-flex justify-content-between align-items-center mb-1">
-                                                    <span class="text-xs font-weight-bold text-primary text-uppercase">Buyer / Country</span>
-                                                    <span id="previewEngineMode"></span>
-                                                </div>
-                                                <div class="h6 mb-0 font-weight-bold text-gray-800" id="previewBuyerCountry">-</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-3">
-                                        <div class="card border-left-info shadow-sm h-100 py-2">
-                                            <div class="card-body py-2">
-                                                <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Style / OCF</div>
-                                                <div class="h6 mb-0 font-weight-bold text-gray-800" id="previewStyleOcf">-</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-3">
-                                        <div class="card border-left-success shadow-sm h-100 py-2">
-                                            <div class="card-body py-2">
-                                                <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Valid Import (Carton)</div>
-                                                <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                                    <span id="previewTotalItems">0</span> Baris (<span id="previewTotalCartons">0</span> Carton)
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-3">
-                                        <div class="card border-left-secondary shadow-sm h-100 py-2">
-                                            <div class="card-body py-2">
-                                                <div class="text-xs font-weight-bold text-secondary text-uppercase mb-1">Baris Dilewati (Skipped)</div>
-                                                <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                                    <span id="previewSkippedCount">0</span> Baris
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Tabs: Valid vs Skipped -->
-                                <ul class="nav nav-tabs font-weight-bold mb-3" id="aiTab" role="tablist">
-                                    <li class="nav-item">
-                                        <a class="nav-link active text-success" id="valid-tab" data-toggle="tab" href="#validRowsTab" role="tab">
-                                            <i class="fas fa-check-circle mr-1"></i> Baris Valid (<span id="badgeValidCount">0</span>)
-                                        </a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a class="nav-link text-secondary" id="skipped-tab" data-toggle="tab" href="#skippedRowsTab" role="tab">
-                                            <i class="fas fa-times-circle mr-1"></i> Baris Dilewati (<span id="badgeSkippedCount">0</span>)
-                                        </a>
-                                    </li>
-                                </ul>
-
-                                <div class="tab-content" id="aiTabContent">
-                                    <!-- Tab 1: Valid Rows -->
-                                    <div class="tab-pane fade show active" id="validRowsTab" role="tabpanel">
-                                        <div class="table-responsive" style="max-height: 380px; overflow-y: auto;">
-                                            <table class="table table-bordered table-sm table-hover mb-0" id="tablePreviewValid">
-                                                <thead class="thead-light sticky-top">
-                                                    <tr>
-                                                        <th width="45">Row</th>
-                                                        <th width="90">Carton No</th>
-                                                        <th>Color</th>
-                                                        <th>JAN Code</th>
-                                                        <th width="65">Size</th>
-                                                        <th width="80" class="text-right">Karton</th>
-                                                        <th width="75" class="text-right">Pcs/Ctn</th>
-                                                        <th width="85" class="text-right">Total Pcs</th>
-                                                        <th width="105">NW / GW (kg)</th>
-                                                        <th width="115">Dimensi / CBM</th>
-                                                        <th width="80" class="text-center">Status</th>
-                                                        <th width="45" class="text-center">Hapus</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody id="tbodyPreviewValid">
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </div>
-
-                                    <!-- Tab 2: Skipped Rows -->
-                                    <div class="tab-pane fade" id="skippedRowsTab" role="tabpanel">
-                                        <div class="table-responsive" style="max-height: 380px; overflow-y: auto;">
-                                            <table class="table table-bordered table-sm mb-0">
-                                                <thead class="thead-light sticky-top">
-                                                    <tr>
-                                                        <th width="85">Row Excel</th>
-                                                        <th width="130">Alasan</th>
-                                                        <th>Color</th>
-                                                        <th>JAN Code</th>
-                                                        <th>Size</th>
-                                                        <th width="85" class="text-right">Carton</th>
-                                                        <th>Catatan / Keterangan</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody id="tbodyPreviewSkipped">
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="modal-footer bg-light" id="aiFooter">
-                            <button type="button" class="btn btn-secondary" id="btnAiReset">
-                                <i class="fas fa-undo mr-1"></i> Upload Ulang
-                            </button>
-                            <button type="button" class="btn btn-success d-none font-weight-bold" id="btnAiConfirmSave">
-                                <i class="fas fa-cloud-upload-alt mr-1"></i> Simpan Packing List
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
 
         </div>
     </div>
@@ -406,8 +376,26 @@
                 table.ajax.reload(null, false);
             });
 
-            // --- Dropzone ---
+            // --- Dropzone & pemilihan file ---
             const dz = document.getElementById('importDropzone');
+            const $fileInput = $('#aiExcelFile');
+
+            function showSelectedFile(name) {
+                $('#aiSelectedName').text(name || '-');
+                $('#importDropzone').addClass('d-none');
+                $('#aiFileSelected').removeClass('d-none').addClass('d-flex');
+            }
+
+            function resetFilePicker() {
+                $fileInput.val('');
+                $('#aiFileSelected').addClass('d-none').removeClass('d-flex');
+                $('#importDropzone').removeClass('d-none');
+            }
+
+            dz.addEventListener('click', function () { $fileInput.trigger('click'); });
+            dz.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $fileInput.trigger('click'); }
+            });
 
             ['dragenter', 'dragover'].forEach(function (evt) {
                 dz.addEventListener(evt, function (e) { e.preventDefault(); dz.classList.add('dragover'); });
@@ -418,11 +406,19 @@
             dz.addEventListener('drop', function (e) {
                 const files = e.dataTransfer && e.dataTransfer.files;
                 if (files && files.length) {
-                    const input = document.getElementById('aiExcelFile');
-                    input.files = files;
-                    $(input).trigger('change');
-                    $('#aiImportModal').modal('show');
+                    $fileInput[0].files = files;
+                    $fileInput.trigger('change');
                 }
+            });
+
+            $fileInput.on('change', function () {
+                const fileName = $(this).val().split('\\').pop();
+                if (fileName) { showSelectedFile(fileName); }
+            });
+
+            $('#btnChooseAnother').on('click', function () {
+                resetFilePicker();
+                $fileInput.trigger('click');
             });
 
             // ==========================================
@@ -437,18 +433,21 @@
                 return (aiSheets && aiSheets[aiActiveSheet]) ? aiSheets[aiActiveSheet] : null;
             }
 
-            $('#aiExcelFile').on('change', function () {
-                const fileName = $(this).val().split('\\').pop();
-                $(this).next('.custom-file-label').addClass("selected").html(fileName || 'Pilih file .xlsx...');
-            });
+            function showPreviewMode() {
+                $('#aiUploadCard').addClass('d-none');
+                $('#aiPreviewCard').removeClass('d-none');
+                $('#aiRecentCard').addClass('d-none');
+                $('html, body').animate({ scrollTop: $('#aiPreviewCard').offset().top - 80 }, 250);
+            }
 
             $('#btnAiReset').click(function () {
-                $('#aiPreviewSection').addClass('d-none');
+                $('#aiPreviewCard').addClass('d-none');
                 $('#aiLoadingSection').addClass('d-none');
+                $('#aiUploadCard').removeClass('d-none');
                 $('#aiUploadSection').removeClass('d-none');
                 $('#btnAiConfirmSave').addClass('d-none');
-                $('#aiUploadForm').trigger('reset');
-                $('#aiExcelFile').next('.custom-file-label').html('Pilih file .xlsx / .xls (Maks 15MB)...');
+                resetFilePicker();
+                $('#aiRecentCard').removeClass('d-none');
                 aiParsedData = null;
                 aiSheets = [];
                 aiActiveSheet = 0;
@@ -457,8 +456,14 @@
             $('#aiUploadForm').on('submit', function (e) {
                 e.preventDefault();
 
+                if (!$fileInput.val()) {
+                    Swal.fire('Perhatian', 'Silakan pilih file Excel terlebih dahulu.', 'warning');
+                    return;
+                }
+
                 const formData = new FormData(this);
                 $('#aiUploadSection').addClass('d-none');
+                $('#aiPreviewCard').addClass('d-none');
                 $('#aiLoadingSection').removeClass('d-none');
 
                 $.ajax({
@@ -471,7 +476,7 @@
                         $('#aiLoadingSection').addClass('d-none');
                         if (!res.success) {
                             Swal.fire('Error', res.message || 'Gagal memproses file.', 'error');
-                            $('#btnAiReset').trigger('click');
+                            $('#aiUploadSection').removeClass('d-none');
                             return;
                         }
 
@@ -500,8 +505,8 @@
                 renderSheetTabs();
                 renderActiveSheet();
 
-                $('#aiPreviewSection').removeClass('d-none');
                 $('#btnAiConfirmSave').removeClass('d-none');
+                showPreviewMode();
             }
 
             function renderSheetTabs() {
@@ -731,10 +736,10 @@
                                         icon: 'success',
                                         title: 'Berhasil!',
                                         html: successMsg,
+                                    }).then(() => {
+                                        $('#btnAiReset').trigger('click');
+                                        table.ajax.reload(null, false);
                                     });
-                                    $('#aiImportModal').modal('hide');
-                                    $('#btnAiReset').trigger('click');
-                                    table.ajax.reload(null, false);
                                 } else {
                                     Swal.fire('Gagal!', res.message || 'Terjadi kesalahan.', 'error');
                                 }

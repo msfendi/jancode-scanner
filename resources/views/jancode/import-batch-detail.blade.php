@@ -12,7 +12,7 @@
                 <div class="container-fluid">
                     <div class="d-sm-flex align-items-center justify-content-between mb-4">
                         <div>
-                            <h1 class="h3 mb-0 text-gray-800">
+                            <h1 class="h4 mb-0 text-gray-800">
                                 {{ $batch->group_label ?: 'Detail Packing List' }}
                                 @if($batch->is_active)
                                     <span class="badge badge-success align-middle"><i class="fas fa-check mr-1"></i>Aktif</span>
@@ -65,7 +65,7 @@
                             <div class="card border-left-success shadow-sm h-100 py-2">
                                 <div class="card-body py-2">
                                     <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Baris Valid</div>
-                                    <div class="h5 mb-0 font-weight-bold text-success">{{ $batch->valid_rows }}</div>
+                                    <div class="h6 mb-0 font-weight-bold text-success">{{ $batch->valid_rows }}</div>
                                     <div class="text-muted small">{{ $batch->total_carton }} carton</div>
                                 </div>
                             </div>
@@ -74,7 +74,7 @@
                             <div class="card border-left-danger shadow-sm h-100 py-2">
                                 <div class="card-body py-2">
                                     <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">Baris Broken</div>
-                                    <div class="h5 mb-0 font-weight-bold text-danger">{{ $batch->invalid_rows }}</div>
+                                    <div class="h6 mb-0 font-weight-bold text-danger">{{ $batch->invalid_rows }}</div>
                                     <div class="text-muted small">tersimpan terpisah</div>
                                 </div>
                             </div>

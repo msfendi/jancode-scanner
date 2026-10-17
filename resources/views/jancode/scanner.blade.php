@@ -18,7 +18,7 @@
                     <!-- Page Heading -->
                     <div class="d-sm-flex align-items-center justify-content-between mb-4">
                         <div>
-                            <h1 class="h3 mb-0 text-gray-800">Scanner Jancode (per Packing List)</h1>
+                            <h1 class="h4 mb-0 text-gray-800">Scanner Jancode (per Packing List)</h1>
                             <p class="mb-0 text-muted small">
                                 Pilih packing list → sistem memuat semua jancode revisi <strong>aktif</strong>.
                                 <strong>1 scan = 1 carton.</strong>
@@ -125,7 +125,7 @@
                                     <div class="row no-gutters align-items-center">
                                         <div class="col mr-2">
                                             <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Sudah Scan (Submit)</div>
-                                            <div class="h3 mb-0 font-weight-bold text-gray-800" id="count-scanned">0</div>
+                                            <div class="h4 mb-0 font-weight-bold text-gray-800" id="count-scanned">0</div>
                                         </div>
                                         <div class="col-auto"><i class="fas fa-check-circle fa-2x text-success"></i></div>
                                     </div>
@@ -138,7 +138,7 @@
                                     <div class="row no-gutters align-items-center">
                                         <div class="col mr-2">
                                             <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">Scan Sementara</div>
-                                            <div class="h3 mb-0 font-weight-bold text-gray-800" id="count-unsubmitted">0</div>
+                                            <div class="h4 mb-0 font-weight-bold text-gray-800" id="count-unsubmitted">0</div>
                                         </div>
                                         <div class="col-auto"><i class="fas fa-pause-circle fa-2x text-warning"></i></div>
                                     </div>
@@ -151,7 +151,7 @@
                                     <div class="row no-gutters align-items-center">
                                         <div class="col mr-2">
                                             <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Total Carton</div>
-                                            <div class="h3 mb-0 font-weight-bold text-gray-800" id="count-total">0</div>
+                                            <div class="h4 mb-0 font-weight-bold text-gray-800" id="count-total">0</div>
                                         </div>
                                         <div class="col-auto"><i class="fas fa-boxes fa-2x text-info"></i></div>
                                     </div>
@@ -164,7 +164,7 @@
                                     <div class="row no-gutters align-items-center">
                                         <div class="col mr-2">
                                             <div class="text-xs font-weight-bold text-danger text-uppercase mb-1" id="label-balance">Balance</div>
-                                            <div class="h3 mb-0 font-weight-bold text-gray-800" id="count-balance">0</div>
+                                            <div class="h4 mb-0 font-weight-bold text-gray-800" id="count-balance">0</div>
                                         </div>
                                         <div class="col-auto"><i class="fas fa-balance-scale fa-2x text-danger" id="icon-balance"></i></div>
                                     </div>

@@ -12,7 +12,7 @@
                 <div class="container-fluid">
                     <div class="d-sm-flex align-items-center justify-content-between mb-4">
                         <div>
-                            <h1 class="h3 mb-0 text-gray-800">
+                            <h1 class="h4 mb-0 text-gray-800">
                                 <i class="fas fa-tasks text-primary mr-1"></i> Manage Packing List
                             </h1>
                             <p class="mb-0 text-muted small">
