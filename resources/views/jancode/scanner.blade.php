@@ -91,7 +91,8 @@
                                 <div class="col-lg-8 mb-2">
                                     <div class="input-group">
                                         <input class="form-control form-control-lg" type="text" id="jancode"
-                                            name="jancode" autocomplete="off" placeholder="Scan barcode karton di sini...">
+                                            name="jancode" autocomplete="off" autofocus
+                                            placeholder="Scan barcode karton di sini...">
                                         <div class="input-group-append">
                                             <button class="btn btn-success" id="btn-submit" type="button">
                                                 <i class="fas fa-check fa-sm mr-1"></i> Submit
@@ -293,6 +294,31 @@
 
                 const presetPackingList = new URLSearchParams(window.location.search).get('packing_list');
 
+                // ── Auto-focus input scan ──────────────────────────────────
+                // Alat scanner mengirim karakter seperti keyboard, jadi fokus harus
+                // selalu berada di input scan. Klik di area kosong / tab kembali
+                // aktif akan mengembalikan fokus ke input.
+                function focusScanInput() {
+                    if (!$('#scan-card').is(':visible')) return;
+                    if (Swal.isVisible()) return;
+                    $input.trigger('focus');
+                }
+
+                $(window).on('focus', focusScanInput);
+
+                $(document).on('mouseup', function (e) {
+                    if ($(e.target).closest('input, textarea, select, button, a, label, .select2-container, .swal2-container, .custom-control, .dropdown-menu').length) return;
+                    focusScanInput();
+                });
+
+                // Fallback: bila fokus jatuh ke body, kembalikan ke input scan
+                // begitu operator mulai mengetik / scan.
+                $(document).on('keydown', function () {
+                    if (Swal.isVisible()) return;
+                    const tag = (document.activeElement && document.activeElement.tagName) || '';
+                    if (tag === 'BODY' || tag === 'HTML') { $input.trigger('focus'); }
+                });
+
                 // ── Select2 Init ───────────────────────────────────────────
                 $select.select2({
                     theme: 'bootstrap4',
@@ -448,6 +474,12 @@
                     }
                 }
 
+                function rowStatusBadge(r) {
+                    if (r.is_complete) return '<span class="badge badge-success">Lengkap</span>';
+                    if (r.unsubmitted > 0) return '<span class="badge badge-warning text-dark">Ada sementara</span>';
+                    return '<span class="badge badge-light border">Belum</span>';
+                }
+
                 function renderRows(rows) {
                     $('#rows-card').show();
                     const filter = ($('#row-filter').val() || '').toLowerCase();
@@ -461,11 +493,7 @@
                         }
                         no++;
 
-                        const status = r.is_complete
-                            ? '<span class="badge badge-success">Lengkap</span>'
-                            : (r.unsubmitted > 0 ? '<span class="badge badge-warning text-dark">Ada sementara</span>' : '<span class="badge badge-light border">Belum</span>');
-
-                        html += `<tr class="${r.is_complete ? 'table-success' : ''}">
+                        html += `<tr data-jancode-id="${r.id}" class="${r.is_complete ? 'table-success' : ''}">
                             <td class="text-center text-muted">${no}</td>
                             <td><code>${r.jancode}</code></td>
                             <td class="small">${r.carton_no}</td>
@@ -473,10 +501,10 @@
                             <td class="text-center"><span class="badge badge-primary">${r.size || '-'}</span></td>
                             <td class="text-right">${r.qty_per_carton}</td>
                             <td class="text-right font-weight-bold">${r.packing}</td>
-                            <td class="text-right text-success font-weight-bold">${r.receive}</td>
-                            <td class="text-right text-warning font-weight-bold">${r.unsubmitted}</td>
-                            <td class="text-right font-weight-bold">${r.balance}</td>
-                            <td class="text-center">${status}</td>
+                            <td class="text-right text-success font-weight-bold cell-receive">${r.receive}</td>
+                            <td class="text-right text-warning font-weight-bold cell-unsub">${r.unsubmitted}</td>
+                            <td class="text-right font-weight-bold cell-balance">${r.balance}</td>
+                            <td class="text-center cell-status">${rowStatusBadge(r)}</td>
                         </tr>`;
                     });
 
@@ -485,6 +513,22 @@
                     }
 
                     $('#rows-tbody').html(html);
+                }
+
+                // Update satu baris saja setelah scan (tanpa rebuild seluruh tabel),
+                // supaya scan terasa instan walau packing list berisi banyak baris.
+                function updateRowFromScan(res, jancodeId) {
+                    if (!jancodeId) return;
+                    const $tr = $('#rows-tbody tr[data-jancode-id="' + jancodeId + '"]');
+                    if (!$tr.length) return;   // baris tidak tampil (mis. sedang difilter)
+                    const row = res.row || (res.rows || []).find(function (r) { return String(r.id) === String(jancodeId); });
+                    if (!row) return;
+
+                    $tr.find('.cell-receive').text(row.receive);
+                    $tr.find('.cell-unsub').text(row.unsubmitted);
+                    $tr.find('.cell-balance').text(row.balance);
+                    $tr.find('.cell-status').html(rowStatusBadge(row));
+                    $tr.toggleClass('table-success', !!row.is_complete);
                 }
 
                 $('#row-filter').on('keyup', refreshRows);
@@ -537,47 +581,87 @@
                 // ── Log helper ─────────────────────────────────────────────
                 function escapeHtml(str) { return $('<div>').text(str || '').html(); }
 
+                function buildLogMeta(statusType, barcode) {
+                    const display = escapeHtml(barcode);
+
+                    if (statusType === 'pending') {
+                        return {
+                            rowClass: 'table-info', isError: false, barcodeHtml: display,
+                            badge: '<span class="badge badge-info px-2 py-1"><i class="fas fa-spinner fa-spin mr-1"></i> Memproses</span>'
+                        };
+                    }
+                    if (statusType === 'over') {
+                        return {
+                            rowClass: 'table-danger text-danger font-weight-bold', isError: true,
+                            barcodeHtml: '<span class="text-danger font-weight-bold">' + display + '</span>',
+                            badge: '<span class="badge badge-danger px-2 py-1"><i class="fas fa-exclamation-triangle mr-1"></i> Over Scan</span>'
+                        };
+                    }
+                    if (statusType === 'different') {
+                        return {
+                            rowClass: 'table-danger text-danger font-weight-bold', isError: true,
+                            barcodeHtml: '<span class="badge badge-danger p-1 font-weight-bold" style="font-size:95%;"><i class="fas fa-exclamation-triangle mr-1"></i>' + display + '</span>',
+                            badge: '<span class="badge badge-danger px-2 py-1"><i class="fas fa-times-circle mr-1"></i> Tidak Cocok</span>'
+                        };
+                    }
+                    if (statusType === 'submitted') {
+                        return {
+                            rowClass: 'table-success text-success', isError: false, barcodeHtml: display,
+                            badge: '<span class="badge badge-success px-2 py-1"><i class="fas fa-check-double mr-1"></i> Disubmit</span>'
+                        };
+                    }
+                    return {
+                        rowClass: 'table-success', isError: false, barcodeHtml: display,
+                        badge: '<span class="badge badge-success px-2 py-1"><i class="fas fa-check-circle mr-1"></i> Cocok</span>'
+                    };
+                }
+
+                function registerLogError(isError) {
+                    if (!isError) return;
+                    errorCount++;
+                    $('#log-error-badge').show();
+                    $('#error-count-num').text(errorCount);
+                }
+
+                // Tambahkan baris log. Mengembalikan id baris agar bisa di-update lagi.
                 function addScanLogRow(barcode, statusType, message, timeOverride) {
                     $('#empty-log-row').hide();
                     scanLogIndex++;
 
                     const now = new Date();
                     const timeStr = timeOverride || now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                    const meta = buildLogMeta(statusType, barcode);
+                    registerLogError(meta.isError);
 
-                    let rowClass = '';
-                    let statusBadge = '';
-                    let barcodeDisplay = escapeHtml(barcode);
-
-                    if (statusType === 'over') {
-                        errorCount++;
-                        rowClass = 'table-danger text-danger font-weight-bold';
-                        statusBadge = '<span class="badge badge-danger px-2 py-1"><i class="fas fa-exclamation-triangle mr-1"></i> Over Scan</span>';
-                        barcodeDisplay = '<span class="text-danger font-weight-bold">' + barcodeDisplay + '</span>';
-                        $('#log-error-badge').show(); $('#error-count-num').text(errorCount);
-                    } else if (statusType === 'different') {
-                        errorCount++;
-                        rowClass = 'table-danger text-danger font-weight-bold';
-                        statusBadge = '<span class="badge badge-danger px-2 py-1"><i class="fas fa-times-circle mr-1"></i> Tidak Cocok</span>';
-                        barcodeDisplay = '<span class="badge badge-danger p-1 font-weight-bold" style="font-size:95%;"><i class="fas fa-exclamation-triangle mr-1"></i>' + barcodeDisplay + '</span>';
-                        $('#log-error-badge').show(); $('#error-count-num').text(errorCount);
-                    } else if (statusType === 'submitted') {
-                        rowClass = 'table-success text-success';
-                        statusBadge = '<span class="badge badge-success px-2 py-1"><i class="fas fa-check-double mr-1"></i> Disubmit</span>';
-                    } else {
-                        rowClass = 'table-success';
-                        statusBadge = '<span class="badge badge-success px-2 py-1"><i class="fas fa-check-circle mr-1"></i> Cocok</span>';
-                    }
-
+                    const rowId = 'log-row-' + scanLogIndex + '-' + now.getTime();
                     $('#log-tbody').prepend(`
-                        <tr class="${rowClass}">
+                        <tr id="${rowId}" class="${meta.rowClass}">
                             <td class="text-center font-weight-bold">${scanLogIndex}</td>
                             <td><small class="font-weight-bold">${timeStr}</small></td>
-                            <td>${barcodeDisplay}</td>
-                            <td class="text-center">${statusBadge}</td>
-                            <td><small>${escapeHtml(message)}</small></td>
+                            <td class="log-barcode">${meta.barcodeHtml}</td>
+                            <td class="text-center log-status">${meta.badge}</td>
+                            <td class="log-message"><small>${escapeHtml(message)}</small></td>
                         </tr>
                     `);
                     $('#log-card').show();
+                    return rowId;
+                }
+
+                // Baris log "optimistic": tampil segera sebelum server menjawab.
+                function addPendingLogRow(barcode) {
+                    return addScanLogRow(barcode, 'pending', 'Mengirim ke server...');
+                }
+
+                // Ubah baris pending menjadi hasil akhir.
+                function resolveLogRow(rowId, statusType, message) {
+                    const $tr = $('#' + rowId);
+                    if (!$tr.length) { return; }
+                    const barcode = $tr.find('.log-barcode').text().trim();
+                    const meta = buildLogMeta(statusType, barcode);
+                    registerLogError(meta.isError);
+                    $tr.attr('class', meta.rowClass);
+                    $tr.find('.log-status').html(meta.badge);
+                    $tr.find('.log-message').html('<small>' + escapeHtml(message) + '</small>');
                 }
 
                 function clearScanLogs() {
@@ -619,20 +703,26 @@
                 function queueScan() {
                     const jancode = $input.val().trim();
                     if (!jancode) return;
+                    if (!loadedBatchId) return;   // belum ada packing list yang dimuat
 
                     const now = Date.now();
                     if (jancode === lastQueued && (now - lastQueuedTime) < 100) { $input.val(''); return; }
                     lastQueued = jancode; lastQueuedTime = now;
                     $input.val('');
 
-                    scanQueue.push(jancode);
+                    // Baris log langsung tampil (optimistic) supaya operator dapat
+                    // umpan balik instan tanpa menunggu balasan server.
+                    const rowId = addPendingLogRow(jancode);
+                    scanQueue.push({ jancode: jancode, rowId: rowId });
                     processQueue();
                 }
 
                 function processQueue() {
                     if (isScanning || scanQueue.length === 0 || !loadedBatchId) return;
 
-                    const jancode = scanQueue.shift();
+                    const item = scanQueue.shift();
+                    const jancode = item.jancode;
+                    const rowId = item.rowId;
                     isScanning = true;
 
                     $.ajax({
@@ -641,20 +731,23 @@
                         contentType: 'application/json',
                         data: JSON.stringify({ jancode: jancode, count: 1 }),
                         success: function (res) {
-                            renderState(res);
-                            addScanLogRow(jancode, 'match', 'Scan berhasil (sementara)');
+                            // Update ringan: counter + satu baris saja (tanpa rebuild tabel).
+                            updateCounters(res.counters || {});
+                            markRowsUpdated();
+                            updateRowFromScan(res, res.jancode_id);
+                            resolveLogRow(rowId, 'match', 'Scan berhasil (sementara)');
                         },
                         error: function (xhr) {
                             const data = xhr.responseJSON || {};
-                            Swal.close();
                             if (data.error === 'over' || data.error === 'not_found') {
                                 if (data.counters) updateCounters(data.counters);
-                                addScanLogRow(jancode, data.error === 'over' ? 'over' : 'different', data.message || 'Scan gagal');
+                                resolveLogRow(rowId, data.error === 'over' ? 'over' : 'different', data.message || 'Scan gagal');
                             } else if (data.error === 'not_active') {
+                                resolveLogRow(rowId, 'different', data.message || 'Revisi aktif berubah');
                                 Swal.fire('Packing List Berubah', data.message || 'Revisi aktif berubah.', 'warning').then(() => location.reload());
                             } else {
+                                resolveLogRow(rowId, 'different', data.message || 'Terjadi kesalahan scan');
                                 refreshRows();
-                                addScanLogRow(jancode, 'different', data.message || 'Terjadi kesalahan scan');
                             }
                         },
                         complete: function () {

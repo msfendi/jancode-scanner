@@ -169,9 +169,10 @@ class JancodeScanController extends Controller
             if ($totalAllCount + $count > $capacity) {
                 DB::rollBack();
                 return response()->json([
-                    'success' => false,
-                    'error'   => 'over',
-                    'message' => 'Qty karton untuk jancode ini sudah terpenuhi (sisa ' . max(0, $capacity - $totalAllCount) . ' karton).',
+                    'success'  => false,
+                    'error'    => 'over',
+                    'message'  => 'Qty karton untuk jancode ini sudah terpenuhi (sisa ' . max(0, $capacity - $totalAllCount) . ' karton).',
+                    'counters' => $this->batchState($batch, false)['counters'],
                 ], 422);
             }
 
@@ -199,12 +200,18 @@ class JancodeScanController extends Controller
             ], 500);
         }
 
-        $state = $this->batchState($batch);
+        // Payload ringan: hanya header + counter + baris yang baru discan.
+        $state = $this->batchState($batch, false);
+
+        $unsubmittedForRow = JancodeLogs::where('jancode_id', $master->id)
+            ->where('is_submitted', 'false')
+            ->count();
 
         return response()->json($state + [
-            'success' => true,
+            'success'         => true,
             'scanned_barcode' => $barcode,
-            'jancode_id' => $master->id,
+            'jancode_id'      => $master->id,
+            'row'             => $this->buildRowArray($master, $unsubmittedForRow),
         ]);
     }
 
@@ -470,12 +477,16 @@ class JancodeScanController extends Controller
 
     /**
      * State lengkap packing list: info header, counter, dan baris jancode.
+     *
+     * @param bool $includeRows  false = hanya header + counter (payload ringan,
+     *                           dipakai saat scan supaya respons jauh lebih cepat).
      */
-    private function batchState(ImportBatch $batch): array
+    private function batchState(ImportBatch $batch, bool $includeRows = true): array
     {
         $jancodes = Jancode::where('import_batch_id', $batch->id)
-            ->orderByRaw('carton_no_from IS NULL, carton_no_from ASC')
-            ->orderBy('id')
+            ->when($includeRows, fn($q) => $q
+                ->orderByRaw('carton_no_from IS NULL, carton_no_from ASC')
+                ->orderBy('id'))
             ->get();
 
         $jancodeIds = $jancodes->pluck('id')->all();
@@ -495,36 +506,20 @@ class JancodeScanController extends Controller
         $completedRows = 0;
 
         foreach ($jancodes as $j) {
-            $packing     = (int)$j->packing_list_qty_carton;
-            $received    = (int)$j->receive_qty_carton;
             $unsubmitted = (int)($unsubmittedMap[$j->id] ?? 0);
-            $balance     = max(0, $packing - $received - $unsubmitted);
+            $row = $this->buildRowArray($j, $unsubmitted);
 
-            $totalCarton      += $packing;
-            $scannedTotal     += $received;
+            $totalCarton      += $row['packing'];
+            $scannedTotal     += $row['receive'];
             $unsubmittedTotal += $unsubmitted;
 
-            $isComplete = $balance === 0;
-            if ($isComplete) {
+            if ($row['is_complete']) {
                 $completedRows++;
             }
 
-            $rows[] = [
-                'id'               => $j->id,
-                'jancode'          => $j->jancode,
-                'color'            => $j->color,
-                'size'             => $j->size,
-                'carton_no'        => $j->carton_no_from
-                    ? ($j->carton_no_to && $j->carton_no_to !== $j->carton_no_from ? "{$j->carton_no_from}-{$j->carton_no_to}" : (string)$j->carton_no_from)
-                    : '-',
-                'qty_per_carton'   => (int)$j->qty_per_carton,
-                'packing'          => $packing,
-                'receive'          => $received,
-                'unsubmitted'      => $unsubmitted,
-                'balance'          => $balance,
-                'is_complete'      => $isComplete,
-                'void'             => $j->void,
-            ];
+            if ($includeRows) {
+                $rows[] = $row;
+            }
         }
 
         return [
@@ -547,11 +542,38 @@ class JancodeScanController extends Controller
                 'unsubmitted' => $unsubmittedTotal,
                 'total'       => $totalCarton,
                 'balance'     => max(0, $totalCarton - $scannedTotal - $unsubmittedTotal),
-                'rows_total'  => $rows === [] ? 0 : count($rows),
+                'rows_total'  => $jancodes->count(),
                 'rows_done'   => $completedRows,
                 'is_complete' => ($totalCarton > 0 && ($scannedTotal + $unsubmittedTotal) >= $totalCarton),
             ],
             'rows' => $rows,
+        ];
+    }
+
+    /**
+     * Bentuk array satu baris jancode (dipakai batchState & respons scan).
+     */
+    private function buildRowArray(Jancode $j, int $unsubmitted): array
+    {
+        $packing  = (int)$j->packing_list_qty_carton;
+        $received = (int)$j->receive_qty_carton;
+        $balance  = max(0, $packing - $received - $unsubmitted);
+
+        return [
+            'id'             => $j->id,
+            'jancode'        => $j->jancode,
+            'color'          => $j->color,
+            'size'           => $j->size,
+            'carton_no'      => $j->carton_no_from
+                ? ($j->carton_no_to && $j->carton_no_to !== $j->carton_no_from ? "{$j->carton_no_from}-{$j->carton_no_to}" : (string)$j->carton_no_from)
+                : '-',
+            'qty_per_carton' => (int)$j->qty_per_carton,
+            'packing'        => $packing,
+            'receive'        => $received,
+            'unsubmitted'    => $unsubmitted,
+            'balance'        => $balance,
+            'is_complete'    => $balance === 0,
+            'void'           => $j->void,
         ];
     }
 
