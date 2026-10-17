@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 @include('layout.header')
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/npm/@ttskch/select2-bootstrap4-theme@1.3.0/dist/select2-bootstrap4.min.css" rel="stylesheet" />
 
 <body id="page-top">
     @include('sweetalert::alert')
@@ -10,7 +12,7 @@
             <div id="content">
                 @include('layout.navbar')
                 <div class="container-fluid">
-                    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+                    <div class="d-sm-flex align-items-center justify-content-between mb-3">
                         <div>
                             <h1 class="h4 mb-0 text-gray-800">
                                 <i class="fas fa-tasks text-primary mr-1"></i> Manage Packing List
@@ -33,12 +35,12 @@
                     @include('layout.workflow-steps', ['current' => 'manage'])
 
                     <!-- Penjelasan -->
-                    <div class="alert alert-light border shadow-sm mb-4 small">
+                    <div class="alert alert-light border shadow-sm mb-3 small py-2">
                         <div class="d-flex">
                             <i class="fas fa-lightbulb fa-lg text-warning mr-3"></i>
                             <div>
                                 Daftar di bawah hanya menampilkan <strong>revisi aktif</strong> tiap packing list.
-                                Grouping: <strong>Style &rarr; CPO/OCF &rarr; Destination &rarr; Warehouse</strong>.
+                                Grouping: <strong>Style &rarr; OCF &rarr; Destination &rarr; Warehouse</strong>.
                                 Jika sudah ada dokumen <span class="badge badge-success">ACTUAL</span>, revisi itulah yang
                                 menjadi acuan scan; bila belum ada, revisi <span class="badge badge-primary">PROFORMA</span>
                                 terbaru yang dipakai.
@@ -46,8 +48,63 @@
                         </div>
                     </div>
 
+                    <!-- Filter Pencarian -->
+                    <div class="card shadow mb-3">
+                        <div class="card-header py-2 d-flex justify-content-between align-items-center">
+                            <h6 class="m-0 font-weight-bold text-primary">
+                                <i class="fas fa-filter mr-1"></i> Filter Pencarian
+                            </h6>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="btnResetFilter">
+                                <i class="fas fa-times mr-1"></i> Reset Filter
+                            </button>
+                        </div>
+                        <div class="card-body py-3">
+                            <div class="row">
+                                <div class="col-md-3 mb-2">
+                                    <label class="small font-weight-bold text-gray-700 mb-1">Style</label>
+                                    <select id="filterStyle" class="form-control form-control-sm"></select>
+                                </div>
+                                <div class="col-md-3 mb-2">
+                                    <label class="small font-weight-bold text-gray-700 mb-1">OCF</label>
+                                    <select id="filterOcf" class="form-control form-control-sm"></select>
+                                </div>
+                                <div class="col-md-3 mb-2">
+                                    <label class="small font-weight-bold text-gray-700 mb-1">Destination</label>
+                                    <select id="filterDestination" class="form-control form-control-sm"></select>
+                                </div>
+                                <div class="col-md-3 mb-2">
+                                    <label class="small font-weight-bold text-gray-700 mb-1">Warehouse</label>
+                                    <select id="filterWarehouse" class="form-control form-control-sm"></select>
+                                </div>
+                                <div class="col-md-6 mb-2">
+                                    <label class="small font-weight-bold text-gray-700 mb-1">Pencarian Bebas</label>
+                                    <div class="input-group input-group-sm">
+                                        <div class="input-group-prepend">
+                                            <span class="input-group-text"><i class="fas fa-search"></i></span>
+                                        </div>
+                                        <input type="text" id="filterSearch" class="form-control"
+                                            placeholder="Cari label packing list / batch / buyer...">
+                                    </div>
+                                </div>
+                                <div class="col-md-6 mb-2 d-flex align-items-end">
+                                    <span class="small text-muted">
+                                        <i class="fas fa-info-circle mr-1"></i>
+                                        Filter bertingkat: pilih <strong>Style</strong> dulu agar pilihan
+                                        <strong>OCF</strong>, <strong>Destination</strong>, dan <strong>Warehouse</strong>
+                                        menyesuaikan. Pencarian otomatis jalan setelah Anda berhenti mengetik.
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <style>
+                        #tablePackingLists thead th { white-space: nowrap; }
+                        #tablePackingLists td { vertical-align: middle; }
+                    </style>
+
                     <div class="card shadow mb-4">
-                        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                        <div class="card-header py-2 d-flex justify-content-between align-items-center">
                             <h6 class="m-0 font-weight-bold text-primary">
                                 <i class="fas fa-clipboard-list mr-1"></i> Daftar Packing List Aktif
                             </h6>
@@ -57,20 +114,23 @@
                         </div>
                         <div class="card-body">
                             <div class="table-responsive">
-                                <table class="table table-bordered table-sm table-hover" id="tablePackingLists" width="100%">
+                                <table class="table table-bordered table-sm table-hover align-middle" id="tablePackingLists" width="100%">
                                     <thead class="thead-light">
                                         <tr>
-                                            <th>#</th>
-                                            <th>Style / CPO / Destination / WH</th>
-                                            <th class="text-center">Tipe</th>
-                                            <th class="text-center">Revisi</th>
-                                            <th class="text-center">Total Carton</th>
-                                            <th class="text-center">Baris Valid</th>
-                                            <th class="text-center">Baris Broken</th>
+                                            <th width="35">#</th>
+                                            <th class="text-center" width="80">Tipe</th>
+                                            <th>Style</th>
+                                            <th>OCF</th>
+                                            <th>Destination</th>
+                                            <th>Warehouse</th>
+                                            <th class="text-center" width="80">Revisi</th>
+                                            <th class="text-right" width="90">Total Carton</th>
+                                            <th class="text-center" width="75">Valid</th>
+                                            <th class="text-center" width="75">Broken</th>
                                             <th>Batch Aktif</th>
                                             <th>File</th>
-                                            <th>Tanggal</th>
-                                            <th class="text-center" width="120">Aksi</th>
+                                            <th width="90">Tanggal</th>
+                                            <th class="text-center" width="110">Aksi</th>
                                         </tr>
                                     </thead>
                                     <tbody></tbody>
@@ -84,24 +144,30 @@
 
     <script src="{{ asset('vendor/datatables/jquery.dataTables.min.js') }}"></script>
     <script src="{{ asset('vendor/datatables/dataTables.bootstrap4.min.js') }}"></script>
-
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <script>
         $(document).ready(function () {
-            $('#tablePackingLists').DataTable({
+            const FILTER_URL = "{{ route('jancode.packingListFilters') }}";
+
+            // ── DataTable ──────────────────────────────────────────────
+            const table = $('#tablePackingLists').DataTable({
                 processing: true,
+                autoWidth: false,
                 ajax: {
                     url: "{{ route('jancode.packingLists') }}",
                     type: "GET",
                     dataType: "json",
                     dataSrc: "data",
+                    data: function (d) {
+                        d.style = $('#filterStyle').val() || '';
+                        d.ocf = $('#filterOcf').val() || '';
+                        d.destination = $('#filterDestination').val() || '';
+                        d.warehouse = $('#filterWarehouse').val() || '';
+                        d.q = $('#filterSearch').val() || '';
+                    },
                 },
                 columns: [
-                    { data: null, render: (d, t, r, m) => m.row + 1, orderable: false },
-                    {
-                        data: null,
-                        render: (d) => `<strong>${d.group_label || '-'}</strong>
-                                <br><small class="text-muted">Buyer: ${d.supplier_name || '-'}</small>`
-                    },
+                    { data: null, render: (d, t, r, m) => m.row + 1, orderable: false, className: 'text-muted' },
                     {
                         data: 'doc_type',
                         className: 'text-center',
@@ -109,6 +175,15 @@
                             ? '<span class="badge badge-success">ACTUAL</span>'
                             : '<span class="badge badge-primary">PROFORMA</span>'
                     },
+                    {
+                        data: 'style_number',
+                        render: (d, t, r) => d
+                            ? `<strong class="text-dark">${d}</strong><br><small class="text-muted">Buyer: ${r.supplier_name || '-'}</small>`
+                            : '<span class="text-muted">-</span>'
+                    },
+                    { data: 'ocf_number', render: d => d || '<span class="text-muted">-</span>' },
+                    { data: 'destination', render: d => d || '<span class="text-muted">-</span>' },
+                    { data: 'warehouse', render: d => d ? `<span class="badge badge-light border">${d}</span>` : '<span class="text-muted">-</span>' },
                     {
                         data: null, className: 'text-center',
                         render: d => `<span class="badge badge-dark">Rev.${d.revision_no}</span>
@@ -120,9 +195,14 @@
                         data: 'skipped_rows', className: 'text-center',
                         render: d => d > 0 ? `<span class="text-danger font-weight-bold">${d}</span>` : `<span class="text-muted">0</span>`
                     },
-                    { data: 'batch_number', render: d => `<code>${d}</code>` },
-                    { data: 'original_filename', render: d => d ? `<small class="text-muted">${d}</small>` : '-' },
-                    { data: 'import_date' },
+                    { data: 'batch_number', render: d => d ? `<code class="small">${d}</code>` : '-' },
+                    {
+                        data: 'original_filename',
+                        render: d => d
+                            ? `<span class="text-muted small d-inline-block text-truncate" style="max-width:160px" title="${d}">${d}</span>`
+                            : '-'
+                    },
+                    { data: 'import_date', className: 'text-nowrap' },
                     {
                         data: null, orderable: false, className: 'text-center',
                         render: (d) => {
@@ -132,7 +212,7 @@
                         }
                     },
                 ],
-                order: [[0, 'desc']],
+                order: [],
                 pageLength: 25,
                 language: {
                     processing: '<i class="fas fa-spinner fa-spin mr-1"></i> Memuat data packing list...',
@@ -140,10 +220,93 @@
                     lengthMenu: 'Tampilkan _MENU_ data',
                     info: 'Menampilkan _START_ - _END_ dari _TOTAL_ packing list',
                     infoEmpty: 'Belum ada data',
-                    zeroRecords: 'Tidak ada packing list yang cocok',
+                    zeroRecords: 'Tidak ada packing list yang cocok dengan filter',
                     emptyTable: '<div class="text-muted py-3"><i class="fas fa-inbox fa-2x d-block mb-2"></i>Belum ada packing list. Silakan <a href="{{ route('jancode.index') }}">import packing list</a> terlebih dahulu.</div>',
                     paginate: { previous: 'Sebelumnya', next: 'Berikutnya' },
                 },
+            });
+
+            // ── Select2 bertingkat (dependent dropdown) ────────────────
+            // delay = debounce supaya tidak request tiap ketikan.
+            function initFilter(selector, field, placeholder, parents) {
+                $(selector).select2({
+                    theme: 'bootstrap4',
+                    placeholder: placeholder,
+                    allowClear: true,
+                    width: '100%',
+                    minimumInputLength: 0,
+                    ajax: {
+                        url: FILTER_URL,
+                        dataType: 'json',
+                        delay: 350,
+                        cache: true,
+                        data: function (params) {
+                            const payload = { field: field, q: params.term || '' };
+                            (parents || []).forEach(function (p) {
+                                const value = $(p.sel).val();
+                                if (value) { payload[p.param] = value; }
+                            });
+                            return payload;
+                        },
+                        processResults: function (data) { return { results: data }; },
+                    },
+                });
+            }
+
+            initFilter('#filterStyle', 'style', 'Semua Style', []);
+            initFilter('#filterOcf', 'ocf', 'Semua OCF', [{ param: 'style', sel: '#filterStyle' }]);
+            initFilter('#filterDestination', 'destination', 'Semua Destination', [
+                { param: 'style', sel: '#filterStyle' },
+                { param: 'ocf', sel: '#filterOcf' },
+            ]);
+            initFilter('#filterWarehouse', 'warehouse', 'Semua Warehouse', [
+                { param: 'style', sel: '#filterStyle' },
+                { param: 'ocf', sel: '#filterOcf' },
+                { param: 'destination', sel: '#filterDestination' },
+            ]);
+
+            function clearSelect(selector) {
+                // trigger 'change.select2' agar UI select2 ikut reset tanpa memicu handler kita.
+                $(selector).val(null).trigger('change.select2');
+            }
+
+            function reloadTable() {
+                table.ajax.reload(null, false);
+            }
+
+            // Cascade: ubah parent -> kosongkan anak -> reload tabel
+            $('#filterStyle').on('change', function () {
+                clearSelect('#filterOcf');
+                clearSelect('#filterDestination');
+                clearSelect('#filterWarehouse');
+                reloadTable();
+            });
+            $('#filterOcf').on('change', function () {
+                clearSelect('#filterDestination');
+                clearSelect('#filterWarehouse');
+                reloadTable();
+            });
+            $('#filterDestination').on('change', function () {
+                clearSelect('#filterWarehouse');
+                reloadTable();
+            });
+            $('#filterWarehouse').on('change', reloadTable);
+
+            // Debounce pencarian bebas
+            let searchTimer = null;
+            $('#filterSearch').on('input', function () {
+                clearTimeout(searchTimer);
+                searchTimer = setTimeout(reloadTable, 400);
+            });
+
+            // Reset semua filter
+            $('#btnResetFilter').on('click', function () {
+                clearSelect('#filterStyle');
+                clearSelect('#filterOcf');
+                clearSelect('#filterDestination');
+                clearSelect('#filterWarehouse');
+                $('#filterSearch').val('');
+                reloadTable();
             });
         });
     </script>

@@ -351,11 +351,16 @@ class JancodeController extends Controller
 
     /**
      * Daftar Packing List (group). Menampilkan revisi aktif tiap group.
+     *
+     * Mendukung filter opsional: style, ocf, destination, warehouse, dan q
+     * (pencarian bebas pada label / batch / buyer).
      */
     public function packingLists(Request $request)
     {
         if ($request->ajax()) {
-            $active = ImportBatch::active()->orderByDesc('id')->get();
+            $active = $this->applyPackingListFilters(ImportBatch::active(), $request)
+                ->orderByDesc('id')
+                ->get();
 
             $groupKeys = $active->pluck('group_key')->filter()->unique()->values();
 
@@ -391,6 +396,75 @@ class JancodeController extends Controller
         }
 
         return view('jancode.packing-lists');
+    }
+
+    /**
+     * Filter parent (style / ocf / destination / warehouse) untuk packing list.
+     */
+    private function applyPackingListParents($query, Request $request)
+    {
+        return $query
+            ->when($request->filled('style'), fn($q) => $q->where('style_number', $request->input('style')))
+            ->when($request->filled('ocf'), fn($q) => $q->where('ocf_number', $request->input('ocf')))
+            ->when($request->filled('destination'), fn($q) => $q->where('destination', $request->input('destination')))
+            ->when($request->filled('warehouse'), fn($q) => $q->where('warehouse', $request->input('warehouse')));
+    }
+
+    /**
+     * Terapkan filter packing list lengkap (parent + pencarian bebas q).
+     */
+    private function applyPackingListFilters($query, Request $request)
+    {
+        $query = $this->applyPackingListParents($query, $request);
+
+        if ($request->filled('q')) {
+            $term = '%' . $request->input('q') . '%';
+            $query->where(function ($w) use ($term) {
+                $w->where('group_label', 'like', $term)
+                  ->orWhere('batch_number', 'like', $term)
+                  ->orWhere('supplier_name', 'like', $term)
+                  ->orWhere('style_number', 'like', $term)
+                  ->orWhere('ocf_number', 'like', $term);
+            });
+        }
+
+        return $query;
+    }
+
+    /**
+     * Opsi filter bertingkat (select2) untuk Manage Packing List.
+     *
+     * Contoh: field=ocf&style=BB2ZDA6A -> daftar OCF yang ada pada style tsb.
+     * Parameter parent yang tidak diisi otomatis diabaikan; parameter q dipakai
+     * untuk mencari nilai pada dropdown yang sedang dibuka saja.
+     */
+    public function packingListFilters(Request $request)
+    {
+        $column = match ($request->input('field')) {
+            'style'       => 'style_number',
+            'ocf'         => 'ocf_number',
+            'destination' => 'destination',
+            'warehouse'   => 'warehouse',
+            default       => null,
+        };
+
+        if (!$column) {
+            return response()->json([]);
+        }
+
+        $query = $this->applyPackingListParents(ImportBatch::active(), $request)
+            ->whereNotNull($column)
+            ->where($column, '!=', '');
+
+        if ($request->filled('q')) {
+            $query->where($column, 'like', '%' . $request->input('q') . '%');
+        }
+
+        $options = $query->distinct()->orderBy($column)->pluck($column);
+
+        return response()->json(
+            $options->map(fn($value) => ['id' => $value, 'text' => $value])->values()
+        );
     }
 
     /**

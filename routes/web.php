@@ -76,6 +76,7 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/jancode/import-batches', [JancodeController::class, 'importBatches'])->name('jancode.importBatches')->middleware(['auth', 'role:Admin']);
     Route::get('/jancode/import-batches/{id}', [JancodeController::class, 'importBatchDetail'])->name('jancode.importBatchDetail')->middleware(['auth', 'role:Admin']);
     Route::get('/jancode/packing-lists', [JancodeController::class, 'packingLists'])->name('jancode.packingLists')->middleware(['auth', 'role:Admin']);
+    Route::get('/jancode/packing-list-filters', [JancodeController::class, 'packingListFilters'])->name('jancode.packingListFilters')->middleware(['auth', 'role:Admin']);
 
     // Pallet Location & Placement
     Route::prefix('pallet')->name('pallet.')->middleware(['auth', 'role:Admin'])->group(function () {
