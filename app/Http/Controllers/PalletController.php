@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ImportBatch;
 use App\Models\Jancode;
 use App\Models\PalletAddress;
 use App\Models\PalletAssignment;
@@ -46,6 +47,7 @@ class PalletController extends Controller
             ->pluck('placed', 'jancode_id');
 
         $availableJancodes = Jancode::where('void', 'false')
+            ->whereIn('import_batch_id', ImportBatch::active()->pluck('id'))
             ->get()
             ->map(function ($item) use ($placedCartonsPerJancode) {
                 $placed = (int)($placedCartonsPerJancode[$item->id] ?? 0);
@@ -222,6 +224,14 @@ class PalletController extends Controller
             $address = PalletAddress::lockForUpdate()->findOrFail($addressId);
             $jancode = Jancode::lockForUpdate()->findOrFail($jancodeId);
 
+            $activeBatch = ImportBatch::find($jancode->import_batch_id);
+            if (!$activeBatch || !$activeBatch->is_active) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Jancode ini milik revisi packing list yang sudah tidak aktif. Silakan muat packing list terbaru.",
+                ], 422);
+            }
+
             $jancodeCountry = strtoupper(trim($jancode->country ?: ($jancode->destination ?: '')));
             $jancodeStyle = strtoupper(trim($jancode->style ?: ''));
             $jancodeOcf = strtoupper(trim($jancode->ocf ?: ($jancode->cpo ?: '')));
@@ -321,9 +331,10 @@ class PalletController extends Controller
                     $detail->increment('qty_carton', $addQty);
                 } else {
                     PalletAssignmentDetail::create([
-                        'assignment_id' => $assignment->id,
-                        'jancode_id'    => $jancodeId,
-                        'qty_carton'    => $addQty,
+                        'assignment_id'   => $assignment->id,
+                        'jancode_id'      => $jancodeId,
+                        'packing_list_id' => $jancode->packing_list_id,
+                        'qty_carton'      => $addQty,
                     ]);
                 }
 
@@ -358,9 +369,10 @@ class PalletController extends Controller
                 }
 
                 PalletAssignmentDetail::create([
-                    'assignment_id' => $assignment->id,
-                    'jancode_id'    => $jancodeId,
-                    'qty_carton'    => $addQty,
+                    'assignment_id'   => $assignment->id,
+                    'jancode_id'      => $jancodeId,
+                    'packing_list_id' => $jancode->packing_list_id,
+                    'qty_carton'      => $addQty,
                 ]);
             }
 
@@ -465,9 +477,10 @@ class PalletController extends Controller
                     $targetDetail->increment('qty_carton', $moveQty);
                 } else {
                     PalletAssignmentDetail::create([
-                        'assignment_id' => $targetAssignment->id,
-                        'jancode_id'    => $jancode->id,
-                        'qty_carton'    => $moveQty,
+                        'assignment_id'   => $targetAssignment->id,
+                        'jancode_id'      => $jancode->id,
+                        'packing_list_id' => $jancode->packing_list_id,
+                        'qty_carton'      => $moveQty,
                     ]);
                 }
 
@@ -502,9 +515,10 @@ class PalletController extends Controller
                 }
 
                 PalletAssignmentDetail::create([
-                    'assignment_id' => $targetAssignment->id,
-                    'jancode_id'    => $jancode->id,
-                    'qty_carton'    => $moveQty,
+                    'assignment_id'   => $targetAssignment->id,
+                    'jancode_id'      => $jancode->id,
+                    'packing_list_id' => $jancode->packing_list_id,
+                    'qty_carton'      => $moveQty,
                 ]);
             }
 

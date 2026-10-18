@@ -12,6 +12,7 @@ class ImportBatch extends Model
     protected $table = 'import_batches';
 
     protected $fillable = [
+        'packing_list_id',
         'batch_number',
         'batch_name',
         'doc_type',
@@ -50,6 +51,11 @@ class ImportBatch extends Model
     public function importedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'imported_by');
+    }
+
+    public function packingList(): BelongsTo
+    {
+        return $this->belongsTo(PackingList::class, 'packing_list_id');
     }
 
     public function jancodes(): HasMany

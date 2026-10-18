@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\ImportBatch;
 use App\Models\ImportFailedRow;
 use App\Models\Jancode;
+use App\Models\PackingList;
 
 /**
  * Menyimpan hasil parsing satu sheet packing list menjadi satu REVISI
@@ -32,9 +33,13 @@ class PackingListImportService
         $groupLabel = ImportBatch::buildGroupLabel($header);
         $revisionNo = ImportBatch::nextRevisionForGroup($groupKey);
 
+        // Packing list = entitas utama yang stabil antar revisi.
+        $packingList = PackingList::findOrCreateForGroupKey($groupKey);
+
         $totalCarton = array_sum(array_map(fn($i) => (int)($i['packing_list_qty_carton'] ?? 0), $items));
 
         $batch = ImportBatch::create([
+            'packing_list_id'   => $packingList?->id,
             'batch_number'      => $meta['batch_number'] ?? ImportBatch::generateBatchNumber(),
             'batch_name'        => ($meta['batch_name'] ?? null) ?: sprintf('%s %s', strtoupper($docType), $groupLabel),
             'doc_type'          => $docType,
@@ -84,8 +89,9 @@ class PackingListImportService
             ),
         ]);
 
-        // Tentukan ulang revisi aktif group (ACTUAL mengalahkan PROFORMA).
-        ImportBatch::recomputeActiveForGroup($groupKey);
+        // Tentukan ulang revisi aktif group (ACTUAL mengalahkan PROFORMA) lalu
+        // bawa seluruh scan/pallet yang sudah terjadi ke revisi aktif tersebut.
+        (new PackingListRevisionService())->syncActiveRevision($groupKey);
         $batch->refresh();
 
         return [
@@ -124,6 +130,7 @@ class PackingListImportService
 
             Jancode::create([
                 'import_batch_id'         => $batch->id,
+                'packing_list_id'         => $batch->packing_list_id,
                 'source_row'              => isset($item['source_row']) ? (int)$item['source_row'] : null,
                 'country'                 => $header['country'] ?? null,
                 'buyer'                   => $header['buyer'] ?? null,

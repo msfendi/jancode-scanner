@@ -180,12 +180,14 @@ class JancodeScanController extends Controller
             $now = now();
             for ($i = 0; $i < $count; $i++) {
                 $logsToInsert[] = [
-                    'jancode'      => $barcode,
-                    'jancode_id'   => $master->id,
-                    'user_id'      => auth()->id(),
-                    'is_submitted' => 'false',
-                    'created_at'   => $now,
-                    'updated_at'   => $now,
+                    'jancode'         => $barcode,
+                    'jancode_id'      => $master->id,
+                    'packing_list_id' => $master->packing_list_id ?? $batch->packing_list_id,
+                    'import_batch_id' => $batch->id,
+                    'user_id'         => auth()->id(),
+                    'is_submitted'    => 'false',
+                    'created_at'      => $now,
+                    'updated_at'      => $now,
                 ];
             }
             JancodeLogs::insert($logsToInsert);
@@ -270,6 +272,7 @@ class JancodeScanController extends Controller
                 'batch_no'        => $batchNo,
                 'jancode_id'      => null,
                 'import_batch_id' => $batchId,
+                'packing_list_id' => $batch->packing_list_id,
                 'user_id'         => auth()->id(),
                 'scanned_qty'     => $unsubmittedCount,
                 'receive_qty'     => 0,
@@ -525,6 +528,7 @@ class JancodeScanController extends Controller
         return [
             'packing_list' => [
                 'id'          => $batch->id,
+                'packing_list_id' => $batch->packing_list_id,
                 'batch_number'=> $batch->batch_number,
                 'doc_type'    => $batch->doc_type ?: 'proforma',
                 'group_label' => $batch->group_label,

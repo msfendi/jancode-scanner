@@ -10,6 +10,8 @@ class JancodeLogs extends Model
     protected $fillable = [
         'jancode',
         'jancode_id',
+        'packing_list_id',
+        'import_batch_id',
         'scan_batch_id',
         'user_id',
         'is_submitted',
@@ -23,5 +25,15 @@ class JancodeLogs extends Model
     public function scanBatch()
     {
         return $this->belongsTo(ScanBatch::class, 'scan_batch_id');
+    }
+
+    public function packingList()
+    {
+        return $this->belongsTo(PackingList::class, 'packing_list_id');
+    }
+
+    public function importBatch()
+    {
+        return $this->belongsTo(ImportBatch::class, 'import_batch_id');
     }
 }

@@ -12,6 +12,7 @@ class ScanBatch extends Model
         'batch_no',
         'jancode_id',
         'import_batch_id',
+        'packing_list_id',
         'user_id',
         'scanned_qty',
         'receive_qty',
@@ -28,6 +29,11 @@ class ScanBatch extends Model
     public function importBatch()
     {
         return $this->belongsTo(ImportBatch::class, 'import_batch_id');
+    }
+
+    public function packingList()
+    {
+        return $this->belongsTo(PackingList::class, 'packing_list_id');
     }
 
     public function user()

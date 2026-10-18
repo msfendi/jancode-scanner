@@ -13,6 +13,7 @@ class Jancode extends Model
 
     protected $fillable = [
         'import_batch_id',
+        'packing_list_id',
         'source_row',
         'country',
         'buyer',
@@ -45,6 +46,11 @@ class Jancode extends Model
     public function importBatch()
     {
         return $this->belongsTo(ImportBatch::class, 'import_batch_id');
+    }
+
+    public function packingList()
+    {
+        return $this->belongsTo(PackingList::class, 'packing_list_id');
     }
 
     public function logs()

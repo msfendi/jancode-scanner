@@ -14,6 +14,7 @@ class PalletAssignmentDetail extends Model
     protected $fillable = [
         'assignment_id',
         'jancode_id',
+        'packing_list_id',
         'qty_carton',
     ];
 
