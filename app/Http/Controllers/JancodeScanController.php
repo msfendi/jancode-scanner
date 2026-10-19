@@ -211,7 +211,8 @@ class JancodeScanController extends Controller
                 ], 404);
             }
 
-            $totalAllCount = JancodeLogs::where('jancode_id', $master->id)->count();
+            // Karton yang sudah "keluar" tidak dihitung, supaya slot bisa discan ulang.
+            $totalAllCount = JancodeLogs::where('jancode_id', $master->id)->inStock()->count();
             $capacity = (int)$master->packing_list_qty_carton;
 
             if ($totalAllCount + $count > $capacity) {
@@ -235,6 +236,7 @@ class JancodeScanController extends Controller
                     'session_id'      => $batch->session_id,
                     'user_id'         => auth()->id(),
                     'is_submitted'    => 'false',
+                    'status'          => JancodeLogs::STATUS_IN,
                     'created_at'      => $now,
                     'updated_at'      => $now,
                 ];
@@ -352,7 +354,7 @@ class JancodeScanController extends Controller
             // Update akumulasi receive & balance per jancode
             $receiveTotal = 0;
             foreach ($jancodes as $j) {
-                $received = JancodeLogs::where('jancode_id', $j->id)->where('is_submitted', 'true')->count();
+                $received = JancodeLogs::where('jancode_id', $j->id)->where('is_submitted', 'true')->inStock()->count();
                 $packing  = (int)$j->packing_list_qty_carton;
                 $j->update([
                     'receive_qty_carton' => $received,
@@ -680,8 +682,8 @@ class JancodeScanController extends Controller
         $results = [];
 
         foreach ($targets as $target) {
-            $totalAll    = JancodeLogs::where('jancode_id', $target->id)->count();
-            $scanned     = JancodeLogs::where('jancode_id', $target->id)->where('is_submitted', 'true')->count();
+            $totalAll    = JancodeLogs::where('jancode_id', $target->id)->inStock()->count();
+            $scanned     = JancodeLogs::where('jancode_id', $target->id)->where('is_submitted', 'true')->inStock()->count();
             $unsubmitted = JancodeLogs::where('jancode_id', $target->id)->where('is_submitted', 'false')->count();
             $balance     = (int)($target->packing_list_qty_carton ?: $target->qty) - $totalAll;
 

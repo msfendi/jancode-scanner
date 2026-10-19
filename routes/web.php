@@ -111,6 +111,17 @@ Route::group(['middleware' => 'auth'], function () {
         Route::get('/batches', [JancodeScanController::class, 'batchHistory'])->name('batches')->middleware(['auth', 'role:Admin']);
     });
 
+    // Karton Keluar (scan out) — packing mengambil karton yang sudah discan / di pallet
+    Route::prefix('carton-out')->name('cartonOut.')->middleware(['auth', 'role:Admin'])->group(function () {
+        Route::get('/', [\App\Http\Controllers\CartonOutController::class, 'index'])->name('index');
+        Route::get('/packing-lists', [\App\Http\Controllers\CartonOutController::class, 'packingLists'])->name('packingLists');
+        Route::post('/load', [\App\Http\Controllers\CartonOutController::class, 'load'])->name('load');
+        Route::get('/rows', [\App\Http\Controllers\CartonOutController::class, 'rows'])->name('rows');
+        Route::get('/lookup', [\App\Http\Controllers\CartonOutController::class, 'lookup'])->name('lookup');
+        Route::post('/store', [\App\Http\Controllers\CartonOutController::class, 'store'])->name('store');
+        Route::get('/history', [\App\Http\Controllers\CartonOutController::class, 'history'])->name('history');
+    });
+
     // Hangtag
     Route::prefix('hangtag')->name('hangtag.')->group(function () {
         // Hangtag Scanner

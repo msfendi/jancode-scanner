@@ -44,6 +44,8 @@ class JancodeController extends Controller
                             'no'         => $index + 1,
                             'created_at' => $log->created_at->format('Y-m-d H:i:s'),
                             'user_name'  => $log->user ? $log->user->name : 'Unknown',
+                            'status'     => $log->status ?: 'in',
+                            'out_at'     => $log->out_at ? \Illuminate\Support\Carbon::parse($log->out_at)->format('Y-m-d H:i:s') : null,
                         ];
                     })
                     ->values();

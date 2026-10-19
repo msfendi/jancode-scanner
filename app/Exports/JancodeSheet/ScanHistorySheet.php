@@ -38,7 +38,8 @@ class ScanHistorySheet implements FromCollection, WithHeadings, WithMapping, Wit
             'Style',
             'CPO',
             'Scan Time',
-            'Scanned By'
+            'Scanned By',
+            'Status'
         ];
     }
 
@@ -55,7 +56,8 @@ class ScanHistorySheet implements FromCollection, WithHeadings, WithMapping, Wit
             $this->jancode->style,
             $this->jancode->cpo,
             $log->created_at->format('Y-m-d H:i:s'),
-            $log->user ? $log->user->name : 'Unknown'
+            $log->user ? $log->user->name : 'Unknown',
+            strtoupper($log->status ?: 'in') === 'OUT' ? 'KELUAR' : 'DI GUDANG'
         ];
     }
 

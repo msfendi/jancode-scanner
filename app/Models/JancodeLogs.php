@@ -6,6 +6,12 @@ use Illuminate\Database\Eloquent\Model;
 
 class JancodeLogs extends Model
 {
+    /** Karton masih ada di gudang (dihitung sebagai receive). */
+    public const STATUS_IN = 'in';
+
+    /** Karton sudah dikeluarkan / diambil packing (tidak dihitung receive). */
+    public const STATUS_OUT = 'out';
+
     protected $table = 'jancode_logs';
     protected $fillable = [
         'jancode',
@@ -16,7 +22,29 @@ class JancodeLogs extends Model
         'scan_batch_id',
         'user_id',
         'is_submitted',
+        'status',
+        'carton_out_id',
+        'out_at',
     ];
+
+    /**
+     * Hanya log yang masih "ada" (belum keluar). Semua perhitungan receive
+     * memakai scope ini supaya karton yang sudah di-scan out tidak ikut terhitung.
+     */
+    public function scopeInStock($query)
+    {
+        return $query->where('status', self::STATUS_IN);
+    }
+
+    public function scopeSubmitted($query)
+    {
+        return $query->where('is_submitted', 'true');
+    }
+
+    public function cartonOut()
+    {
+        return $this->belongsTo(CartonOut::class, 'carton_out_id');
+    }
 
     public function user()
     {

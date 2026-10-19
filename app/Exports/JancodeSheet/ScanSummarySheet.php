@@ -19,7 +19,7 @@ class ScanSummarySheet implements FromView, WithTitle, ShouldAutoSize
 
     public function view(): View
     {
-        $scanned = JancodeLogs::where('jancode', $this->jancode->jancode)->count();
+        $scanned = JancodeLogs::where('jancode', $this->jancode->jancode)->inStock()->count();
 
         return view('exports.scan_summary', [
             'jancode' => $this->jancode,

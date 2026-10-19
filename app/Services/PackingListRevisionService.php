@@ -124,6 +124,7 @@ class PackingListRevisionService
 
         $receivedMap = JancodeLogs::whereIn('jancode_id', $rows->pluck('id'))
             ->where('is_submitted', 'true')
+            ->inStock()
             ->selectRaw('jancode_id, COUNT(*) as total')
             ->groupBy('jancode_id')
             ->pluck('total', 'jancode_id');

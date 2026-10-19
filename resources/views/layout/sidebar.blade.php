@@ -88,6 +88,13 @@
         </div>
     </li>
 
+    <li class="nav-item {{ request()->is('carton-out*') ? 'active' : '' }}">
+        <a class="nav-link" href="{{ route('cartonOut.index') }}">
+            <i class="fas fa-fw fa-box-open"></i>
+            <span>Karton Keluar</span>
+        </a>
+    </li>
+
     <!-- Divider -->
     <hr class="sidebar-divider">
 
