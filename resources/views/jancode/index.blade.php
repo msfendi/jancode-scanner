@@ -158,6 +158,14 @@
                                 Hasil ekstraksi tidak sepenuhnya sinkron dengan hitungan carton deterministik. Harap tinjau dengan seksama sebelum konfirmasi.
                             </div>
 
+                            <!-- Rencana pengelompokan session (satu kombinasi = satu session) -->
+                            <div id="aiRoutingAlert" class="alert alert-info border-left-info py-2 d-none">
+                                <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                    <i class="fas fa-sitemap mr-1"></i> Pengelompokan Session
+                                </div>
+                                <div id="aiRoutingList" class="small"></div>
+                            </div>
+
                             <!-- Summary Cards -->
                             <div class="row mb-3">
                                 <div class="col-md-3">
@@ -357,6 +365,7 @@
             let aiSheets = [];                // daftar sheet (packing list) pada file
             let aiActiveSheet = 0;            // index sheet yang sedang ditampilkan
             let aiOriginalFilename = null;
+            let aiRouting = [];               // rencana pengelompokan session per group
 
             function aiSheet() {
                 return (aiSheets && aiSheets[aiActiveSheet]) ? aiSheets[aiActiveSheet] : null;
@@ -379,7 +388,9 @@
                 resetFilePicker();
                 aiParsedData = null;
                 aiSheets = [];
+                aiRouting = [];
                 aiActiveSheet = 0;
+                $('#aiRoutingAlert').addClass('d-none');
             });
 
             $('#aiUploadForm').on('submit', function (e) {
@@ -412,6 +423,7 @@
                         aiParsedData = res.data;
                         aiOriginalFilename = res.original_filename || null;
                         aiSheets = (res.data && res.data.sheets) ? res.data.sheets : [];
+                        aiRouting = res.routing || [];
                         aiActiveSheet = 0;
                         renderAiPreview();
                     },
@@ -476,11 +488,44 @@
                     return;
                 }
 
+                renderRoutingBlock();
                 renderSheetTabs();
                 renderActiveSheet();
 
                 $('#btnAiConfirmSave').removeClass('d-none');
                 showPreviewMode();
+            }
+
+            // Tampilkan rencana pengelompokan: group mana masuk session mana.
+            function renderRoutingBlock() {
+                if (!aiRouting || !aiRouting.length) {
+                    $('#aiRoutingAlert').addClass('d-none');
+                    return;
+                }
+
+                let html = '<ul class="mb-0 pl-3">';
+                aiRouting.forEach(function (r) {
+                    const docTypes = r.doc_types ? ` <span class="badge badge-light border">${r.doc_types}</span>` : '';
+                    let target;
+                    if (r.is_new) {
+                        target = '<span class="badge badge-success">Session baru</span>';
+                    } else {
+                        const status = (r.session_status || '').toUpperCase();
+                        const badge = status === 'OPEN'
+                            ? '<span class="badge badge-success ml-1">OPEN</span>'
+                            : '<span class="badge badge-secondary ml-1">CLOSED &rarr; dibuka</span>';
+                        target = `<strong>${r.session_code}</strong>${badge}`;
+                    }
+                    html += `<li class="mb-1">
+                        <strong>${r.group_label}</strong>${docTypes}<br>
+                        <span class="text-muted">${r.sheets || ''}</span><br>
+                        &rarr; ${target} <span class="text-muted">(revisi ${r.next_revision}, ${r.total_items} baris / ${r.total_carton} carton)</span>
+                    </li>`;
+                });
+                html += '</ul>';
+
+                $('#aiRoutingList').html(html);
+                $('#aiRoutingAlert').removeClass('d-none');
             }
 
             function renderSheetTabs() {
@@ -510,6 +555,11 @@
 
                 const info = [];
                 info.push('<div class="small text-muted">Group: <strong>' + (sheet.group_label || '-') + '</strong></div>');
+                if (sheet.target_is_new) {
+                    info.push('<div class="small text-success font-weight-bold"><i class="fas fa-plus-circle mr-1"></i> Session baru akan dibuat</div>');
+                } else if (sheet.target_session_code) {
+                    info.push('<div class="small text-primary font-weight-bold"><i class="fas fa-sitemap mr-1"></i> Masuk session: ' + sheet.target_session_code + '</div>');
+                }
                 if (sheet.active_batch_no) {
                     info.push('<div class="small text-warning font-weight-bold"><i class="fas fa-exclamation-circle mr-1"></i> Menggantikan batch aktif: ' + sheet.active_batch_no + '</div>');
                 } else {
@@ -674,7 +724,7 @@
 
                 Swal.fire({
                     title: 'Konfirmasi Import Packing List',
-                    html: `Apakah Anda yakin ingin menyimpan <strong>${aiSheets.length}</strong> packing list (${totalItems} baris jancode) ke sistem?<br><small class="text-muted">Setiap packing list disimpan sebagai revisi baru; revisi terbaru menjadi ACTIVE.</small>`,
+                    html: `Apakah Anda yakin ingin menyimpan <strong>${aiSheets.length}</strong> packing list (${totalItems} baris jancode) ke sistem?<br><small class="text-muted">Setiap packing list masuk ke session sesuai kombinasi style / OCF / destination / warehouse, disimpan sebagai revisi; revisi terbaru menjadi ACTIVE.</small>`,
                     icon: 'question',
                     showCancelButton: true,
                     confirmButtonText: 'Ya, Simpan',
@@ -700,7 +750,7 @@
                                     if (res.batches && res.batches.length) {
                                         successMsg += '<hr class="my-2"><div class="text-left small">';
                                         res.batches.forEach(function (b) {
-                                            successMsg += `<div class="mb-1"><strong>${b.batch_number}</strong> &middot; ${b.group_label} &middot; <span class="badge badge-primary">${(b.doc_type || '').toUpperCase()}</span> rev ${b.revision_no} &middot; ${b.imported} baris`;
+                                            successMsg += `<div class="mb-1"><strong>${b.batch_number}</strong> &middot; <span class="text-primary">${b.session_code || ''}</span> &middot; ${b.group_label} &middot; <span class="badge badge-primary">${(b.doc_type || '').toUpperCase()}</span> rev ${b.revision_no} &middot; ${b.imported} baris`;
                                             if (b.skipped > 0) { successMsg += ` &middot; <span class="text-warning">${b.skipped} broken</span>`; }
                                             successMsg += '</div>';
                                         });

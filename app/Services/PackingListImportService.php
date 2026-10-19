@@ -127,13 +127,18 @@ class PackingListImportService
     }
 
     /**
-     * Simpan baris SOLID yang utuh. Setiap revisi memiliki baris sendiri
-     * sehingga rekaman revisi lama tetap dapat ditelusuri.
+     * Simpan baris SOLID menjadi baris master JANCODE.
+     *
+     * Satu JAN + color + size bisa muncul di beberapa blok karton pada file
+     * (rentang karton berbeda). Semua baris dengan identitas sama digabung
+     * menjadi SATU baris master: quantity-nya dijumlahkan dan rentang karton
+     * diambil dari yang terkecil sampai terbesar. Dengan begitu kapasitas
+     * master = total carton packing list (tidak ada carton yang hilang).
      */
     private function saveItems(ImportBatch $batch, array $items, array $header): int
     {
-        $seen = [];
-        $imported = 0;
+        // 1. Gabungkan per identitas color|size|jan.
+        $merged = [];
 
         foreach ($items as $item) {
             $jan = preg_replace('/[^0-9]/', '', (string)($item['jan_code'] ?? ''));
@@ -141,17 +146,43 @@ class PackingListImportService
                 continue;
             }
 
-            $identity = strtolower(trim(($item['color'] ?? '') . '|' . ($item['size'] ?? '') . '|' . $jan));
-            if (isset($seen[$identity])) {
-                continue;
-            }
-            $seen[$identity] = true;
-
-            $packingQty   = (int)($item['packing_list_qty_carton'] ?? 0);
-            $qtyPerCarton = (int)($item['qty_per_carton'] ?? 0);
+            $packingQty = (int)($item['packing_list_qty_carton'] ?? 0);
             if ($packingQty <= 0) {
                 continue;
             }
+
+            $identity = strtolower(trim(($item['color'] ?? '') . '|' . ($item['size'] ?? '') . '|' . $jan));
+
+            if (!isset($merged[$identity])) {
+                $item['jan_code']                = $jan;
+                $item['packing_list_qty_carton'] = $packingQty;
+                $item['carton_no_from']          = $this->toIntOrNull($item['carton_no_from'] ?? null);
+                $item['carton_no_to']            = $this->toIntOrNull($item['carton_no_to'] ?? null);
+                $merged[$identity] = $item;
+                continue;
+            }
+
+            $merged[$identity]['packing_list_qty_carton'] += $packingQty;
+
+            $from    = $this->toIntOrNull($item['carton_no_from'] ?? null);
+            $to      = $this->toIntOrNull($item['carton_no_to'] ?? null);
+            $curFrom = $merged[$identity]['carton_no_from'];
+            $curTo   = $merged[$identity]['carton_no_to'];
+
+            if ($from !== null) {
+                $merged[$identity]['carton_no_from'] = $curFrom === null ? $from : min($curFrom, $from);
+            }
+            if ($to !== null) {
+                $merged[$identity]['carton_no_to'] = $curTo === null ? $to : max($curTo, $to);
+            }
+        }
+
+        // 2. Simpan satu baris master per identitas.
+        $imported = 0;
+
+        foreach ($merged as $item) {
+            $packingQty   = (int)$item['packing_list_qty_carton'];
+            $qtyPerCarton = (int)($item['qty_per_carton'] ?? 0);
 
             Jancode::create([
                 'import_batch_id'         => $batch->id,
@@ -161,13 +192,13 @@ class PackingListImportService
                 'buyer'                   => $header['buyer'] ?? null,
                 'ocf'                     => $header['ocf'] ?? null,
                 'style'                   => $header['style'] ?? null,
-                'carton_no_from'          => isset($item['carton_no_from']) && $item['carton_no_from'] !== '' ? (int)$item['carton_no_from'] : null,
-                'carton_no_to'            => isset($item['carton_no_to']) && $item['carton_no_to'] !== '' ? (int)$item['carton_no_to'] : null,
+                'carton_no_from'          => $item['carton_no_from'],
+                'carton_no_to'            => $item['carton_no_to'],
                 'color'                   => $item['color'] ?? null,
                 'size'                    => $item['size'] ?? null,
                 'description'             => trim(($item['color'] ?? '') . ' / ' . ($item['size'] ?? ''), ' /'),
                 'qty_per_carton'          => $qtyPerCarton,
-                'jancode'                 => $jan,
+                'jancode'                 => $item['jan_code'],
                 'packing_list_qty_carton' => $packingQty,
                 'receive_qty_carton'      => 0,
                 'balance'                 => $packingQty,
@@ -188,6 +219,17 @@ class PackingListImportService
         }
 
         return $imported;
+    }
+
+    private function toIntOrNull(mixed $value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        $digits = preg_replace('/[^0-9]/', '', (string) $value);
+
+        return $digits === '' ? null : (int) $digits;
     }
 
     /**
