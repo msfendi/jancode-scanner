@@ -239,6 +239,9 @@
                             <a href="{{ route('scanner.index') }}" class="btn btn-sm btn-success shadow-sm">
                                 <i class="fas fa-barcode fa-sm mr-1"></i> Buka Scanner
                             </a>
+                            <a href="{{ route('pallet.threeD') }}" class="btn btn-sm btn-dark shadow-sm">
+                                <i class="fas fa-cubes fa-sm mr-1"></i> Visualisasi 3D
+                            </a>
                             <button class="btn btn-sm btn-primary shadow-sm" data-toggle="modal" data-target="#quickPlotModal">
                                 <i class="fas fa-plus fa-sm text-white-50 mr-1"></i> Plot Karton Baru
                             </button>

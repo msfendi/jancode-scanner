@@ -103,7 +103,13 @@
         4. Manage Pallet
     </div>
 
-    <li class="nav-item {{ request()->is('pallet*') ? 'active' : '' }}">
+    <li class="nav-item {{ request()->is('pallet/3d*') ? 'active' : '' }}">
+        <a class="nav-link" href="{{ route('pallet.threeD') }}">
+            <i class="fas fa-fw fa-cubes"></i>
+            <span>Visualisasi 3D Pallet</span>
+        </a>
+    </li>
+    <li class="nav-item {{ request()->is('pallet') || request()->is('pallet/detail*') ? 'active' : '' }}">
         <a class="nav-link" href="{{ route('pallet.index') }}">
             <i class="fas fa-fw fa-pallet"></i>
             <span>Manage Pallet Location</span>

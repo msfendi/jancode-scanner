@@ -156,6 +156,88 @@ class PalletController extends Controller
     }
 
     /**
+     * Visualisasi 3D layout pallet (Three.js).
+     * Menampilkan gudang 480 posisi dalam bentuk 3D + animasi handlift in/out karton.
+     */
+    public function threeD()
+    {
+        $this->ensureAddressesSeeded();
+
+        $currentSession = ImportSession::current();
+
+        return view('pallet.three-d', compact('currentSession'));
+    }
+
+    /**
+     * Data layout pallet untuk visualisasi 3D (dipanggil berkala untuk sinkronisasi).
+     */
+    public function threeDData()
+    {
+        $this->ensureAddressesSeeded();
+
+        $addresses = PalletAddress::with(['assignment.details.jancode'])
+            ->orderBy('row_label')
+            ->orderBy('col_label')
+            ->orderBy('position_no')
+            ->get();
+
+        $pallets = [];
+        $occupied = 0;
+        $cartons = 0;
+
+        foreach ($addresses as $addr) {
+            $asg = $addr->assignment;
+            $qty = $asg ? (int) $asg->total_carton : 0;
+
+            $items = [];
+            if ($asg) {
+                foreach ($asg->details as $det) {
+                    $jc = $det->jancode;
+                    $items[] = [
+                        'jancode' => $jc ? $jc->jancode : null,
+                        'color'   => $jc ? $jc->color : null,
+                        'size'    => $jc ? $jc->size : null,
+                        'qty'     => (int) $det->qty_carton,
+                    ];
+                }
+            }
+
+            if ($qty > 0) {
+                $occupied++;
+                $cartons += $qty;
+            }
+
+            $pallets[] = [
+                'code'     => $addr->code,
+                'row'      => $addr->row_label,
+                'col'      => $addr->col_label,
+                'pos'      => (int) $addr->position_no,
+                'capacity' => (int) ($addr->max_carton ?: 42),
+                'qty'      => $qty,
+                'style'    => $asg ? $asg->style : null,
+                'country'  => $asg ? $asg->country : null,
+                'ocf'      => $asg ? $asg->ocf : null,
+                'items'    => $items,
+            ];
+        }
+
+        $total = count($pallets);
+
+        return response()->json([
+            'success'    => true,
+            'stats'      => [
+                'positions' => $total,
+                'occupied'  => $occupied,
+                'vacant'    => $total - $occupied,
+                'cartons'   => $cartons,
+                'capacity'  => $total * 42,
+            ],
+            'pallets'    => $pallets,
+            'updated_at' => now()->toDateTimeString(),
+        ]);
+    }
+
+    /**
      * SSE stream untuk live update pallet (tanpa Vite / WebSocket).
      * Emit event 'pallet' tiap ada perubahan assignment/detail.
      */
