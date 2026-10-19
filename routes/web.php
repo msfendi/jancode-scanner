@@ -61,6 +61,12 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/user/assign/{id}', [UserController::class, 'assign'])->name('user.assign')->middleware(['auth', 'role:Admin']);
     Route::post('/user/assignrole', [UserController::class, 'assignrole'])->name('user.assignrole')->middleware(['auth', 'role:Admin']);
 
+    // Session Import (induk sebelum import packing list)
+    Route::get('/session', [\App\Http\Controllers\ImportSessionController::class, 'index'])->name('session.index')->middleware(['auth', 'role:Admin']);
+    Route::post('/session/start', [\App\Http\Controllers\ImportSessionController::class, 'start'])->name('session.start')->middleware(['auth', 'role:Admin']);
+    Route::post('/session/{session}/select', [\App\Http\Controllers\ImportSessionController::class, 'select'])->name('session.select')->middleware(['auth', 'role:Admin']);
+    Route::post('/session/{session}/close', [\App\Http\Controllers\ImportSessionController::class, 'close'])->name('session.close')->middleware(['auth', 'role:Admin']);
+
     //Jancode
     Route::get('/jancode', [JancodeController::class, 'index'])->name('jancode.index')->middleware(['auth', 'role:Admin']);
     Route::post('/jancode', [JancodeController::class, 'store'])->name('jancode.store')->middleware(['auth', 'role:Admin']);

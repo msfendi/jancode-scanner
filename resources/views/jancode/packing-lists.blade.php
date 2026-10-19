@@ -18,7 +18,7 @@
                                 <i class="fas fa-tasks text-primary mr-1"></i> Manage Packing List
                             </h1>
                             <p class="mb-0 text-muted small">
-                                Langkah <strong>2</strong>: satu baris = satu packing list (revisi <strong>aktif</strong>).
+                                Langkah <strong>3</strong>: satu baris = satu packing list (revisi <strong>aktif</strong>).
                                 Klik <i class="fas fa-eye"></i> untuk melihat riwayat revisi &amp; baris broken.
                             </p>
                         </div>
@@ -33,6 +33,25 @@
                     </div>
 
                     @include('layout.workflow-steps', ['current' => 'manage'])
+
+                    @include('layout.session-banner', ['currentSession' => $currentSession])
+
+                    @php $hasSession = (bool) $currentSession; @endphp
+
+                    @if (!$hasSession)
+                        <div class="card shadow mb-4 border-left-warning">
+                            <div class="card-body text-center py-5">
+                                <i class="fas fa-lock fa-2x text-warning mb-3"></i>
+                                <h5 class="font-weight-bold text-gray-800">Pilih session dulu</h5>
+                                <p class="text-muted mb-3">
+                                    Data packing list dikelompokkan per session. Mulai atau pilih session untuk melihat datanya.
+                                </p>
+                                <a href="{{ route('session.index') }}" class="btn btn-primary font-weight-bold">
+                                    <i class="fas fa-play-circle mr-1"></i> Ke Halaman Session
+                                </a>
+                            </div>
+                        </div>
+                    @endif
 
                     <!-- Penjelasan -->
                     <div class="alert alert-light border shadow-sm mb-3 small py-2">
@@ -49,7 +68,7 @@
                     </div>
 
                     <!-- Filter Pencarian -->
-                    <div class="card shadow mb-3">
+                    <div class="card shadow mb-3 {{ $hasSession ? '' : 'd-none' }}">
                         <div class="card-header py-2 d-flex justify-content-between align-items-center">
                             <h6 class="m-0 font-weight-bold text-primary">
                                 <i class="fas fa-filter mr-1"></i> Filter Pencarian
@@ -103,7 +122,7 @@
                         #tablePackingLists td { vertical-align: middle; }
                     </style>
 
-                    <div class="card shadow mb-4">
+                    <div class="card shadow mb-4 {{ $hasSession ? '' : 'd-none' }}">
                         <div class="card-header py-2 d-flex justify-content-between align-items-center">
                             <h6 class="m-0 font-weight-bold text-primary">
                                 <i class="fas fa-clipboard-list mr-1"></i> Daftar Packing List Aktif

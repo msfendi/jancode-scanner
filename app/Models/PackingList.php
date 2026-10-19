@@ -19,6 +19,7 @@ class PackingList extends Model
     protected $table = 'packing_lists';
 
     protected $fillable = [
+        'session_id',
         'group_key',
         'group_label',
         'style_number',
@@ -32,6 +33,11 @@ class PackingList extends Model
     public function importBatches(): HasMany
     {
         return $this->hasMany(ImportBatch::class, 'packing_list_id');
+    }
+
+    public function session(): BelongsTo
+    {
+        return $this->belongsTo(ImportSession::class, 'session_id');
     }
 
     public function activeImportBatch(): BelongsTo
@@ -50,15 +56,19 @@ class PackingList extends Model
     }
 
     /**
-     * Cari packing list berdasarkan group_key, buat jika belum ada.
+     * Cari packing list berdasarkan (session, group_key), buat jika belum ada.
+     * Identitas packing list = session + group_key.
      */
-    public static function findOrCreateForGroupKey(?string $groupKey): ?self
+    public static function findOrCreateForGroupKey(?string $groupKey, ?int $sessionId = null): ?self
     {
         if (!$groupKey) {
             return null;
         }
 
-        return static::firstOrCreate(['group_key' => $groupKey]);
+        return static::firstOrCreate([
+            'session_id' => $sessionId,
+            'group_key'  => $groupKey,
+        ]);
     }
 
     /**

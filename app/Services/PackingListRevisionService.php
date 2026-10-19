@@ -26,14 +26,14 @@ class PackingListRevisionService
      * 2. Sinkronkan pointer packing list.
      * 3. Bawa semua scan/pallet dari revisi lain ke revisi aktif.
      */
-    public function syncActiveRevision(?string $groupKey): ?ImportBatch
+    public function syncActiveRevision(?string $groupKey, ?int $sessionId = null): ?ImportBatch
     {
         if (!$groupKey) {
             return null;
         }
 
-        $packingList = PackingList::findOrCreateForGroupKey($groupKey);
-        $active      = ImportBatch::recomputeActiveForGroup($groupKey);
+        $packingList = PackingList::findOrCreateForGroupKey($groupKey, $sessionId);
+        $active      = ImportBatch::recomputeActiveForGroup($groupKey, $sessionId);
 
         if ($packingList && $active) {
             $packingList->syncFromBatch($active, $active->id);
@@ -54,7 +54,7 @@ class PackingListRevisionService
     {
         $stats = ['logs' => 0, 'pallets' => 0, 'unmapped' => 0];
 
-        $otherBatchIds = ImportBatch::forGroup($active->group_key)
+        $otherBatchIds = ImportBatch::forGroup($active->group_key, $active->session_id)
             ->where('id', '!=', $active->id)
             ->pluck('id')
             ->all();
@@ -95,11 +95,13 @@ class PackingListRevisionService
                     'jancode_id'      => $targetId,
                     'import_batch_id' => $active->id,
                     'packing_list_id' => $active->packing_list_id,
+                    'session_id'      => $active->session_id,
                 ]);
 
                 $stats['pallets'] += PalletAssignmentDetail::whereIn('jancode_id', $oldIds)->update([
                     'jancode_id'      => $targetId,
                     'packing_list_id' => $active->packing_list_id,
+                    'session_id'      => $active->session_id,
                 ]);
             }
         });

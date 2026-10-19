@@ -19,8 +19,8 @@
                                 <i class="fas fa-file-import text-primary mr-1"></i> Import Packing List
                             </h1>
                             <p class="mb-0 text-muted small">
-                                Langkah <strong>1</strong>: upload file Excel packing list. Setiap sheet disimpan
-                                sebagai satu <strong>revisi</strong>.
+                                Langkah <strong>2</strong>: upload file Excel packing list. Setiap sheet disimpan
+                                sebagai satu <strong>revisi</strong> di dalam session aktif.
                             </p>
                         </div>
                         <a href="{{ route('jancode.packingLists') }}" class="btn btn-sm btn-primary shadow-sm">
@@ -29,6 +29,31 @@
                     </div>
 
                     @include('layout.workflow-steps', ['current' => 'import'])
+
+                    @include('layout.session-banner', ['currentSession' => $currentSession])
+
+                    @php $canImport = $currentSession && $currentSession->isOpen(); @endphp
+
+                    @if (!$canImport)
+                        <!-- Gate: session belum aktif / ditutup -->
+                        <div class="card shadow mb-4 border-left-warning">
+                            <div class="card-body text-center py-5">
+                                <i class="fas fa-lock fa-2x text-warning mb-3"></i>
+                                <h5 class="font-weight-bold text-gray-800">Import terkunci</h5>
+                                <p class="text-muted mb-3">
+                                    @if (!$currentSession)
+                                        Mulai session terlebih dahulu sebagai induk packing list.
+                                    @else
+                                        Session <strong>{{ $currentSession->code }}</strong> sudah ditutup.
+                                        Pilih session lain atau mulai session baru.
+                                    @endif
+                                </p>
+                                <a href="{{ route('session.index') }}" class="btn btn-primary font-weight-bold">
+                                    <i class="fas fa-play-circle mr-1"></i> Ke Halaman Session
+                                </a>
+                            </div>
+                        </div>
+                    @endif
 
                     <!-- Penjelasan alur -->
                     <div class="alert alert-info border-left-info shadow-sm mb-3 py-2">
@@ -45,7 +70,7 @@
                     </div>
 
                     <!-- 1. Upload Card -->
-                    <div class="card shadow mb-4" id="aiUploadCard">
+                    <div class="card shadow mb-4 {{ $canImport ? '' : 'd-none' }}" id="aiUploadCard">
                         <div class="card-header py-2">
                             <h6 class="m-0 font-weight-bold text-primary">
                                 <i class="fas fa-cloud-upload-alt mr-1"></i> 1. Upload File Packing List
@@ -241,41 +266,6 @@
                         </div>
                     </div>
 
-                    <!-- Packing List Terbaru (disembunyikan saat preview tampil) -->
-                    <div class="card shadow mb-4" id="aiRecentCard">
-                        <div class="card-header py-2 d-flex justify-content-between align-items-center">
-                            <h6 class="m-0 font-weight-bold text-primary">
-                                <i class="fas fa-clock mr-1"></i> Packing List Terbaru
-                            </h6>
-                            <button class="btn btn-sm btn-outline-secondary" id="btnReloadRecent">
-                                <i class="fas fa-sync-alt mr-1"></i> Refresh
-                            </button>
-                        </div>
-                        <div class="card-body">
-                            <div class="table-responsive">
-                                <table class="table table-bordered table-sm table-hover" id="tableRecentPackingLists" width="100%">
-                                    <thead class="thead-light">
-                                        <tr>
-                                            <th class="text-center">Tipe</th>
-                                            <th>Packing List</th>
-                                            <th class="text-center">Revisi</th>
-                                            <th class="text-right">Total Carton</th>
-                                            <th class="text-center">Valid</th>
-                                            <th class="text-center">Broken</th>
-                                            <th>File</th>
-                                            <th>Tanggal</th>
-                                            <th class="text-center" width="120">Aksi</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody></tbody>
-                                </table>
-                            </div>
-                            <div class="text-right mt-2">
-                                <a href="{{ route('jancode.packingLists') }}" class="btn btn-sm btn-link">
-                                    Lihat semua packing list <i class="fas fa-arrow-right ml-1"></i>
-                                </a>
-                            </div>
-                        </div>
                     </div>
 
                 </div>
@@ -287,9 +277,6 @@
     </div>
 
     <!-- Page level plugins -->
-    <script src="{{asset('vendor/datatables/jquery.dataTables.min.js')}}"></script>
-    <script src="{{asset('vendor/datatables/dataTables.bootstrap4.min.js')}}"></script>
-
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
     <style>
@@ -315,66 +302,8 @@
                 }
             });
 
-            // --- DataTables: Packing List Terbaru ---
-            const table = $('#tableRecentPackingLists').DataTable({
-                processing: true,
-                ajax: {
-                    url: "{{ route('jancode.packingLists') }}",
-                    type: "GET",
-                    dataType: "json",
-                    dataSrc: "data",
-                },
-                columns: [
-                    {
-                        data: 'doc_type', className: 'text-center',
-                        render: d => d === 'actual'
-                            ? '<span class="badge badge-success">ACTUAL</span>'
-                            : '<span class="badge badge-primary">PROFORMA</span>'
-                    },
-                    {
-                        data: null,
-                        render: (d) => `<strong>${d.group_label || '-'}</strong>
-                            <br><small class="text-muted">Buyer: ${d.supplier_name || '-'}</small>`
-                    },
-                    {
-                        data: null, className: 'text-center',
-                        render: d => `<span class="badge badge-dark">Rev.${d.revision_no}</span>
-                            <br><small class="text-muted">${d.revision_count} revisi</small>`
-                    },
-                    { data: 'total_carton', className: 'text-right font-weight-bold text-primary' },
-                    { data: 'valid_rows', className: 'text-center text-success font-weight-bold' },
-                    {
-                        data: 'skipped_rows', className: 'text-center',
-                        render: d => d > 0 ? `<span class="text-danger font-weight-bold">${d}</span>` : `<span class="text-muted">0</span>`
-                    },
-                    { data: 'original_filename', render: d => d ? `<small class="text-muted">${d}</small>` : '-' },
-                    { data: 'import_date' },
-                    {
-                        data: null, orderable: false, className: 'text-center',
-                        render: (d) => {
-                            const detail = `{{ url('/jancode/import-batches') }}/${d.id}`;
-                            return `<a href="${detail}" class="btn btn-info btn-sm btn-circle" title="Detail & Riwayat Revisi"><i class="fas fa-eye"></i></a>
-                                <a href="{{ route('scanner.index') }}?packing_list=${d.id}" class="btn btn-success btn-sm btn-circle ml-1" title="Scan packing list ini"><i class="fas fa-barcode"></i></a>`;
-                        }
-                    },
-                ],
-                order: [[7, 'desc']],
-                pageLength: 5,
-                lengthChange: false,
-                language: {
-                    processing: '<i class="fas fa-spinner fa-spin mr-1"></i> Memuat data packing list...',
-                    search: 'Cari:',
-                    info: 'Menampilkan _START_ - _END_ dari _TOTAL_ packing list',
-                    infoEmpty: 'Belum ada data',
-                    zeroRecords: 'Tidak ada packing list yang cocok',
-                    emptyTable: '<div class="text-muted py-2"><i class="fas fa-inbox fa-2x d-block mb-2"></i>Belum ada packing list. Silakan import file Excel terlebih dahulu.</div>',
-                    paginate: { previous: 'Sebelumnya', next: 'Berikutnya' },
-                },
-            });
-
-            $('#btnReloadRecent').click(function () {
-                table.ajax.reload(null, false);
-            });
+            // Apakah session aktif mengizinkan import?
+            const canImport = @json($canImport);
 
             // --- Dropzone & pemilihan file ---
             const dz = document.getElementById('importDropzone');
@@ -436,18 +365,18 @@
             function showPreviewMode() {
                 $('#aiUploadCard').addClass('d-none');
                 $('#aiPreviewCard').removeClass('d-none');
-                $('#aiRecentCard').addClass('d-none');
                 $('html, body').animate({ scrollTop: $('#aiPreviewCard').offset().top - 80 }, 250);
             }
 
             $('#btnAiReset').click(function () {
                 $('#aiPreviewCard').addClass('d-none');
                 $('#aiLoadingSection').addClass('d-none');
-                $('#aiUploadCard').removeClass('d-none');
+                if (canImport) {
+                    $('#aiUploadCard').removeClass('d-none');
+                }
                 $('#aiUploadSection').removeClass('d-none');
                 $('#btnAiConfirmSave').addClass('d-none');
                 resetFilePicker();
-                $('#aiRecentCard').removeClass('d-none');
                 aiParsedData = null;
                 aiSheets = [];
                 aiActiveSheet = 0;
@@ -738,7 +667,6 @@
                                         html: successMsg,
                                     }).then(() => {
                                         $('#btnAiReset').trigger('click');
-                                        table.ajax.reload(null, false);
                                     });
                                 } else {
                                     Swal.fire('Gagal!', res.message || 'Terjadi kesalahan.', 'error');

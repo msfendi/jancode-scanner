@@ -12,6 +12,7 @@ class JancodeLogs extends Model
         'jancode_id',
         'packing_list_id',
         'import_batch_id',
+        'session_id',
         'scan_batch_id',
         'user_id',
         'is_submitted',
@@ -35,5 +36,10 @@ class JancodeLogs extends Model
     public function importBatch()
     {
         return $this->belongsTo(ImportBatch::class, 'import_batch_id');
+    }
+
+    public function session()
+    {
+        return $this->belongsTo(ImportSession::class, 'session_id');
     }
 }

@@ -243,12 +243,14 @@
 
                     @include('layout.workflow-steps', ['current' => 'pallet'])
 
+                    @include('layout.session-banner', ['currentSession' => $currentSession])
+
                     <!-- Penjelasan -->
                     <div class="alert alert-light border shadow-sm mb-4 small">
                         <div class="d-flex">
                             <i class="fas fa-lightbulb fa-lg text-warning mr-3"></i>
                             <div>
-                                Langkah <strong>4</strong>: setelah karton di-<em>scan</em>, tempatkan pada lokasi pallet.
+                                Langkah <strong>5</strong>: setelah karton di-<em>scan</em>, tempatkan pada lokasi pallet.
                                 Warna <span class="text-danger font-weight-bold">merah</span> = pallet terisi,
                                 <span class="text-success font-weight-bold">hijau</span> = kosong.
                                 Satu pallet maksimal <strong>42 karton</strong> dengan kompatibilitas <strong>1 Country &amp; 1 Style/OCF</strong> per row.

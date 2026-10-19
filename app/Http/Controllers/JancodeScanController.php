@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\ImportBatch;
+use App\Models\ImportSession;
 use App\Models\Jancode;
 use App\Models\JancodeLogs;
 use App\Models\ScanBatch;
@@ -26,7 +27,9 @@ class JancodeScanController extends Controller
     // Halaman utama scanner
     public function index()
     {
-        return view('jancode.scanner');
+        $currentSession = ImportSession::current();
+
+        return view('jancode.scanner', compact('currentSession'));
     }
 
     /**
@@ -36,7 +39,9 @@ class JancodeScanController extends Controller
     {
         $q = $request->input('q');
 
-        $query = ImportBatch::active()->orderByDesc('id');
+        $query = ImportBatch::active()
+            ->where('session_id', ImportSession::currentId() ?? 0)
+            ->orderByDesc('id');
         if ($q) {
             $query->where(function ($w) use ($q) {
                 $w->where('group_label', 'LIKE', "%$q%")
@@ -72,6 +77,31 @@ class JancodeScanController extends Controller
         $batch = ImportBatch::find($batchId);
         if (!$batch) {
             return response()->json(['success' => false, 'message' => 'Packing list tidak ditemukan'], 404);
+        }
+
+        $currentSession = ImportSession::current();
+        if (!$currentSession) {
+            return response()->json([
+                'success' => false,
+                'error'   => 'no_session',
+                'message' => 'Mulai session terlebih dahulu sebelum scan.',
+            ], 422);
+        }
+
+        if (!$currentSession->isOpen()) {
+            return response()->json([
+                'success' => false,
+                'error'   => 'session_closed',
+                'message' => 'Session ini sudah ditutup. Buat session baru untuk scan.',
+            ], 422);
+        }
+
+        if ((int) $batch->session_id !== (int) $currentSession->id) {
+            return response()->json([
+                'success' => false,
+                'error'   => 'wrong_session',
+                'message' => 'Packing list ini bukan milik session aktif.',
+            ], 422);
         }
 
         if (!$batch->is_active) {
@@ -143,6 +173,24 @@ class JancodeScanController extends Controller
             ], 409);
         }
 
+        $currentSession = ImportSession::current();
+        if (!$currentSession || (int) $batch->session_id !== (int) $currentSession->id) {
+            session()->forget(self::SESSION_KEY);
+            return response()->json([
+                'success' => false,
+                'error'   => 'wrong_session',
+                'message' => 'Packing list ini bukan milik session aktif. Silakan muat ulang.',
+            ], 409);
+        }
+
+        if (!$currentSession->isOpen()) {
+            return response()->json([
+                'success' => false,
+                'error'   => 'session_closed',
+                'message' => 'Session ini sudah ditutup. Buat session baru untuk scan.',
+            ], 422);
+        }
+
         $count = max(1, (int)$request->input('count', 1));
 
         try {
@@ -184,6 +232,7 @@ class JancodeScanController extends Controller
                     'jancode_id'      => $master->id,
                     'packing_list_id' => $master->packing_list_id ?? $batch->packing_list_id,
                     'import_batch_id' => $batch->id,
+                    'session_id'      => $batch->session_id,
                     'user_id'         => auth()->id(),
                     'is_submitted'    => 'false',
                     'created_at'      => $now,
@@ -243,6 +292,15 @@ class JancodeScanController extends Controller
             return response()->json(['success' => false, 'message' => 'Packing list tidak ditemukan'], 404);
         }
 
+        $currentSession = ImportSession::current();
+        if (!$currentSession || (int) $batch->session_id !== (int) $currentSession->id) {
+            return response()->json([
+                'success' => false,
+                'error'   => 'wrong_session',
+                'message' => 'Packing list ini bukan milik session aktif.',
+            ], 403);
+        }
+
         try {
             DB::beginTransaction();
 
@@ -273,6 +331,7 @@ class JancodeScanController extends Controller
                 'jancode_id'      => null,
                 'import_batch_id' => $batchId,
                 'packing_list_id' => $batch->packing_list_id,
+                'session_id'      => $batch->session_id,
                 'user_id'         => auth()->id(),
                 'scanned_qty'     => $unsubmittedCount,
                 'receive_qty'     => 0,
@@ -336,7 +395,13 @@ class JancodeScanController extends Controller
         if ($request->ajax()) {
             $importBatchId = $request->input('import_batch_id');
 
-            $query = ScanBatch::with(['jancode', 'user', 'importBatch'])->latest();
+            $query = ScanBatch::with(['jancode', 'user', 'importBatch', 'session'])->latest();
+
+            $sessionId = ImportSession::currentId();
+            if ($sessionId) {
+                $query->where('session_id', $sessionId);
+            }
+
             if ($importBatchId) {
                 $query->where('import_batch_id', $importBatchId);
             }
@@ -348,6 +413,7 @@ class JancodeScanController extends Controller
                     'id'          => $b->id,
                     'batch_no'    => $b->batch_no,
                     'created_at'  => $b->created_at ? $b->created_at->format('d/m/Y H:i:s') : '-',
+                    'session_code'=> $b->session?->code ?: '-',
                     'packing_list'=> $ib ? ($ib->group_label . ' (' . strtoupper($ib->doc_type) . ' Rev.' . $ib->revision_no . ')') : '-',
                     'jancode'     => $j ? $j->jancode : '-',
                     'color'       => $j ? $j->color : '-',
@@ -465,7 +531,18 @@ class JancodeScanController extends Controller
             return null;
         }
 
-        return ImportBatch::find($batchId);
+        $batch = ImportBatch::find($batchId);
+        if (!$batch) {
+            return null;
+        }
+
+        // Batch hanya boleh dipakai jika masih milik session aktif.
+        $sessionId = ImportSession::currentId();
+        if (!$sessionId || (int) $batch->session_id !== (int) $sessionId) {
+            return null;
+        }
+
+        return $batch;
     }
 
     private function unsubmittedCount(int $batchId): int

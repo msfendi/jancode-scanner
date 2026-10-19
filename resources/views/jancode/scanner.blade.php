@@ -20,7 +20,7 @@
                         <div>
                             <h1 class="h4 mb-0 text-gray-800">Scanner Jancode (per Packing List)</h1>
                             <p class="mb-0 text-muted small">
-                                Pilih packing list → sistem memuat semua jancode revisi <strong>aktif</strong>.
+                                Pilih packing list pada session aktif → sistem memuat semua jancode revisi <strong>aktif</strong>.
                                 <strong>1 scan = 1 carton.</strong>
                             </p>
                         </div>
@@ -39,8 +39,32 @@
 
                     @include('layout.workflow-steps', ['current' => 'scan'])
 
+                    @include('layout.session-banner', ['currentSession' => $currentSession])
+
+                    @php $canScan = $currentSession && $currentSession->isOpen(); @endphp
+
+                    @if (!$canScan)
+                        <div class="card shadow mb-4 border-left-warning">
+                            <div class="card-body text-center py-5">
+                                <i class="fas fa-lock fa-2x text-warning mb-3"></i>
+                                <h5 class="font-weight-bold text-gray-800">Scan terkunci</h5>
+                                <p class="text-muted mb-3">
+                                    @if (!$currentSession)
+                                        Mulai session terlebih dahulu sebelum melakukan scan.
+                                    @else
+                                        Session <strong>{{ $currentSession->code }}</strong> sudah ditutup.
+                                        Pilih session lain atau mulai session baru.
+                                    @endif
+                                </p>
+                                <a href="{{ route('session.index') }}" class="btn btn-primary font-weight-bold">
+                                    <i class="fas fa-play-circle mr-1"></i> Ke Halaman Session
+                                </a>
+                            </div>
+                        </div>
+                    @endif
+
                     <!-- Pilih Packing List -->
-                    <div class="card shadow mb-4">
+                    <div class="card shadow mb-4 {{ $canScan ? '' : 'd-none' }}">
                         <div class="card-header py-3">
                             <h6 class="m-0 font-weight-bold text-primary">
                                 <i class="fas fa-clipboard-list mr-1"></i> 1. Pilih Packing List

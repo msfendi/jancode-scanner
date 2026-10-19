@@ -24,9 +24,24 @@
     <!-- Divider -->
     <hr class="sidebar-divider">
 
-    <!-- Heading 1: Packing List -->
+    <!-- Heading 1: Sesi Import -->
     <div class="sidebar-heading">
-        1. Packing List
+        1. Sesi Import
+    </div>
+
+    <li class="nav-item {{ request()->is('session*') ? 'active' : '' }}">
+        <a class="nav-link" href="{{ route('session.index') }}">
+            <i class="fas fa-fw fa-play-circle"></i>
+            <span>Sesi &amp; Mulai Import</span>
+        </a>
+    </li>
+
+    <!-- Divider -->
+    <hr class="sidebar-divider">
+
+    <!-- Heading 2: Packing List -->
+    <div class="sidebar-heading">
+        2. Packing List
     </div>
 
     <li class="nav-item {{ request()->is('jancode*') ? 'active' : '' }}">
@@ -50,9 +65,9 @@
     <!-- Divider -->
     <hr class="sidebar-divider">
 
-    <!-- Heading 2: Scan Jancode -->
+    <!-- Heading 3: Scan Jancode -->
     <div class="sidebar-heading">
-        2. Scan Jancode
+        3. Scan Jancode
     </div>
 
     <li class="nav-item {{ request()->is('scanner*') ? 'active' : '' }}">
@@ -76,9 +91,9 @@
     <!-- Divider -->
     <hr class="sidebar-divider">
 
-    <!-- Heading 3: Manage Pallet -->
+    <!-- Heading 4: Manage Pallet -->
     <div class="sidebar-heading">
-        3. Manage Pallet
+        4. Manage Pallet
     </div>
 
     <li class="nav-item {{ request()->is('pallet*') ? 'active' : '' }}">
@@ -91,9 +106,9 @@
     <!-- Divider -->
     <hr class="sidebar-divider">
 
-    <!-- Heading 4: Hangtag (Modul Terpisah) -->
+    <!-- Heading 5: Hangtag (Modul Terpisah) -->
     <div class="sidebar-heading">
-        4. Modul Hangtag
+        5. Modul Hangtag
     </div>
 
     <li class="nav-item {{ request()->is('hangtag*') ? 'active' : '' }}">
@@ -117,9 +132,9 @@
     <!-- Divider -->
     <hr class="sidebar-divider">
 
-    <!-- Heading 5: Pengaturan Sistem -->
+    <!-- Heading 6: Pengaturan Sistem -->
     <div class="sidebar-heading">
-        5. Pengaturan Sistem
+        6. Pengaturan Sistem
     </div>
 
     <li class="nav-item {{ request()->is('user*') || request()->is('role*') ? 'active' : '' }}">

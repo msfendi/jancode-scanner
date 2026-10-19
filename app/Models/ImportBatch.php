@@ -12,6 +12,7 @@ class ImportBatch extends Model
     protected $table = 'import_batches';
 
     protected $fillable = [
+        'session_id',
         'packing_list_id',
         'batch_number',
         'batch_name',
@@ -58,6 +59,11 @@ class ImportBatch extends Model
         return $this->belongsTo(PackingList::class, 'packing_list_id');
     }
 
+    public function session(): BelongsTo
+    {
+        return $this->belongsTo(ImportSession::class, 'session_id');
+    }
+
     public function jancodes(): HasMany
     {
         return $this->hasMany(Jancode::class, 'import_batch_id');
@@ -80,9 +86,15 @@ class ImportBatch extends Model
         return $query->where('is_active', true);
     }
 
-    public function scopeForGroup(Builder $query, ?string $groupKey): Builder
+    public function scopeForGroup(Builder $query, ?string $groupKey, ?int $sessionId = null): Builder
     {
-        return $query->where('group_key', $groupKey);
+        $query->where('group_key', $groupKey);
+
+        if ($sessionId !== null) {
+            $query->where('session_id', $sessionId);
+        }
+
+        return $query;
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────
@@ -125,13 +137,13 @@ class ImportBatch extends Model
      * revisi ACTUAL terbaru yang menjadi aktif. Jika belum ada ACTUAL, revisi
      * PROFORMA terbaru yang menjadi aktif.
      */
-    public static function activeForGroup(?string $groupKey): ?self
+    public static function activeForGroup(?string $groupKey, ?int $sessionId = null): ?self
     {
         if (!$groupKey) {
             return null;
         }
 
-        $active = static::forGroup($groupKey)
+        $active = static::forGroup($groupKey, $sessionId)
             ->active()
             ->orderByDesc('revision_no')
             ->get();
@@ -143,13 +155,13 @@ class ImportBatch extends Model
      * Hitung ulang revisi aktif sebuah group dan set flag is_active.
      * Dipakai setiap kali sebuah revisi baru diimport.
      */
-    public static function recomputeActiveForGroup(?string $groupKey): ?self
+    public static function recomputeActiveForGroup(?string $groupKey, ?int $sessionId = null): ?self
     {
         if (!$groupKey) {
             return null;
         }
 
-        $batches = static::forGroup($groupKey)->orderByDesc('revision_no')->get();
+        $batches = static::forGroup($groupKey, $sessionId)->orderByDesc('revision_no')->get();
         if ($batches->isEmpty()) {
             return null;
         }
@@ -172,13 +184,13 @@ class ImportBatch extends Model
     /**
      * Revisi berikutnya untuk sebuah group (dipakai saat import revisi baru).
      */
-    public static function nextRevisionForGroup(?string $groupKey): int
+    public static function nextRevisionForGroup(?string $groupKey, ?int $sessionId = null): int
     {
         if (!$groupKey) {
             return 1;
         }
 
-        return ((int) static::forGroup($groupKey)->max('revision_no')) + 1;
+        return ((int) static::forGroup($groupKey, $sessionId)->max('revision_no')) + 1;
     }
 
     public function getDocTypeLabelAttribute(): string

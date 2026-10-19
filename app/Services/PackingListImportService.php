@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\ImportBatch;
 use App\Models\ImportFailedRow;
+use App\Models\ImportSession;
 use App\Models\Jancode;
 use App\Models\PackingList;
 
@@ -31,14 +32,26 @@ class PackingListImportService
         $docType    = strtolower($sheet['doc_type'] ?? 'proforma') === 'actual' ? 'actual' : 'proforma';
         $groupKey   = ImportBatch::buildGroupKey($header);
         $groupLabel = ImportBatch::buildGroupLabel($header);
-        $revisionNo = ImportBatch::nextRevisionForGroup($groupKey);
 
-        // Packing list = entitas utama yang stabil antar revisi.
-        $packingList = PackingList::findOrCreateForGroupKey($groupKey);
+        // Session induk: semua import wajib berada dalam satu session.
+        $sessionId = $meta['session_id'] ?? ImportSession::currentId();
+        $session   = $sessionId ? ImportSession::find($sessionId) : null;
+
+        if ($session && !$session->acceptsGroup($groupKey)) {
+            throw new \InvalidArgumentException(
+                'File ini memiliki style/OCF/destination/warehouse yang berbeda dari session aktif. Silakan buat session baru untuk packing list tersebut.'
+            );
+        }
+
+        $revisionNo  = ImportBatch::nextRevisionForGroup($groupKey, $sessionId);
+
+        // Packing list = (session, group_key) — entitas utama yang stabil antar revisi.
+        $packingList = PackingList::findOrCreateForGroupKey($groupKey, $sessionId);
 
         $totalCarton = array_sum(array_map(fn($i) => (int)($i['packing_list_qty_carton'] ?? 0), $items));
 
         $batch = ImportBatch::create([
+            'session_id'        => $sessionId,
             'packing_list_id'   => $packingList?->id,
             'batch_number'      => $meta['batch_number'] ?? ImportBatch::generateBatchNumber(),
             'batch_name'        => ($meta['batch_name'] ?? null) ?: sprintf('%s %s', strtoupper($docType), $groupLabel),
@@ -89,9 +102,10 @@ class PackingListImportService
             ),
         ]);
 
-        // Tentukan ulang revisi aktif group (ACTUAL mengalahkan PROFORMA) lalu
-        // bawa seluruh scan/pallet yang sudah terjadi ke revisi aktif tersebut.
-        (new PackingListRevisionService())->syncActiveRevision($groupKey);
+        // Ikat group ke session saat import pertama, lalu tentukan revisi aktif
+        // (ACTUAL mengalahkan PROFORMA) dan bawa scan lama ke revisi aktif.
+        $session?->bindGroup($groupKey, $header, $meta['supplier_name'] ?? null);
+        (new PackingListRevisionService())->syncActiveRevision($groupKey, $sessionId);
         $batch->refresh();
 
         return [

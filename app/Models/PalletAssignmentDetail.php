@@ -15,6 +15,7 @@ class PalletAssignmentDetail extends Model
         'assignment_id',
         'jancode_id',
         'packing_list_id',
+        'session_id',
         'qty_carton',
     ];
 

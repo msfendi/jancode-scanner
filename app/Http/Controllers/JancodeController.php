@@ -8,9 +8,8 @@ use App\Models\Jancode;
 use App\Models\JancodeLogs;
 use App\Models\ImportBatch;
 use App\Models\ImportFailedRow;
+use App\Models\ImportSession;
 use App\Models\ScanBatch;
-use App\Imports\JancodesImport;
-use App\Imports\JancodesNewFormatImport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -27,7 +26,9 @@ class JancodeController extends Controller
      */
     public function index(Request $request)
     {
-        return view('jancode.index');
+        $currentSession = ImportSession::current();
+
+        return view('jancode.index', compact('currentSession'));
     }
 
     public function scanLogs($id)
@@ -138,26 +139,30 @@ class JancodeController extends Controller
         return response()->json(['success' => 'Jancode deleted successfully.']);
     }
 
+    /**
+     * @deprecated Import lama (tanpa session/packing list) sudah tidak dipakai.
+     * Gunakan alur: Start Session -> Import Packing List (aiPreview/aiConfirm).
+     */
     public function import(Request $request)
     {
-        $request->validate([
-            'file' => 'required|mimes:xlsx,xls,csv'
-        ]);
-
-        Excel::import(new JancodesImport, $request->file('file'));
-
-        return response()->json(['message' => 'Jancodes imported successfully!']);
+        return $this->legacyImportDisabledResponse();
     }
 
+    /**
+     * @deprecated Lihat import().
+     */
     public function importNewFormat(Request $request)
     {
-        $request->validate([
-            'file' => 'required|mimes:xlsx,xls,csv'
-        ]);
+        return $this->legacyImportDisabledResponse();
+    }
 
-        Excel::import(new JancodesNewFormatImport, $request->file('file'));
-
-        return response()->json(['message' => 'Jancodes (new format) imported successfully!']);
+    private function legacyImportDisabledResponse()
+    {
+        return response()->json([
+            'success' => false,
+            'error'   => 'legacy_import_disabled',
+            'message' => 'Import lama dinonaktifkan. Mulai Session lalu gunakan halaman Import Packing List agar data masuk ke packing list & session yang benar.',
+        ], 410);
     }
 
     /**
@@ -168,6 +173,23 @@ class JancodeController extends Controller
         $request->validate([
             'file' => 'required|file|mimes:xlsx,xls|max:15360'
         ]);
+
+        $importSession = ImportSession::current();
+        if (!$importSession) {
+            return response()->json([
+                'success' => false,
+                'error'   => 'no_session',
+                'message' => 'Mulai session terlebih dahulu sebelum import packing list.',
+            ], 422);
+        }
+
+        if (!$importSession->isOpen()) {
+            return response()->json([
+                'success' => false,
+                'error'   => 'session_closed',
+                'message' => 'Session ini sudah ditutup. Buat session baru untuk import packing list.',
+            ], 422);
+        }
 
         try {
             $uploadedFile = $request->file('file');
@@ -181,10 +203,29 @@ class JancodeController extends Controller
                 ], 422);
             }
 
+            // Semua sheet harus memiliki info yang sama dengan session aktif.
+            $mismatch = [];
+            foreach ($preview['sheets'] as $sheet) {
+                $gk = ImportBatch::buildGroupKey($sheet['header']);
+                if (!$importSession->acceptsGroup($gk)) {
+                    $mismatch[] = ImportBatch::buildGroupLabel($sheet['header']);
+                }
+            }
+
+            if (!empty($mismatch)) {
+                return response()->json([
+                    'success' => false,
+                    'error'   => 'group_mismatch',
+                    'message' => 'File berisi packing list dengan info berbeda dari session ' . $importSession->code . ': '
+                        . implode(', ', array_unique($mismatch))
+                        . '. Buat session baru untuk packing list tersebut.',
+                ], 422);
+            }
+
             // Tandai duplikat terhadap data eksisting pada packing list (group) yang sama
             foreach ($preview['sheets'] as &$sheet) {
                 $groupKey = ImportBatch::buildGroupKey($sheet['header']);
-                $active   = ImportBatch::activeForGroup($groupKey);
+                $active   = ImportBatch::activeForGroup($groupKey, $importSession->id);
 
                 $existingKeys = [];
                 if ($active) {
@@ -203,7 +244,7 @@ class JancodeController extends Controller
 
                 $sheet['group_key']       = $groupKey;
                 $sheet['group_label']     = ImportBatch::buildGroupLabel($sheet['header']);
-                $sheet['next_revision']   = ImportBatch::nextRevisionForGroup($groupKey);
+                $sheet['next_revision']   = ImportBatch::nextRevisionForGroup($groupKey, $importSession->id);
                 $sheet['active_batch_no'] = $active->batch_number ?? null;
             }
             unset($sheet);
@@ -212,6 +253,12 @@ class JancodeController extends Controller
                 'success'          => true,
                 'data'             => $preview,
                 'original_filename'=> $originalName,
+                'session'          => [
+                    'id'          => $importSession->id,
+                    'code'        => $importSession->code,
+                    'group_key'   => $importSession->group_key,
+                    'group_label' => $importSession->group_label,
+                ],
             ]);
         } catch (\Throwable $e) {
             Log::error('Packing list import error: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
@@ -249,7 +296,37 @@ class JancodeController extends Controller
             ], 422);
         }
 
+        $importSession = ImportSession::current();
+        if (!$importSession) {
+            return response()->json([
+                'success' => false,
+                'error'   => 'no_session',
+                'message' => 'Mulai session terlebih dahulu sebelum import packing list.',
+            ], 422);
+        }
+
+        if (!$importSession->isOpen()) {
+            return response()->json([
+                'success' => false,
+                'error'   => 'session_closed',
+                'message' => 'Session ini sudah ditutup. Buat session baru untuk import packing list.',
+            ], 422);
+        }
+
+        foreach ($sheets as $sheet) {
+            $gk = ImportBatch::buildGroupKey($sheet['header'] ?? []);
+            if (!$importSession->acceptsGroup($gk)) {
+                return response()->json([
+                    'success' => false,
+                    'error'   => 'group_mismatch',
+                    'message' => 'Packing list ini memiliki style/OCF/destination/warehouse berbeda dari session '
+                        . $importSession->code . '. Buat session baru untuk packing list tersebut.',
+                ], 422);
+            }
+        }
+
         $meta = [
+            'session_id'        => $importSession->id,
             'original_filename' => $request->input('original_filename'),
             'batch_name'        => $request->input('batch_name'),
             'supplier_name'     => $request->input('supplier_name'),
@@ -260,31 +337,46 @@ class JancodeController extends Controller
         $importedCount = 0;
         $skippedCount  = 0;
 
-        DB::transaction(function () use ($sheets, $meta, $importService, &$created, &$importedCount, &$skippedCount) {
-            foreach ($sheets as $sheet) {
-                $result = $importService->importSheet($sheet, $meta);
-                if (!$result) {
-                    continue;
+        try {
+            DB::transaction(function () use ($sheets, $meta, $importService, &$created, &$importedCount, &$skippedCount) {
+                foreach ($sheets as $sheet) {
+                    $result = $importService->importSheet($sheet, $meta);
+                    if (!$result) {
+                        continue;
+                    }
+
+                    /** @var ImportBatch $batch */
+                    $batch = $result['batch'];
+
+                    $created[] = [
+                        'batch_id'     => $batch->id,
+                        'batch_number' => $batch->batch_number,
+                        'group_label'  => $batch->group_label,
+                        'doc_type'     => $batch->doc_type,
+                        'revision_no'  => $batch->revision_no,
+                        'imported'     => $result['imported'],
+                        'skipped'      => $result['skipped'],
+                        'total_carton' => $batch->total_carton,
+                    ];
+
+                    $importedCount += $result['imported'];
+                    $skippedCount  += $result['skipped'];
                 }
+            });
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'success' => false,
+                'error'   => 'group_mismatch',
+                'message' => $e->getMessage(),
+            ], 422);
+        } catch (\Throwable $e) {
+            Log::error('Import packing list gagal: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
 
-                /** @var ImportBatch $batch */
-                $batch = $result['batch'];
-
-                $created[] = [
-                    'batch_id'     => $batch->id,
-                    'batch_number' => $batch->batch_number,
-                    'group_label'  => $batch->group_label,
-                    'doc_type'     => $batch->doc_type,
-                    'revision_no'  => $batch->revision_no,
-                    'imported'     => $result['imported'],
-                    'skipped'      => $result['skipped'],
-                    'total_carton' => $batch->total_carton,
-                ];
-
-                $importedCount += $result['imported'];
-                $skippedCount  += $result['skipped'];
-            }
-        });
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal menyimpan import: ' . $e->getMessage(),
+            ], 500);
+        }
 
         if (empty($created)) {
             return response()->json([
@@ -357,15 +449,22 @@ class JancodeController extends Controller
      */
     public function packingLists(Request $request)
     {
+        $currentSession = ImportSession::current();
+        $sessionId      = $currentSession?->id;
+
         if ($request->ajax()) {
-            $active = $this->applyPackingListFilters(ImportBatch::active(), $request)
+            $active = $this->applyPackingListFilters(
+                    ImportBatch::active()->where('session_id', $sessionId ?? 0),
+                    $request
+                )
                 ->orderByDesc('id')
                 ->get();
 
             $groupKeys = $active->pluck('group_key')->filter()->unique()->values();
 
-            // Hitung jumlah revisi per group
+            // Hitung jumlah revisi per group dalam session yang sama
             $revisionCounts = ImportBatch::whereIn('group_key', $groupKeys)
+                ->where('session_id', $sessionId ?? 0)
                 ->selectRaw('group_key, COUNT(*) as total')
                 ->groupBy('group_key')
                 ->pluck('total', 'group_key');
@@ -395,7 +494,7 @@ class JancodeController extends Controller
             return response()->json(['data' => $data]);
         }
 
-        return view('jancode.packing-lists');
+        return view('jancode.packing-lists', compact('currentSession'));
     }
 
     /**
@@ -452,7 +551,12 @@ class JancodeController extends Controller
             return response()->json([]);
         }
 
-        $query = $this->applyPackingListParents(ImportBatch::active(), $request)
+        $sessionId = ImportSession::currentId();
+
+        $query = $this->applyPackingListParents(
+                ImportBatch::active()->where('session_id', $sessionId ?? 0),
+                $request
+            )
             ->whereNotNull($column)
             ->where($column, '!=', '');
 
@@ -515,7 +619,7 @@ class JancodeController extends Controller
         }
 
         // Riwayat revisi lain pada group yang sama (termasuk non-aktif)
-        $revisions = ImportBatch::forGroup($batch->group_key)
+        $revisions = ImportBatch::forGroup($batch->group_key, $batch->session_id)
             ->orderByDesc('revision_no')
             ->get(['id', 'batch_number', 'doc_type', 'revision_no', 'is_active', 'valid_rows', 'invalid_rows', 'total_carton', 'created_at', 'original_filename']);
 

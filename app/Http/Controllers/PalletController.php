@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\ImportBatch;
+use App\Models\ImportSession;
 use App\Models\Jancode;
 use App\Models\PalletAddress;
 use App\Models\PalletAssignment;
@@ -22,6 +23,8 @@ class PalletController extends Controller
         $this->ensureAddressesSeeded();
 
         $selectedRow = $request->input('row', 'all'); // 'all' atau 'B', 'C', dll
+
+        $currentSession = ImportSession::current();
 
         $query = PalletAddress::with(['assignment.details.jancode'])
             ->orderBy('row_label')
@@ -48,7 +51,9 @@ class PalletController extends Controller
             ->pluck('placed', 'jancode_id');
 
         $availableJancodes = Jancode::where('void', 'false')
-            ->whereIn('import_batch_id', ImportBatch::active()->pluck('id'))
+            ->whereIn('import_batch_id', ImportBatch::active()
+                ->where('session_id', ImportSession::currentId() ?? 0)
+                ->pluck('id'))
             ->get()
             ->map(function ($item) use ($placedCartonsPerJancode) {
                 $placed = (int)($placedCartonsPerJancode[$item->id] ?? 0);
@@ -145,7 +150,8 @@ class PalletController extends Controller
             'totalCartons',
             'totalCapacity',
             'availableJancodes',
-            'rowSummaries'
+            'rowSummaries',
+            'currentSession'
         ));
     }
 
@@ -472,6 +478,7 @@ class PalletController extends Controller
                         'assignment_id'   => $assignment->id,
                         'jancode_id'      => $jancodeId,
                         'packing_list_id' => $jancode->packing_list_id,
+                        'session_id'      => $activeBatch->session_id,
                         'qty_carton'      => $addQty,
                     ]);
                 }
@@ -510,6 +517,7 @@ class PalletController extends Controller
                     'assignment_id'   => $assignment->id,
                     'jancode_id'      => $jancodeId,
                     'packing_list_id' => $jancode->packing_list_id,
+                    'session_id'      => $activeBatch->session_id,
                     'qty_carton'      => $addQty,
                 ]);
             }
@@ -618,6 +626,7 @@ class PalletController extends Controller
                         'assignment_id'   => $targetAssignment->id,
                         'jancode_id'      => $jancode->id,
                         'packing_list_id' => $jancode->packing_list_id,
+                        'session_id'      => $sourceDetail->session_id,
                         'qty_carton'      => $moveQty,
                     ]);
                 }
@@ -656,6 +665,7 @@ class PalletController extends Controller
                     'assignment_id'   => $targetAssignment->id,
                     'jancode_id'      => $jancode->id,
                     'packing_list_id' => $jancode->packing_list_id,
+                    'session_id'      => $sourceDetail->session_id,
                     'qty_carton'      => $moveQty,
                 ]);
             }

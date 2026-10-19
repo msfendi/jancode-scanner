@@ -1,6 +1,13 @@
 @php
     $workflowSteps = [
         [
+            'key'   => 'session',
+            'label' => 'Sesi Import',
+            'desc'  => 'Mulai / pilih session induk',
+            'icon'  => 'fa-play-circle',
+            'route' => 'session.index',
+        ],
+        [
             'key'   => 'import',
             'label' => 'Import Packing List',
             'desc'  => 'Upload file Excel PROFORMA / ACTUAL',
@@ -47,7 +54,7 @@
                 <i class="fas fa-route mr-1"></i> Alur Kerja
             </div>
             <small class="text-muted d-none d-md-block">
-                Ikuti urutan langkah 1 &rarr; 4
+                Ikuti urutan langkah 1 &rarr; 5
             </small>
         </div>
         <div class="d-flex flex-wrap align-items-center">

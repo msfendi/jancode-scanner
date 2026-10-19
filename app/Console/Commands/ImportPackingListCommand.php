@@ -4,8 +4,11 @@ namespace App\Console\Commands;
 
 use App\Models\ImportBatch;
 use App\Models\ImportFailedRow;
+use App\Models\ImportSession;
 use App\Models\Jancode;
 use App\Models\JancodeLogs;
+use App\Models\PackingList;
+use App\Models\PalletAssignmentDetail;
 use App\Models\ScanBatch;
 use App\Services\JancodeImportService;
 use App\Services\PackingListImportService;
@@ -33,9 +36,12 @@ class ImportPackingListCommand extends Command
             DB::statement('PRAGMA foreign_keys = OFF');
             JancodeLogs::query()->delete();
             ScanBatch::query()->delete();
+            PalletAssignmentDetail::query()->delete();
             Jancode::query()->delete();
             ImportFailedRow::query()->delete();
             ImportBatch::query()->delete();
+            PackingList::query()->delete();
+            ImportSession::query()->delete();
             DB::statement('PRAGMA foreign_keys = ON');
         }
 
@@ -49,6 +55,11 @@ class ImportPackingListCommand extends Command
         $totalBatch = 0;
         $totalItems = 0;
         $totalBroken = 0;
+
+        // Satu session per kombinasi style|OCF|destination|warehouse (group_key),
+        // agar file dengan header sama tetap dianggap revisi, sedangkan group lain
+        // mendapat session sendiri.
+        $sessionByGroup = [];
 
         foreach ($files as $file) {
             $this->info('');
@@ -67,7 +78,25 @@ class ImportPackingListCommand extends Command
             }
 
             foreach ($parsed['sheets'] as $sheet) {
+                $groupKey = ImportBatch::buildGroupKey($sheet['header']);
+
+                if (!isset($sessionByGroup[$groupKey])) {
+                    $sessionByGroup[$groupKey] = ImportSession::create([
+                        'code'         => ImportSession::generateCode(),
+                        'notes'        => 'Import CLI: ' . basename($file),
+                        'group_key'    => $groupKey,
+                        'style_number' => $sheet['header']['style'] ?? null,
+                        'ocf_number'   => $sheet['header']['ocf'] ?? null,
+                        'destination'  => $sheet['header']['country'] ?? null,
+                        'warehouse'    => $sheet['header']['warehouse'] ?? null,
+                        'supplier_name'=> $sheet['header']['buyer'] ?? null,
+                        'status'       => 'open',
+                        'started_at'   => now(),
+                    ]);
+                }
+
                 $result = DB::transaction(fn() => $importer->importSheet($sheet, [
+                    'session_id'        => $sessionByGroup[$groupKey]->id,
                     'original_filename' => basename($file),
                     'imported_by'       => null,
                 ]));
