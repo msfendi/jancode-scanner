@@ -43,6 +43,17 @@ class PackingListImportService
             );
         }
 
+        // Satu kombinasi style|OCF|destination|warehouse = satu session.
+        // Jika kombinasi ini sudah dimiliki session lain, tolak agar packing
+        // list antar session tidak tercampur.
+        $owner = ImportSession::findByGroup($groupKey, $sessionId);
+        if ($owner) {
+            throw new \InvalidArgumentException(
+                "Kombinasi {$groupLabel} sudah menjadi milik session {$owner->code}. "
+                . 'Gunakan / buka kembali session tersebut agar data tidak tercampur dengan session lain.'
+            );
+        }
+
         $revisionNo  = ImportBatch::nextRevisionForGroup($groupKey, $sessionId);
 
         // Packing list = (session, group_key) — entitas utama yang stabil antar revisi.

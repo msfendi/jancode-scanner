@@ -24,6 +24,13 @@
                         <span class="badge badge-success mr-2">OPEN</span>
                     @else
                         <span class="badge badge-secondary mr-2">CLOSED</span>
+                        <form method="POST" action="{{ route('session.reopen', $sessionBanner) }}" class="d-inline mr-2"
+                            onsubmit="return confirm('Buka kembali session {{ $sessionBanner->code }} untuk melanjutkan pekerjaan?');">
+                            @csrf
+                            <button type="submit" class="btn btn-sm btn-success">
+                                <i class="fas fa-undo mr-1"></i> Buka Kembali
+                            </button>
+                        </form>
                     @endif
                     <a href="{{ route('session.index') }}" class="btn btn-sm btn-outline-primary">
                         <i class="fas fa-exchange-alt mr-1"></i> Ganti Session

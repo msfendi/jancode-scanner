@@ -203,6 +203,37 @@ class JancodeController extends Controller
                 ], 422);
             }
 
+            // Satu kombinasi style|OCF|destination|warehouse = satu session.
+            // Jika kombinasi file ini sudah dimiliki session lain, arahkan ke
+            // session tersebut (buka kembali bila sudah ditutup).
+            $fileGroupKeys = collect($preview['sheets'])
+                ->map(fn ($s) => ImportBatch::buildGroupKey($s['header']))
+                ->unique()
+                ->values();
+
+            if ($fileGroupKeys->count() === 1) {
+                $owner = ImportSession::findByGroup($fileGroupKeys->first(), $importSession->id);
+
+                if ($owner) {
+                    return response()->json([
+                        'success'     => false,
+                        'error'       => 'session_exists',
+                        'message'     => 'Kombinasi ' . $owner->group_label . ' sudah ada pada session '
+                            . $owner->code . ' (' . strtoupper($owner->status) . '). '
+                            . 'Gunakan / buka kembali session tersebut agar data tidak tercampur.',
+                        'session'     => [
+                            'id'          => $owner->id,
+                            'code'        => $owner->code,
+                            'status'      => $owner->status,
+                            'is_open'     => $owner->isOpen(),
+                            'group_label' => $owner->group_label,
+                        ],
+                        'reopen_url'  => route('session.reopen', $owner),
+                        'status_url'  => route('session.index'),
+                    ], 409);
+                }
+            }
+
             // Semua sheet harus memiliki info yang sama dengan session aktif.
             $mismatch = [];
             foreach ($preview['sheets'] as $sheet) {

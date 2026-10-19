@@ -66,6 +66,7 @@ Route::group(['middleware' => 'auth'], function () {
     Route::post('/session/start', [\App\Http\Controllers\ImportSessionController::class, 'start'])->name('session.start')->middleware(['auth', 'role:Admin']);
     Route::post('/session/{session}/select', [\App\Http\Controllers\ImportSessionController::class, 'select'])->name('session.select')->middleware(['auth', 'role:Admin']);
     Route::post('/session/{session}/close', [\App\Http\Controllers\ImportSessionController::class, 'close'])->name('session.close')->middleware(['auth', 'role:Admin']);
+    Route::post('/session/{session}/reopen', [\App\Http\Controllers\ImportSessionController::class, 'reopen'])->name('session.reopen')->middleware(['auth', 'role:Admin']);
 
     //Jancode
     Route::get('/jancode', [JancodeController::class, 'index'])->name('jancode.index')->middleware(['auth', 'role:Admin']);

@@ -145,11 +145,36 @@
 
                     <!-- Daftar Session -->
                     <div class="card shadow mb-4">
-                        <div class="card-header py-2 d-flex justify-content-between align-items-center">
-                            <h6 class="m-0 font-weight-bold text-primary">
-                                <i class="fas fa-history mr-1"></i> Daftar Session
-                            </h6>
-                            <span class="badge badge-light border">{{ $sessions->count() }} session</span>
+                        <div class="card-header py-2">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <h6 class="m-0 font-weight-bold text-primary">
+                                    <i class="fas fa-history mr-1"></i> Daftar Session
+                                </h6>
+                                <span class="badge badge-light border">{{ $sessions->count() }} session</span>
+                            </div>
+                            <form method="GET" action="{{ route('session.index') }}" class="form-row align-items-end">
+                                <div class="col-md-6 mb-1">
+                                    <label class="small text-muted mb-0">
+                                        Cari kode / style / OCF / destination / warehouse / catatan
+                                    </label>
+                                    <input type="text" name="q" value="{{ $search }}"
+                                        class="form-control form-control-sm"
+                                        placeholder="mis. TESTA1 / 90001 / JAPAN / WH1">
+                                </div>
+                                <div class="col-md-3 mb-1">
+                                    <label class="small text-muted mb-0">Status</label>
+                                    <select name="status" class="form-control form-control-sm">
+                                        <option value="">Semua status</option>
+                                        <option value="open" {{ $status === 'open' ? 'selected' : '' }}>OPEN</option>
+                                        <option value="closed" {{ $status === 'closed' ? 'selected' : '' }}>CLOSED</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3 mb-1">
+                                    <button type="submit" class="btn btn-sm btn-primary btn-block">
+                                        <i class="fas fa-search mr-1"></i> Cari
+                                    </button>
+                                </div>
+                            </form>
                         </div>
                         <div class="card-body p-0">
                             <div class="table-responsive">
@@ -157,7 +182,10 @@
                                     <thead class="thead-light">
                                         <tr>
                                             <th class="pl-3">Kode Session</th>
-                                            <th>Info Packing List</th>
+                                            <th>Style</th>
+                                            <th>OCF / CPO</th>
+                                            <th>Destination</th>
+                                            <th>Warehouse</th>
                                             <th class="text-center">Revisi</th>
                                             <th class="text-center">Packing List</th>
                                             <th>Catatan</th>
@@ -179,7 +207,16 @@
                                                     </div>
                                                 </td>
                                                 <td class="align-middle">
-                                                    <div class="small text-gray-800">{{ $s->group_label }}</div>
+                                                    <span class="small text-gray-800">{{ $s->style_number ?: '-' }}</span>
+                                                </td>
+                                                <td class="align-middle">
+                                                    <span class="small text-gray-800">{{ $s->ocf_number ?: '-' }}</span>
+                                                </td>
+                                                <td class="align-middle">
+                                                    <span class="small text-gray-800">{{ $s->destination ?: '-' }}</span>
+                                                </td>
+                                                <td class="align-middle">
+                                                    <span class="small text-gray-800">{{ $s->warehouse ?: '-' }}</span>
                                                 </td>
                                                 <td class="align-middle text-center">
                                                     <span class="badge badge-light border">{{ $s->import_batches_count }}</span>
@@ -188,7 +225,7 @@
                                                     <span class="badge badge-light border">{{ $s->packing_lists_count }}</span>
                                                 </td>
                                                 <td class="align-middle">
-                                                    <div class="text-muted small text-truncate" style="max-width: 260px;"
+                                                    <div class="text-muted small text-truncate" style="max-width: 220px;"
                                                         title="{{ $s->notes }}">
                                                         {{ $s->notes ?: '-' }}
                                                     </div>
@@ -204,7 +241,8 @@
                                                     @if (!$isCurrent)
                                                         <form method="POST" action="{{ route('session.select', $s) }}" class="d-inline">
                                                             @csrf
-                                                            <button type="submit" class="btn btn-sm btn-outline-primary">
+                                                            <button type="submit" class="btn btn-sm btn-outline-primary"
+                                                                title="Jadikan session aktif">
                                                                 <i class="fas fa-hand-pointer mr-1"></i> Gunakan
                                                             </button>
                                                         </form>
@@ -214,11 +252,21 @@
                                                         </span>
                                                     @endif
 
-                                                    @if ($s->isOpen())
+                                                    @if ($s->isClosed())
+                                                        <form method="POST" action="{{ route('session.reopen', $s) }}" class="d-inline"
+                                                            onsubmit="return confirm('Buka kembali session {{ $s->code }} untuk melanjutkan pekerjaan?');">
+                                                            @csrf
+                                                            <button type="submit" class="btn btn-sm btn-success"
+                                                                title="Buka kembali session (pekerjaan belum selesai)">
+                                                                <i class="fas fa-undo mr-1"></i> Buka Kembali
+                                                            </button>
+                                                        </form>
+                                                    @else
                                                         <form method="POST" action="{{ route('session.close', $s) }}" class="d-inline"
                                                             onsubmit="return confirm('Tutup session {{ $s->code }}? Import & scan baru tidak akan diizinkan.');">
                                                             @csrf
-                                                            <button type="submit" class="btn btn-sm btn-outline-secondary">
+                                                            <button type="submit" class="btn btn-sm btn-outline-secondary"
+                                                                title="Tutup session">
                                                                 <i class="fas fa-stop-circle"></i>
                                                             </button>
                                                         </form>
@@ -227,8 +275,12 @@
                                             </tr>
                                         @empty
                                             <tr>
-                                                <td colspan="7" class="text-center text-muted py-4">
-                                                    Belum ada session. Mulai session pertama Anda di atas.
+                                                <td colspan="10" class="text-center text-muted py-4">
+                                                    @if ($search !== '' || $status)
+                                                        Tidak ada session yang cocok dengan pencarian.
+                                                    @else
+                                                        Belum ada session. Mulai session pertama Anda di atas.
+                                                    @endif
                                                 </td>
                                             </tr>
                                         @endforelse

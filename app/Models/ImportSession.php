@@ -74,6 +74,31 @@ class ImportSession extends Model
         return $query->where('status', 'open');
     }
 
+    /**
+     * Pencarian bebas untuk daftar session (kode, catatan, dan info
+     * style / OCF / destination / warehouse / supplier).
+     */
+    public function scopeSearch(Builder $query, ?string $term): Builder
+    {
+        $term = trim((string) $term);
+        if ($term === '') {
+            return $query;
+        }
+
+        $like = '%' . $term . '%';
+
+        return $query->where(function (Builder $q) use ($like) {
+            $q->where('code', 'like', $like)
+              ->orWhere('notes', 'like', $like)
+              ->orWhere('group_key', 'like', $like)
+              ->orWhere('style_number', 'like', $like)
+              ->orWhere('ocf_number', 'like', $like)
+              ->orWhere('destination', 'like', $like)
+              ->orWhere('warehouse', 'like', $like)
+              ->orWhere('supplier_name', 'like', $like);
+        });
+    }
+
     // ── Session aktif (dipilih user) ─────────────────────────────────────
 
     public static function current(): ?self
@@ -140,6 +165,29 @@ class ImportSession extends Model
     }
 
     /**
+     * Session lain yang sudah memegang kombinasi group_key ini.
+     *
+     * Dipakai untuk memastikan satu kombinasi style|OCF|destination|warehouse
+     * hanya dimiliki satu session, sehingga packing list antar session tidak
+     * pernah tercampur.
+     */
+    public static function findByGroup(string $groupKey, ?int $exceptId = null): ?self
+    {
+        if ($groupKey === '') {
+            return null;
+        }
+
+        return static::query()
+            ->where('group_key', $groupKey)
+            ->when($exceptId, fn (Builder $q) => $q->where('id', '!=', $exceptId))
+            // Utamakan session yang masih OPEN agar user diarahkan ke session
+            // yang memang bisa dipakai untuk import / scan lanjutan.
+            ->orderByRaw("CASE WHEN status = 'open' THEN 0 ELSE 1 END")
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    /**
      * Ikat group_key + metadata header saat import pertama.
      */
     public function bindGroup(string $groupKey, array $header, ?string $supplierName = null): void
@@ -168,6 +216,22 @@ class ImportSession extends Model
         if ((int) session(self::SESSION_KEY) === (int) $this->id) {
             static::setCurrent(null);
         }
+    }
+
+    /**
+     * Buka kembali session yang sudah ditutup (pekerjaan belum selesai).
+     * Session menjadi OPEN lagi dan siap dipakai untuk import / scan lanjutan.
+     */
+    public function reopen(): void
+    {
+        if ($this->isOpen()) {
+            return;
+        }
+
+        $this->update([
+            'status'    => 'open',
+            'closed_at' => null,
+        ]);
     }
 
     public function getLabelAttribute(): string

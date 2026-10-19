@@ -418,7 +418,52 @@
                     error: function (xhr) {
                         $('#aiLoadingSection').addClass('d-none');
                         $('#aiUploadSection').removeClass('d-none');
-                        const msg = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : 'Terjadi kesalahan saat memproses Excel.';
+
+                        const res = xhr.responseJSON || {};
+
+                        // Kombinasi ini sudah dimiliki session lain -> tawarkan
+                        // pindah ke session tersebut (buka kembali bila ditutup).
+                        if (res.error === 'session_exists' && res.session) {
+                            Swal.fire({
+                                title: 'Session sudah ada',
+                                html: `Kombinasi <strong>${res.session.group_label || '-'}</strong> sudah ada pada session `
+                                    + `<strong>${res.session.code}</strong> <span class="badge badge-light border">${(res.session.status || '').toUpperCase()}</span>.<br>`
+                                    + `<small class="text-muted">Gunakan session itu agar data tidak tercampur dengan session lain.</small>`,
+                                icon: 'info',
+                                showCancelButton: true,
+                                confirmButtonText: res.session.is_open ? 'Gunakan Session' : 'Buka Kembali &amp; Gunakan',
+                                cancelButtonText: 'Batal',
+                            }).then(function (r) {
+                                if (!r.isConfirmed) return;
+
+                                $.ajax({
+                                    url: res.reopen_url,
+                                    type: 'POST',
+                                    headers: { 'Accept': 'application/json' },
+                                }).done(function (rr) {
+                                    if (rr && rr.code) {
+                                        $('.session-pill').html('<i class="fas fa-layer-group mr-1"></i>' + rr.code);
+                                    }
+                                    if (rr && rr.group_label) {
+                                        $('.session-banner .font-weight-bold').first().text(rr.group_label);
+                                    }
+                                    Swal.fire({
+                                        icon: 'success',
+                                        title: 'Session aktif',
+                                        text: (rr && rr.message) || 'Session dipilih.',
+                                        timer: 1600,
+                                        showConfirmButton: false,
+                                    }).then(function () {
+                                        $('#aiUploadForm').trigger('submit');
+                                    });
+                                }).fail(function () {
+                                    Swal.fire('Gagal', 'Tidak bisa membuka session tersebut.', 'error');
+                                });
+                            });
+                            return;
+                        }
+
+                        const msg = res.message || 'Terjadi kesalahan saat memproses Excel.';
                         Swal.fire('Proses Gagal', msg, 'error');
                     }
                 });

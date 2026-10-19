@@ -51,6 +51,24 @@
                                 </a>
                             </div>
                         </div>
+                    @elseif ($currentSession->isClosed())
+                        <div class="alert alert-warning border-left-warning shadow-sm mb-3 py-2">
+                            <div class="d-flex flex-wrap align-items-center justify-content-between">
+                                <div class="small mb-2 mb-md-0">
+                                    <i class="fas fa-lock mr-1"></i>
+                                    Session <strong>{{ $currentSession->code }}</strong> sudah ditutup
+                                    ({{ $currentSession->group_label }}). Data tetap bisa dilihat, tetapi
+                                    import &amp; scan baru diblokir.
+                                </div>
+                                <form method="POST" action="{{ route('session.reopen', $currentSession) }}" class="mb-0"
+                                    onsubmit="return confirm('Buka kembali session {{ $currentSession->code }} untuk melanjutkan pekerjaan?');">
+                                    @csrf
+                                    <button type="submit" class="btn btn-sm btn-success font-weight-bold">
+                                        <i class="fas fa-undo mr-1"></i> Buka Kembali Session
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
                     @endif
 
                     <!-- Penjelasan -->

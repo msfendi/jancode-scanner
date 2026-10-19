@@ -86,15 +86,18 @@ class ImportBatch extends Model
         return $query->where('is_active', true);
     }
 
+    /**
+     * Filter batch pada satu group packing list.
+     *
+     * SELALU dibatasi ke satu session (session_id null = data legacy tanpa
+     * session). Dengan begitu packing list pada satu session tidak akan pernah
+     * tercampur / memengaruhi session lain walau group_key-nya identik.
+     */
     public function scopeForGroup(Builder $query, ?string $groupKey, ?int $sessionId = null): Builder
     {
-        $query->where('group_key', $groupKey);
-
-        if ($sessionId !== null) {
-            $query->where('session_id', $sessionId);
-        }
-
-        return $query;
+        return $query
+            ->where('group_key', $groupKey)
+            ->where('session_id', $sessionId);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────
