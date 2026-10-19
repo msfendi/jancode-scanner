@@ -96,17 +96,10 @@
                         </div>
                         <div class="card-body">
 
-                            <div class="form-row">
-                                <div class="col-md-9">
-                                    <input type="text" id="scanJan" class="form-control form-control-lg"
-                                        placeholder="Scan barcode JAN (1 scan = 1 karton)..." autocomplete="off">
-                                </div>
-                                <div class="col-md-3 mt-2 mt-md-0">
-                                    <button id="btn-add-scan"
-                                        class="btn btn-success btn-lg btn-block font-weight-bold">
-                                        <i class="fas fa-plus-circle mr-1"></i> Tambah
-                                    </button>
-                                </div>
+                            <div class="input-group input-group-lg">
+                                <input type="text" id="scanJan" class="form-control"
+                                    placeholder="Scan barcode JAN — otomatis masuk log (1 scan = 1 karton)"
+                                    autocomplete="off">
                             </div>
 
                             <button id="btn-open-pick" class="btn btn-outline-primary btn-sm mt-2">
@@ -243,7 +236,6 @@
                 packingLists: "{{ route('cartonOut.packingLists') }}",
                 load:         "{{ route('cartonOut.load') }}",
                 rows:         "{{ route('cartonOut.rows') }}",
-                lookup:       "{{ route('cartonOut.lookup') }}",
                 store:        "{{ route('cartonOut.store') }}",
                 history:      "{{ route('cartonOut.history') }}",
             };
@@ -302,6 +294,9 @@
             // ── Helpers ────────────────────────────────────────────────────
             function rowById(id) {
                 return rows.find(r => String(r.id) === String(id)) || null;
+            }
+            function rowByJan(code) {
+                return rows.find(r => String(r.jancode) === String(code)) || null;
             }
             function toast(icon, title) {
                 Swal.fire({
@@ -446,55 +441,90 @@
                 return addQty;
             }
 
-            // ── Scan barcode (1 scan = 1 karton) ───────────────────────────
-            $('#scanJan').on('keydown', function (e) {
-                if (e.key === 'Enter') {
+            // ── Scan barcode (otomatis, seperti scan in: 1 scan = 1 karton) ─
+            const $scanInput = $('#scanJan');
+            let bufferTimer = null;
+            let lastQueued = '';
+            let lastQueuedTime = 0;
+
+            $scanInput.on('keydown', function (e) {
+                if (e.key === 'Enter' || e.keyCode === 13 || e.key === 'Tab' || e.keyCode === 9) {
                     e.preventDefault();
-                    $('#btn-add-scan').trigger('click');
+                    clearTimeout(bufferTimer);
+                    queueScan();
                 }
             });
 
-            $('#btn-add-scan').on('click', function () {
-                const code = ($('#scanJan').val() || '').replace(/[^0-9]/g, '');
+            $scanInput.on('input', function () {
+                clearTimeout(bufferTimer);
+                const val = $scanInput.val().trim();
+                if (!val) return;
+                // Barcode JAN umumnya 13 digit; beri jeda pendek setelah panjang tercapai.
+                bufferTimer = setTimeout(queueScan, val.length >= 13 ? 30 : 500);
+            });
 
-                if (code === '') {
-                    toast('warning', 'Scan / masukkan barcode terlebih dahulu.');
-                    return;
-                }
+            function showScanInfo(level, html) {
+                $('#scanInfo').html('<div class="alert alert-' + level + ' py-2 mb-0">' + html + '</div>');
+            }
+
+            function queueScan() {
+                const code = ($scanInput.val() || '').replace(/[^0-9]/g, '');
+                if (code === '') return;
+
                 if (!currentBatchId) {
                     toast('warning', 'Muat packing list terlebih dahulu.');
+                    $scanInput.val('');
                     return;
                 }
 
-                const $btn = $(this).prop('disabled', true);
+                // Cegah barcode yang sama diproses dua kali (Enter + debounce).
+                const now = Date.now();
+                if (code === lastQueued && (now - lastQueuedTime) < 150) {
+                    $scanInput.val('');
+                    return;
+                }
+                lastQueued = code;
+                lastQueuedTime = now;
+                $scanInput.val('');
 
-                $.get(URLS.lookup, { jancode: code })
-                    .done(function (res) {
-                        if (!res.success) {
-                            $('#scanInfo').html('<div class="alert alert-warning py-2 mb-0">' + res.message + '</div>');
-                            return;
-                        }
-                        const row = res.row;
-                        const added = addToLog(row.id, 1, defaultPallet(row));
+                const row = rowByJan(code);
+                if (!row) {
+                    showScanInfo('danger', 'Barcode <strong>' + code + '</strong> tidak ada pada packing list ini.');
+                    return;
+                }
 
-                        if (added > 0) {
-                            $('#scanInfo').html(
-                                '<div class="alert alert-success py-2 mb-0">' +
-                                '<strong>' + row.jancode + '</strong> — ' + (row.color || '-') + ' / ' + (row.size || '-') +
-                                '<br><span class="small">Receive: ' + row.receive + ' · Di pallet: ' + row.placed + ' · Belum di pallet: ' + row.unplaced + '</span>' +
-                                '</div>'
-                            );
-                        }
-                        $('#scanJan').val('').trigger('focus');
-                    })
-                    .fail(function (xhr) {
-                        const msg = (xhr.responseJSON && xhr.responseJSON.message) || 'Barcode tidak ditemukan.';
-                        $('#scanInfo').html('<div class="alert alert-danger py-2 mb-0">' + msg + '</div>');
-                        $('#scanJan').val('').trigger('focus');
-                    })
-                    .always(function () {
-                        $btn.prop('disabled', false);
-                    });
+                const added = addToLog(row.id, 1, defaultPallet(row));
+
+                if (added > 0) {
+                    showScanInfo('success',
+                        '<strong>' + row.jancode + '</strong> — ' + (row.color || '-') + ' / ' + (row.size || '-') +
+                        '<br><span class="small">Receive: ' + row.receive + ' · Di pallet: ' + row.placed + ' · Belum di pallet: ' + row.unplaced + '</span>'
+                    );
+                }
+            }
+
+            // ── Auto-focus input scan (seperti scan in) ────────────────────
+            function focusScanInput() {
+                if (!currentBatchId) return;
+                if (Swal.isVisible()) return;
+                if ($('#pickModal').hasClass('show')) return;
+                $scanInput.trigger('focus');
+            }
+
+            $(window).on('focus', focusScanInput);
+
+            $(document).on('mouseup', function (e) {
+                if ($(e.target).closest('input, textarea, select, button, a, label, .select2-container, .swal2-container, .modal, .dropdown-menu').length) return;
+                focusScanInput();
+            });
+
+            $(document).on('keydown', function () {
+                if (Swal.isVisible()) return;
+                if ($('#pickModal').hasClass('show')) return;
+                const tag = (document.activeElement && document.activeElement.tagName) || '';
+                if (tag === 'BODY' || tag === 'HTML') {
+                    $scanInput.trigger('focus');
+                }
             });
 
             // ── Render log ─────────────────────────────────────────────────
