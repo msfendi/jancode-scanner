@@ -156,6 +156,10 @@
     #fullscreenOverlay.active {
         display: flex;
     }
+    /* Saat fullscreen, modal & swal harus tampil di atas overlay (z-index 9999) */
+    body.fullscreen-mode .modal { z-index: 10050 !important; }
+    body.fullscreen-mode .modal-backdrop { z-index: 10040 !important; }
+    body.fullscreen-mode .swal2-container { z-index: 10060 !important; }
     #fullscreenTopBar {
         background: #2c3152;
         color: #fff;
@@ -1271,12 +1275,14 @@
             applyFsZoom();
 
             overlay.classList.add('active');
+            document.body.classList.add('fullscreen-mode');
             document.body.style.overflow = 'hidden';
         }
 
         function closeFullscreen() {
             const overlay = document.getElementById('fullscreenOverlay');
             overlay.classList.remove('active');
+            document.body.classList.remove('fullscreen-mode');
             document.body.style.overflow = '';
             document.getElementById('fullscreenBoard').innerHTML = '';
             fsBoardScroll = null;
@@ -1576,9 +1582,11 @@
             window._palletLive = { connect: connect };
         })();
 
-        // Close fullscreen with Escape key
+        // Close fullscreen with Escape key (kecuali sedang ada modal / swal terbuka)
         document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape' && document.getElementById('fullscreenOverlay').classList.contains('active')) {
+            if (e.key !== 'Escape') return;
+            if (document.querySelector('.modal.show') || Swal.isVisible()) return;
+            if (document.getElementById('fullscreenOverlay').classList.contains('active')) {
                 closeFullscreen();
             }
         });
