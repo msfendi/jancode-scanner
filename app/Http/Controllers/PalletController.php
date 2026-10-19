@@ -9,6 +9,7 @@ use App\Models\PalletAssignment;
 use App\Models\PalletAssignmentDetail;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class PalletController extends Controller
 {
@@ -146,6 +147,143 @@ class PalletController extends Controller
             'availableJancodes',
             'rowSummaries'
         ));
+    }
+
+    /**
+     * SSE stream untuk live update pallet (tanpa Vite / WebSocket).
+     * Emit event 'pallet' tiap ada perubahan assignment/detail.
+     */
+    public function stream(Request $request): StreamedResponse
+    {
+        if (session_status() === PHP_SESSION_ACTIVE) { session_write_close(); }
+        $lastHash = (string) $request->query('t', '');
+        $maxSeconds = 55;
+        $pollMs = 2000;
+        return new StreamedResponse(function () use ($lastHash, $maxSeconds, $pollMs) {
+            set_time_limit(0);
+            ignore_user_abort(true);
+            if (ob_get_level() > 0) { @ob_end_clean(); }
+            $start = time();
+            $prevHash = $lastHash;
+            $initial = $this->buildLiveSnapshot();
+            $initialHash = $initial['hash'];
+            if ($prevHash === '' || $prevHash !== $initialHash) {
+                echo 'event: pallet' . PHP_EOL;
+                echo 'data: ' . json_encode($initial['payload'], JSON_UNESCAPED_UNICODE) . PHP_EOL . PHP_EOL;
+                @ob_flush(); @flush();
+                $prevHash = $initialHash;
+            } else {
+                echo ': connected' . PHP_EOL . PHP_EOL;
+                @ob_flush(); @flush();
+            }
+            while ((time() - $start) < $maxSeconds) {
+                if (connection_aborted()) break;
+                usleep($pollMs * 1000);
+                $snap = $this->buildLiveSnapshot();
+                if ($snap['hash'] !== $prevHash) {
+                    echo 'event: pallet' . PHP_EOL;
+                    echo 'data: ' . json_encode($snap['payload'], JSON_UNESCAPED_UNICODE) . PHP_EOL . PHP_EOL;
+                    @ob_flush(); @flush();
+                    $prevHash = $snap['hash'];
+                } else {
+                    echo ': hb ' . time() . PHP_EOL . PHP_EOL;
+                    @ob_flush(); @flush();
+                }
+            }
+            echo 'event: done' . PHP_EOL;
+            echo 'data: closing' . PHP_EOL . PHP_EOL;
+            @ob_flush(); @flush();
+        }, 200, [
+            'Content-Type' => 'text/event-stream',
+            'Cache-Control' => 'no-cache, no-transform',
+            'Connection' => 'keep-alive',
+            'X-Accel-Buffering' => 'no',
+            'Pragma' => 'no-cache',
+        ]);
+    }
+
+    private function buildLiveSnapshot(): array
+    {
+        $addresses = PalletAddress::with('assignment')->orderBy('id')->get(['id','code','row_label','col_label','position_no','max_carton']);
+        $assignments = PalletAssignment::with(['details.jancode','address'])->get();
+        $maxA = PalletAssignment::max('updated_at') ?: '0';
+        $maxD = PalletAssignmentDetail::max('updated_at') ?: '0';
+        $sum = (int) $assignments->sum('total_carton');
+        $cnt = $assignments->count();
+        $hash = md5($maxA . '|' . $maxD . '|' . $sum . '|' . $cnt);
+        $pallets = [];
+        foreach ($addresses as $a) {
+            $asg = $a->assignment;
+            $pallets[] = [
+                'id' => $a->id,
+                'code' => $a->code,
+                'row' => $a->row_label,
+                'col' => $a->col_label,
+                'pos' => $a->position_no,
+                'cartons' => $asg ? (int)$asg->total_carton : 0,
+                'style' => $asg ? $asg->style : null,
+                'country' => $asg ? $asg->country : null,
+                'ocf' => $asg ? ($asg->ocf ?? null) : null,
+            ];
+        }
+        $occupied = collect($pallets)->where('cartons','>',0)->count();
+        $total = count($pallets);
+        $vacant = $total - $occupied;
+        $rowSummaries = [];
+        foreach (['B','C','D','E','F','G','H','I'] as $r) {
+            $inRow = $assignments->filter(fn($x) => $x->address && $x->address->row_label === $r && $x->total_carton > 0);
+            $first = $inRow->first();
+            $totalCartons = (int) $inRow->sum('total_carton');
+            $totalPcs = 0;
+            $colorBreakdown = [];
+            foreach ($inRow as $asg) {
+                foreach ($asg->details as $det) {
+                    $jc = $det->jancode;
+                    if (!$jc) continue;
+                    $cName = $jc->color ?: '-';
+                    $sName = $jc->size ?: '-';
+                    $ctn = (int)$det->qty_carton;
+                    $pcs = $ctn * (int)($jc->qty_per_carton ?: 0);
+                    $totalPcs += $pcs;
+                    if (!isset($colorBreakdown[$cName])) {
+                        $colorBreakdown[$cName] = ['sizes'=>[],'total_cartons'=>0,'total_pcs'=>0];
+                    }
+                    if (!isset($colorBreakdown[$cName]['sizes'][$sName])) $colorBreakdown[$cName]['sizes'][$sName]=0;
+                    $colorBreakdown[$cName]['sizes'][$sName]+= $ctn;
+                    $colorBreakdown[$cName]['total_cartons']+= $ctn;
+                    $colorBreakdown[$cName]['total_pcs']+= $pcs;
+                }
+            }
+            if ($first) {
+                $firstJc = $first->details->first()?->jancode;
+                $rowSummaries[$r] = [
+                    'is_locked' => true,
+                    'country' => $first->country,
+                    'style' => $first->style,
+                    'ocf' => $first->ocf ?: ($firstJc ? ($firstJc->ocf ?? null) : null),
+                    'total_cartons' => $totalCartons,
+                    'total_pcs' => $totalPcs,
+                    'color_breakdown' => $colorBreakdown,
+                ];
+            } else {
+                $rowSummaries[$r] = ['is_locked'=>false,'country'=>null,'style'=>null,'ocf'=>null,'total_cartons'=>0,'total_pcs'=>0,'color_breakdown'=>[]];
+            }
+        }
+        $payload = [
+            'ts' => time(),
+            'hash' => $hash,
+            'stats' => [
+                'total' => $total,
+                'occupied' => $occupied,
+                'vacant' => $vacant,
+                'totalCartons' => $sum,
+                'totalCapacity' => $total * 42,
+                'pct' => $total ? round($occupied/$total*100,1) : 0,
+            ],
+            'pallets' => $pallets,
+            'rows' => $rowSummaries,
+        ];
+        return ['hash'=>$hash, 'payload'=>$payload];
     }
 
     /**

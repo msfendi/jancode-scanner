@@ -81,6 +81,7 @@ Route::group(['middleware' => 'auth'], function () {
     // Pallet Location & Placement
     Route::prefix('pallet')->name('pallet.')->middleware(['auth', 'role:Admin'])->group(function () {
         Route::get('/', [\App\Http\Controllers\PalletController::class, 'index'])->name('index');
+        Route::get('/stream', [\App\Http\Controllers\PalletController::class, 'stream'])->name('stream');
         Route::get('/detail/{id}', [\App\Http\Controllers\PalletController::class, 'getDetail'])->name('detail');
         Route::post('/store', [\App\Http\Controllers\PalletController::class, 'storeAssignment'])->name('store');
         Route::post('/move', [\App\Http\Controllers\PalletController::class, 'moveCarton'])->name('move');

@@ -256,6 +256,15 @@
                         </div>
                     </div>
 
+                    <!-- Live Indicator -->
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <small class="text-muted"><span id="liveDot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ccc;vertical-align:middle;margin-right:6px;"></span><span id="liveText">Live: menghubungkan…</span> <span class="text-muted ml-2" id="liveTs"></span></small>
+                        <div>
+                            <button type="button" class="btn btn-xs btn-outline-secondary" id="btnLivePause" title="Jeda live update">Jeda</button>
+                            <small class="text-muted ml-2" id="liveHash" title="hash"></small>
+                        </div>
+                    </div>
+
                     <!-- Statistics Cards -->
                     <div class="row mb-4">
                         <div class="col-xl-3 col-md-6 mb-3">
@@ -281,8 +290,8 @@
                                     <div class="row no-gutters align-items-center">
                                         <div class="col mr-2">
                                             <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">Pallet Terisi (Merah)</div>
-                                            <div class="h5 mb-0 font-weight-bold text-danger">{{ $occupiedCount }} Pallet</div>
-                                            <div class="small text-muted">{{ $totalPositions > 0 ? round(($occupiedCount / $totalPositions) * 100, 1) : 0 }}% Terpakai</div>
+                                            <div class="h5 mb-0 font-weight-bold text-danger"><span id="statOccupied">{{ $occupiedCount }}</span> Pallet</div>
+                                            <div class="small text-muted"><span id="statPct">{{ $totalPositions > 0 ? round(($occupiedCount / $totalPositions) * 100, 1) : 0 }}</span>% Terpakai</div>
                                         </div>
                                         <div class="col-auto">
                                             <i class="fas fa-pallet fa-2x text-danger opacity-50"></i>
@@ -298,7 +307,7 @@
                                     <div class="row no-gutters align-items-center">
                                         <div class="col mr-2">
                                             <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Pallet Kosong (Hijau)</div>
-                                            <div class="h5 mb-0 font-weight-bold text-success">{{ $vacantCount }} Pallet</div>
+                                            <div class="h5 mb-0 font-weight-bold text-success"><span id="statVacant">{{ $vacantCount }}</span> Pallet</div>
                                             <div class="small text-muted">Siap ditempatkan</div>
                                         </div>
                                         <div class="col-auto">
@@ -315,7 +324,7 @@
                                     <div class="row no-gutters align-items-center">
                                         <div class="col mr-2">
                                             <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Total Karton Ditempatkan</div>
-                                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ number_format($totalCartons) }} Karton</div>
+                                            <div class="h5 mb-0 font-weight-bold text-gray-800"><span id="statCartons">{{ number_format($totalCartons) }}</span> Karton</div>
                                             <div class="small text-muted">Dari total kapasitas {{ number_format($totalCapacity) }}</div>
                                         </div>
                                         <div class="col-auto">
@@ -495,16 +504,14 @@
                                                         <div class="pallet-vert-row">
                                                             <span class="pallet-pos-tag">{{ $p }}</span>
                                                             @if($addrA)
-                                                                <div class="pallet-box {{ $isOccA ? 'pallet-occupied' : 'pallet-vacant' }}"
-                                                                     onclick="openPalletModal({{ $addrA->id }})"
+                                                                <div class="pallet-box {{ $isOccA ? 'pallet-occupied' : 'pallet-vacant' }}" data-pallet-id="{{ $addrA->id }}" data-code="{{ $addrA->code }}" onclick="openPalletModal({{ $addrA->id }})"
                                                                      title="{{ $addrA->code }}: {{ $isOccA ? $cartonsA . '/42 Karton (' . $addrA->assignment->style . ' - ' . $addrA->assignment->country . ')' : 'Kosong (Maks 42)' }}">
                                                                     <span class="font-weight-bold">{{ $addrA->code }}</span>
                                                                     <span class="small font-weight-bold">{{ $isOccA ? $cartonsA . ' ctn' : '0' }}</span>
                                                                 </div>
                                                             @endif
                                                             @if($addrB)
-                                                                <div class="pallet-box {{ $isOccB ? 'pallet-occupied' : 'pallet-vacant' }}"
-                                                                     onclick="openPalletModal({{ $addrB->id }})"
+                                                                <div class="pallet-box {{ $isOccB ? 'pallet-occupied' : 'pallet-vacant' }}" data-pallet-id="{{ $addrB->id }}" data-code="{{ $addrB->code }}" onclick="openPalletModal({{ $addrB->id }})"
                                                                      title="{{ $addrB->code }}: {{ $isOccB ? $cartonsB . '/42 Karton (' . $addrB->assignment->style . ' - ' . $addrB->assignment->country . ')' : 'Kosong (Maks 42)' }}">
                                                                     <span class="font-weight-bold">{{ $addrB->code }}</span>
                                                                     <span class="small font-weight-bold">{{ $isOccB ? $cartonsB . ' ctn' : '0' }}</span>
@@ -539,16 +546,14 @@
                                                         <div class="pallet-vert-row">
                                                             <span class="pallet-pos-tag">{{ $p }}</span>
                                                             @if($addrC)
-                                                                <div class="pallet-box {{ $isOccC ? 'pallet-occupied' : 'pallet-vacant' }}"
-                                                                     onclick="openPalletModal({{ $addrC->id }})"
+                                                                <div class="pallet-box {{ $isOccC ? 'pallet-occupied' : 'pallet-vacant' }}" data-pallet-id="{{ $addrC->id }}" data-code="{{ $addrC->code }}" onclick="openPalletModal({{ $addrC->id }})"
                                                                      title="{{ $addrC->code }}: {{ $isOccC ? $cartonsC . '/42 Karton (' . $addrC->assignment->style . ' - ' . $addrC->assignment->country . ')' : 'Kosong (Maks 42)' }}">
                                                                     <span class="font-weight-bold">{{ $addrC->code }}</span>
                                                                     <span class="small font-weight-bold">{{ $isOccC ? $cartonsC . ' ctn' : '0' }}</span>
                                                                 </div>
                                                             @endif
                                                             @if($addrD)
-                                                                <div class="pallet-box {{ $isOccD ? 'pallet-occupied' : 'pallet-vacant' }}"
-                                                                     onclick="openPalletModal({{ $addrD->id }})"
+                                                                <div class="pallet-box {{ $isOccD ? 'pallet-occupied' : 'pallet-vacant' }}" data-pallet-id="{{ $addrD->id }}" data-code="{{ $addrD->code }}" onclick="openPalletModal({{ $addrD->id }})"
                                                                      title="{{ $addrD->code }}: {{ $isOccD ? $cartonsD . '/42 Karton (' . $addrD->assignment->style . ' - ' . $addrD->assignment->country . ')' : 'Kosong (Maks 42)' }}">
                                                                     <span class="font-weight-bold">{{ $addrD->code }}</span>
                                                                     <span class="small font-weight-bold">{{ $isOccD ? $cartonsD . ' ctn' : '0' }}</span>
@@ -1340,6 +1345,234 @@
                 if (e.key === 'Enter') document.getElementById('fsBtnSearch').click();
             });
         });
+
+
+        // ================= LIVE SSE (tanpa Vite) =================
+        (function(){
+            const streamUrl = "{{ route('pallet.stream') }}";
+            const dot = document.getElementById('liveDot');
+            const liveText = document.getElementById('liveText');
+            const liveTs = document.getElementById('liveTs');
+            const liveHash = document.getElementById('liveHash');
+            const btnPause = document.getElementById('btnLivePause');
+            let paused = false;
+            let es = null;
+            let lastHash = '';
+            let reconnectTimer = null;
+
+            function setLiveState(color, text){
+                if(dot){ dot.style.background = color; }
+                if(liveText){ liveText.textContent = text; }
+            }
+            function applyPayload(data){
+                if(!data || !data.pallets) return;
+                lastHash = data.hash || '';
+                if(liveHash) liveHash.textContent = lastHash ? ('#' + lastHash.slice(0,6)) : '';
+                if(liveTs) liveTs.textContent = data.ts ? ('update ' + new Date(data.ts*1000).toLocaleTimeString()) : '';
+                // stats
+                if(data.stats){
+                    const s = data.stats;
+                    const elOcc = document.getElementById('statOccupied'); if(elOcc) elOcc.textContent = s.occupied;
+                    const elVac = document.getElementById('statVacant'); if(elVac) elVac.textContent = s.vacant;
+                    const elCtn = document.getElementById('statCartons'); if(elCtn) elCtn.textContent = (s.totalCartons||0).toLocaleString('id-ID');
+                    const elPct = document.getElementById('statPct'); if(elPct) elPct.textContent = s.pct;
+                }
+                // rows: update header lock + totals without reload
+                if(data.rows){
+                    document.querySelectorAll('.pallet-row-card').forEach(function(card){
+                        const row = card.getAttribute('data-row');
+                        const r = data.rows[row];
+                        if(!r) return;
+                        // patch header badge + style/country/ocf text if locked
+                        // card header is first div.card-header; find it
+                        const hdr = card.querySelector('.card-header');
+                        if(!hdr) return;
+                        const badge = hdr.querySelector('.badge');
+                        if(badge){
+                            if(r.is_locked){
+                                badge.className = 'badge badge-danger px-2 py-1';
+                                badge.innerHTML = '<i class="fas fa-lock mr-1"></i> Terkunci';
+                                card.classList.add('locked-card');
+                            } else {
+                                badge.className = 'badge badge-success px-2 py-1';
+                                badge.innerHTML = '<i class="fas fa-lock-open mr-1"></i> Terbuka';
+                                card.classList.remove('locked-card');
+                            }
+                        }
+                        // find country/style lines: first truncate divs under border-top
+                        const countryEl = hdr.querySelector('.border-top .font-weight-bold');
+                        if(countryEl && r.is_locked){
+                            countryEl.innerHTML = '<i class="fas fa-globe text-secondary mr-1"></i> ' + (r.country||'-');
+                        }
+                        // cartons + pcs line
+                        const ctnEl = hdr.querySelector('.text-danger');
+                        if(ctnEl && r.is_locked){
+                            ctnEl.innerHTML = '<i class="fas fa-boxes mr-1"></i> ' + r.total_cartons + ' ctn';
+                        }
+                        // update pcs sibling
+                        if(r.is_locked){
+                            const pcsEl = hdr.querySelector('.border-top .text-dark.small');
+                            if(pcsEl) pcsEl.textContent = '(' + (r.total_pcs||0).toLocaleString('id-ID') + ' pcs)';
+                        }
+                        // rebuild breakdown Size & Color (always update even if collapsed)
+                        (function(){
+                            const targetId = 'breakdown-' + row;
+                            const bdWrap = document.getElementById(targetId);
+                            const btn = card.querySelector('[data-target="#' + targetId + '"]');
+                            const btnWrap = btn ? btn.closest('.mt-2') : null;
+                            // resolve inner container: bdWrap > .p-2.bg-white, or create
+                            let container = null;
+                            if(bdWrap){
+                                container = bdWrap.querySelector('.p-2.bg-white');
+                                // if markup changed, bdWrap itself might be the container
+                                if(!container && bdWrap.classList.contains('p-2')) container = bdWrap;
+                            }
+                            if(!r.is_locked){
+                                if(btnWrap) btnWrap.style.display='none';
+                                if(bdWrap) { bdWrap.classList.remove('show'); if(container) container.innerHTML=''; }
+                                return;
+                            }
+                            if(btnWrap) btnWrap.style.display='';
+                            if(!container){
+                                // row was empty at initial render -> no breakdown DOM at all, build it
+                                const wrap = document.createElement('div');
+                                wrap.className='mt-2';
+                                wrap.innerHTML='<button class="btn btn-xs btn-outline-primary btn-block text-left d-flex justify-content-between align-items-center py-1" type="button" data-toggle="collapse" data-target="#' + targetId + '"><span><i class="fas fa-tags mr-1"></i> <strong>Breakdown Size & Color</strong></span><i class="fas fa-chevron-down small"></i></button><div class="collapse mt-2" id="' + targetId + '"><div class="p-2 bg-white rounded border small" style="max-height:220px;overflow-y:auto;"></div></div>';
+                                const borderTop = hdr.querySelector('.border-top');
+                                if(borderTop && borderTop.parentNode) borderTop.parentNode.insertBefore(wrap, borderTop.nextSibling.nextSibling || null);
+                                else hdr.appendChild(wrap);
+                                container = wrap.querySelector('.p-2.bg-white');
+                            }
+                            if(!container) return;
+                            const cb = r.color_breakdown || {};
+                            const keys = Object.keys(cb);
+                            if(keys.length===0){ container.innerHTML='<span class="text-muted">Belum ada breakdown.</span>'; return; }
+                            let html='';
+                            keys.forEach(function(cName){
+                                const c = cb[cName];
+                                const sizes = c.sizes||{};
+                                let szHtml='';
+                                Object.keys(sizes).forEach(function(sN){
+                                    szHtml+='<span class="badge badge-light border text-dark mr-1 mb-1 font-mono">'+sN+': <strong>'+sizes[sN]+'</strong> ctn</span>';
+                                });
+                                html+='<div class="mb-2 pb-1 border-bottom"><div class="font-weight-bold text-dark d-flex justify-content-between"><span class="text-truncate mr-1" title="'+cName.replace(/"/g,'&quot;')+'">'+cName+'</span><span class="badge badge-info">'+c.total_cartons+' ctn</span></div><div class="d-flex flex-wrap mt-1">'+szHtml+'</div></div>';
+                            });
+                            container.innerHTML = html;
+                            // if was open (has .show), keep open; if closed, leave collapsed but content fresh for next open
+                        })();
+                    });
+                }
+                // pallets: patch color + count + title
+                const map = new Map(data.pallets.map(function(x){ return [String(x.id), x]; }));
+                let changedCount = 0;
+                document.querySelectorAll('.pallet-box[data-pallet-id]').forEach(function(box){
+                    const id = box.getAttribute('data-pallet-id');
+                    const info = map.get(String(id));
+                    if(!info) return;
+                    const wantOccupied = (info.cartons||0) > 0;
+                    const hasOccupied = box.classList.contains('pallet-occupied');
+                    const was = hasOccupied ? 1 : 0;
+                    const now = wantOccupied ? 1 : 0;
+                    if(was !== now) changedCount++;
+                    box.classList.toggle('pallet-occupied', wantOccupied);
+                    box.classList.toggle('pallet-vacant', !wantOccupied);
+                    // update inner count text (second span)
+                    const spans = box.querySelectorAll('span');
+                    if(spans[1]) spans[1].textContent = wantOccupied ? (info.cartons + ' ctn') : '0';
+                    // title
+                    box.title = info.code + ': ' + (wantOccupied ? (info.cartons + '/42 Karton ('+(info.style||'-')+' - '+(info.country||'-')+')') : 'Kosong (Maks 42)');
+                    if(was !== now){
+                        box.style.transition = 'transform 0.12s ease';
+                        box.style.boxShadow = wantOccupied ? '0 0 0 3px rgba(231,74,59,0.35)' : '0 0 0 3px rgba(28,200,138,0.35)';
+                        setTimeout(function(){ box.style.boxShadow=''; }, 900);
+                    }
+                });
+                if(changedCount>0 && liveTs){
+                    liveTs.textContent += ' • ' + changedCount + ' pallet berubah';
+                }
+                setLiveState('#1cc88a', 'Live: terhubung');
+                // also refresh fullscreen clone if open
+                const fs = document.getElementById('fullscreenBoard');
+                if(fs && fs.querySelector('.pallet-box')){
+                    // re-apply same logic to fullscreen clone
+                    fs.querySelectorAll('.pallet-box').forEach(function(box){
+                        // fullscreen clone lost data-pallet-id? we preserved via clone? ensure fallback via code text
+                        let id = box.getAttribute('data-pallet-id');
+                        if(!id){
+                            // fallback: find by code text match
+                            const code = (box.querySelector('span')||{}).textContent||'';
+                            // skip if no mapping
+                            return;
+                        }
+                        const info = map.get(String(id));
+                        if(!info) return;
+                        const wantOccupied = (info.cartons||0) > 0;
+                        box.classList.toggle('pallet-occupied', wantOccupied);
+                        box.classList.toggle('pallet-vacant', !wantOccupied);
+                    });
+                }
+            }
+            function connect(){
+                if(paused) return;
+                if(es){ try{ es.close(); }catch(e){} }
+                setLiveState('#f6c23e', 'Live: menghubungkan…');
+                const url = lastHash ? (streamUrl + '?t=' + encodeURIComponent(lastHash)) : streamUrl;
+                es = new EventSource(url);
+                es.addEventListener('pallet', function(ev){
+                    try{
+                        const data = JSON.parse(ev.data);
+                        applyPayload(data);
+                    }catch(e){ console.error('SSE parse', e); }
+                });
+                es.addEventListener('done', function(){
+                    try{ es.close(); }catch(e){}
+                    if(!paused){
+                        reconnectTimer = setTimeout(connect, 1200);
+                        setLiveState('#858796', 'Live: reconnect…');
+                    }
+                });
+                es.onerror = function(){
+                    try{ es.close(); }catch(e){}
+                    if(!paused){
+                        setLiveState('#e74a3b', 'Live: terputus, reconnect…');
+                        clearTimeout(reconnectTimer);
+                        reconnectTimer = setTimeout(connect, 2500);
+                    } else {
+                        setLiveState('#858796', 'Live: dijeda');
+                    }
+                };
+                es.onopen = function(){
+                    setLiveState('#1cc88a', 'Live: terhubung');
+                };
+            }
+            if(btnPause){
+                btnPause.addEventListener('click', function(){
+                    paused = !paused;
+                    btnPause.textContent = paused ? 'Lanjutkan' : 'Jeda';
+                    btnPause.classList.toggle('btn-outline-secondary', !paused);
+                    btnPause.classList.toggle('btn-warning', paused);
+                    if(paused){
+                        if(es){ try{ es.close(); }catch(e){} }
+                        setLiveState('#858796', 'Live: dijeda');
+                    } else {
+                        connect();
+                    }
+                });
+            }
+            // pause when tab hidden to save resources
+            document.addEventListener('visibilitychange', function(){
+                if(document.hidden){
+                    if(es){ try{ es.close(); }catch(e){} }
+                    setLiveState('#858796', 'Live: tab tersembunyi');
+                } else if(!paused){
+                    connect();
+                }
+            });
+            // start
+            connect();
+            // expose for debug
+            window._palletLive = { connect: connect };
+        })();
 
         // Close fullscreen with Escape key
         document.addEventListener('keydown', function(e) {
