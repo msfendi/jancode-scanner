@@ -86,94 +86,71 @@
                         </div>
                     </div>
 
-                    <!-- 2 & 3. Input & Rencana -->
-                    <div id="outWorkCard" class="d-none">
-                        <div class="row">
-                            <div class="col-lg-5">
+                    <!-- 2. Scan / Input Karton Keluar + Log -->
+                    <div id="outWorkCard" class="card shadow mb-4 d-none">
+                        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                            <h6 class="m-0 font-weight-bold text-primary">
+                                <i class="fas fa-barcode mr-1"></i> 2. Scan / Input Karton Keluar
+                            </h6>
+                            <span class="badge badge-light border text-gray-700" id="plLabelBadge">-</span>
+                        </div>
+                        <div class="card-body">
 
-                                <!-- Scan / tambah -->
-                                <div class="card shadow mb-4">
-                                    <div class="card-header py-3">
-                                        <h6 class="m-0 font-weight-bold text-primary">
-                                            <i class="fas fa-barcode mr-1"></i> 2. Scan / Tambah Karton
-                                        </h6>
-                                    </div>
-                                    <div class="card-body">
-                                        <div class="form-row">
-                                            <div class="col-8">
-                                                <label class="small font-weight-bold text-gray-700">Barcode JAN</label>
-                                                <input type="text" id="scanJan" class="form-control form-control-lg"
-                                                    placeholder="Scan barcode..." autocomplete="off">
-                                            </div>
-                                            <div class="col-4">
-                                                <label class="small font-weight-bold text-gray-700">Qty</label>
-                                                <input type="number" id="scanQty" class="form-control form-control-lg"
-                                                    value="1" min="1" step="1">
-                                            </div>
-                                        </div>
-                                        <button id="btn-add-scan" class="btn btn-success btn-block font-weight-bold mt-3">
-                                            <i class="fas fa-plus-circle mr-1"></i> Tambahkan
-                                        </button>
-                                        <button id="btn-open-pick" class="btn btn-outline-primary btn-block mt-2">
-                                            <i class="fas fa-list mr-1"></i> Pilih dari Daftar
-                                        </button>
-
-                                        <div id="scanInfo" class="mt-3"></div>
-                                    </div>
+                            <div class="form-row">
+                                <div class="col-md-9">
+                                    <input type="text" id="scanJan" class="form-control form-control-lg"
+                                        placeholder="Scan barcode JAN (1 scan = 1 karton)..." autocomplete="off">
                                 </div>
-
-                                <!-- Info packing list -->
-                                <div class="card shadow mb-4">
-                                    <div class="card-header py-3">
-                                        <h6 class="m-0 font-weight-bold text-primary">
-                                            <i class="fas fa-info-circle mr-1"></i> Info Packing List
-                                        </h6>
-                                    </div>
-                                    <div class="card-body" id="plInfo">
-                                        <p class="text-muted mb-0">Belum ada packing list dimuat.</p>
-                                    </div>
+                                <div class="col-md-3 mt-2 mt-md-0">
+                                    <button id="btn-add-scan"
+                                        class="btn btn-success btn-lg btn-block font-weight-bold">
+                                        <i class="fas fa-plus-circle mr-1"></i> Tambah
+                                    </button>
                                 </div>
                             </div>
 
-                            <div class="col-lg-7">
-                                <div class="card shadow mb-4">
-                                    <div class="card-header py-3 d-flex justify-content-between align-items-center">
-                                        <h6 class="m-0 font-weight-bold text-primary">
-                                            <i class="fas fa-clipboard-check mr-1"></i> 3. Rencana Karton Keluar
-                                        </h6>
-                                        <span class="badge badge-primary badge-pill" id="plannedTotalBadge">0 karton</span>
-                                    </div>
-                                    <div class="card-body p-0">
-                                        <div class="table-responsive" style="max-height: 420px; overflow-y: auto;">
-                                            <table class="table table-sm table-bordered mb-0">
-                                                <thead class="thead-light sticky-top">
-                                                    <tr>
-                                                        <th style="min-width:120px">JAN Code</th>
-                                                        <th>Color / Size</th>
-                                                        <th width="70" class="text-center">Qty</th>
-                                                        <th style="min-width:170px">Pallet Asal</th>
-                                                        <th width="40" class="text-center"></th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody id="plannedBody"></tbody>
-                                            </table>
-                                        </div>
-                                    </div>
-                                    <div class="card-footer bg-white">
-                                        <label class="small font-weight-bold text-gray-700">Catatan (opsional)</label>
-                                        <input type="text" id="outNotes" class="form-control mb-3"
-                                            placeholder="mis. permintaan packing / revisi proforma baru">
+                            <button id="btn-open-pick" class="btn btn-outline-primary btn-sm mt-2">
+                                <i class="fas fa-list mr-1"></i> Pilih dari Daftar / Input Qty per Jancode
+                            </button>
 
-                                        <button id="btn-save" class="btn btn-primary btn-lg btn-block font-weight-bold">
-                                            <i class="fas fa-save mr-1"></i> Simpan Karton Keluar
-                                        </button>
-                                    </div>
-                                </div>
+                            <div id="scanInfo" class="mt-3"></div>
+
+                            <hr>
+
+                            <!-- Log langsung di bawah input scan -->
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="text-xs font-weight-bold text-uppercase text-muted">
+                                    <i class="fas fa-stream mr-1"></i> Log Karton Keluar
+                                </span>
+                                <span class="badge badge-primary badge-pill" id="plannedTotalBadge">0 karton</span>
                             </div>
+                            <div class="table-responsive" style="max-height: 420px; overflow-y: auto;">
+                                <table class="table table-sm table-bordered mb-0">
+                                    <thead class="thead-light sticky-top">
+                                        <tr>
+                                            <th style="min-width:120px">JAN Code</th>
+                                            <th>Color / Size</th>
+                                            <th width="80" class="text-center">Qty</th>
+                                            <th style="min-width:180px">Pallet Asal</th>
+                                            <th width="40" class="text-center"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="plannedBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="card-footer bg-white">
+                            <label class="small font-weight-bold text-gray-700">Catatan (opsional)</label>
+                            <input type="text" id="outNotes" class="form-control mb-3"
+                                placeholder="mis. permintaan packing / revisi proforma baru">
+
+                            <button id="btn-save" class="btn btn-primary btn-lg btn-block font-weight-bold">
+                                <i class="fas fa-save mr-1"></i> Simpan Karton Keluar
+                            </button>
                         </div>
                     </div>
 
-                    <!-- 4. Riwayat -->
+                    <!-- 3. Riwayat -->
                     <div class="card shadow mb-4">
                         <div class="card-header py-3">
                             <h6 class="m-0 font-weight-bold text-primary">
@@ -217,7 +194,7 @@
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title font-weight-bold">
-                        <i class="fas fa-list mr-1"></i> Pilih Baris dari Packing List
+                        <i class="fas fa-list mr-1"></i> Pilih Baris / Input Qty per Jancode
                     </h5>
                     <button type="button" class="close" data-dismiss="modal" aria-label="Close">
                         <span aria-hidden="true">&times;</span>
@@ -326,12 +303,6 @@
             function rowById(id) {
                 return rows.find(r => String(r.id) === String(id)) || null;
             }
-            function rowByJan(code) {
-                return rows.find(r => String(r.jancode) === String(code)) || null;
-            }
-            function plannedQty(filterFn) {
-                return planned.filter(filterFn).reduce((s, p) => s + Number(p.qty_carton || 0), 0);
-            }
             function toast(icon, title) {
                 Swal.fire({
                     toast: true,
@@ -342,6 +313,48 @@
                     timer: 2200,
                     timerProgressBar: true
                 });
+            }
+
+            // Total qty yang sudah masuk log (opsional kecualikan 1 entri).
+            function logQty(filterFn) {
+                return planned.filter(filterFn).reduce((s, p) => s + Number(p.qty_carton || 0), 0);
+            }
+
+            // Sisa maksimal yang boleh diambil untuk 1 baris + 1 pallet (mengecualikan entri tertentu).
+            function maxFor(row, addr, exceptUid) {
+                const usedRow = logQty(p =>
+                    String(p.jancode_id) === String(row.id) && p.uid !== exceptUid
+                );
+                const maxReceive = row.receive - usedRow;
+
+                let maxThis;
+                if (addr) {
+                    const pl = (row.pallets || []).find(x => String(x.address_id) === String(addr));
+                    const plQty = pl ? pl.qty : 0;
+                    const usedPl = logQty(p =>
+                        String(p.jancode_id) === String(row.id) &&
+                        String(p.pallet_address_id) === String(addr) &&
+                        p.uid !== exceptUid
+                    );
+                    maxThis = Math.min(maxReceive, plQty - usedPl);
+                } else {
+                    const usedUn = logQty(p =>
+                        String(p.jancode_id) === String(row.id) &&
+                        !p.pallet_address_id &&
+                        p.uid !== exceptUid
+                    );
+                    maxThis = Math.min(maxReceive, row.unplaced - usedUn);
+                }
+
+                return Math.max(0, maxThis);
+            }
+
+            // Pallet asal default: pallet pertama yang masih punya sisa; jika tidak ada, "belum di pallet".
+            function defaultPallet(row) {
+                for (const pl of (row.pallets || [])) {
+                    if (maxFor(row, pl.address_id, null) > 0) return pl.address_id;
+                }
+                return null;
             }
 
             // ── Muat packing list ──────────────────────────────────────────
@@ -363,10 +376,11 @@
                         currentBatchId = res.packing_list.id;
                         rows = res.rows || [];
                         planned = [];
-                        renderInfo(res);
+                        $('#plLabelBadge').text(res.packing_list.group_label || '-');
                         renderPlanned();
-                        renderPick();
+                        renderPick('');
                         $('#outWorkCard').removeClass('d-none');
+                        $('#scanInfo').html('');
                         toast('success', 'Packing list dimuat.');
                         $('#scanJan').trigger('focus');
                     })
@@ -378,76 +392,61 @@
                     });
             });
 
-            // ── Render info packing list ───────────────────────────────────
-            function renderInfo(res) {
-                const pl = res.packing_list || {};
-                const t = res.totals || {};
-                const html =
-                    '<div class="mb-1"><strong>' + (pl.group_label || '-') + '</strong></div>' +
-                    '<div class="small text-muted mb-2">' + (pl.doc_type || '') + ' Rev.' + (pl.revision_no || 1) + '</div>' +
-                    '<div class="row text-center">' +
-                      '<div class="col"><div class="small text-muted">Receive</div><div class="h5 mb-0 font-weight-bold text-success">' + (t.receive || 0) + '</div></div>' +
-                      '<div class="col"><div class="small text-muted">Sudah Keluar</div><div class="h5 mb-0 font-weight-bold text-danger">' + (t.out || 0) + '</div></div>' +
-                      '<div class="col"><div class="small text-muted">Di Pallet</div><div class="h5 mb-0 font-weight-bold text-primary">' + (t.placed || 0) + '</div></div>' +
-                    '</div>';
-                $('#plInfo').html(html);
-            }
-
-            // ── Tambah item ────────────────────────────────────────────────
-            function addPlanned(jancodeId, qty, palletAddressId) {
+            // ── Tambah ke log (merge per jancode + pallet) ─────────────────
+            function addToLog(jancodeId, qty, palletAddressId) {
                 const row = rowById(jancodeId);
                 if (!row) {
                     toast('error', 'Baris tidak ditemukan.');
-                    return false;
+                    return 0;
                 }
 
-                qty = parseInt(qty, 10) || 1;
-                const usedReceive = plannedQty(p => String(p.jancode_id) === String(row.id));
-                const remainReceive = row.receive - usedReceive;
+                const addr = palletAddressId ? parseInt(palletAddressId, 10) : null;
 
-                if (remainReceive <= 0) {
-                    toast('warning', row.jancode + ': tidak ada karton yang bisa diambil.');
-                    return false;
-                }
-                if (qty > remainReceive) { qty = remainReceive; }
+                // Entri yang sudah ada untuk kombinasi jancode + pallet yang sama.
+                let entry = planned.find(p =>
+                    String(p.jancode_id) === String(row.id) &&
+                    String(p.pallet_address_id || '') === String(addr || '')
+                );
 
-                const addr = palletAddressId ? String(palletAddressId) : null;
-
-                if (addr) {
-                    const pl = (row.pallets || []).find(x => String(x.address_id) === addr);
-                    const plQty = pl ? pl.qty : 0;
-                    const usedPl = plannedQty(p => String(p.jancode_id) === String(row.id) && String(p.pallet_address_id) === addr);
-                    const remainPl = plQty - usedPl;
-                    if (remainPl <= 0) {
+                // Batas total entri ini (mengecualikan qty entri itu sendiri),
+                // lalu kurangi qty yang sudah ada → sisa yang masih boleh ditambah.
+                const ceiling = maxFor(row, addr, entry ? entry.uid : null);
+                const allowance = ceiling - (entry ? Number(entry.qty_carton) : 0);
+                if (allowance <= 0) {
+                    if (addr) {
+                        const pl = (row.pallets || []).find(x => String(x.address_id) === String(addr));
                         toast('warning', 'Pallet ' + (pl ? pl.code : addr) + ' sudah habis untuk karton ini.');
-                        return false;
+                    } else {
+                        toast('warning', row.jancode + ': tidak ada karton yang bisa diambil.');
                     }
-                    if (qty > remainPl) { qty = remainPl; }
-                } else {
-                    const usedUn = plannedQty(p => String(p.jancode_id) === String(row.id) && !p.pallet_address_id);
-                    const remainUn = row.unplaced - usedUn;
-                    if (remainUn <= 0) {
-                        toast('warning', 'Tidak ada karton ' + row.jancode + ' yang belum ditempatkan.');
-                        return false;
-                    }
-                    if (qty > remainUn) { qty = remainUn; }
+                    return 0;
                 }
 
-                planned.push({
-                    uid: ++uidSeq,
-                    jancode_id: row.id,
-                    jancode: row.jancode,
-                    color: row.color,
-                    size: row.size,
-                    qty_carton: qty,
-                    pallet_address_id: addr ? parseInt(addr, 10) : null,
-                });
+                const addQty = Math.min(parseInt(qty, 10) || 1, allowance);
+
+                if (!entry) {
+                    entry = {
+                        uid: ++uidSeq,
+                        jancode_id: row.id,
+                        jancode: row.jancode,
+                        color: row.color,
+                        size: row.size,
+                        qty_carton: 0,
+                        pallet_address_id: addr,
+                    };
+                    planned.push(entry);
+                }
+                entry.qty_carton += addQty;
+
+                if (addQty < (parseInt(qty, 10) || 1)) {
+                    toast('warning', 'Qty disesuaikan ke sisa yang tersedia (' + addQty + ' karton).');
+                }
 
                 renderPlanned();
-                return true;
+                return addQty;
             }
 
-            // ── Scan barcode ───────────────────────────────────────────────
+            // ── Scan barcode (1 scan = 1 karton) ───────────────────────────
             $('#scanJan').on('keydown', function (e) {
                 if (e.key === 'Enter') {
                     e.preventDefault();
@@ -457,7 +456,6 @@
 
             $('#btn-add-scan').on('click', function () {
                 const code = ($('#scanJan').val() || '').replace(/[^0-9]/g, '');
-                const qty = parseInt($('#scanQty').val(), 10) || 1;
 
                 if (code === '') {
                     toast('warning', 'Scan / masukkan barcode terlebih dahulu.');
@@ -477,9 +475,9 @@
                             return;
                         }
                         const row = res.row;
-                        const defPallet = (row.pallets && row.pallets.length) ? row.pallets[0].address_id : null;
+                        const added = addToLog(row.id, 1, defaultPallet(row));
 
-                        if (addPlanned(row.id, qty, defPallet)) {
+                        if (added > 0) {
                             $('#scanInfo').html(
                                 '<div class="alert alert-success py-2 mb-0">' +
                                 '<strong>' + row.jancode + '</strong> — ' + (row.color || '-') + ' / ' + (row.size || '-') +
@@ -499,20 +497,15 @@
                     });
             });
 
-            // ── Render rencana ─────────────────────────────────────────────
-            function optionPallet(row, item, selectedAddr) {
-                let html = '<option value="">— Belum di pallet —</option>';
+            // ── Render log ─────────────────────────────────────────────────
+            function optionPallet(row, item) {
+                let html = '<option value="">Belum di pallet</option>';
                 (row.pallets || []).forEach(function (pl) {
-                    const usedOthers = plannedQty(p =>
-                        p.uid !== item.uid &&
-                        String(p.jancode_id) === String(row.id) &&
-                        String(p.pallet_address_id) === String(pl.address_id)
-                    );
-                    const avail = pl.qty - usedOthers;
-                    const isSel = String(selectedAddr) === String(pl.address_id);
+                    const isSel = String(item.pallet_address_id) === String(pl.address_id);
+                    const avail = maxFor(row, pl.address_id, item.uid);
                     const disabled = (avail <= 0 && !isSel) ? 'disabled' : '';
                     html += '<option value="' + pl.address_id + '" ' + (isSel ? 'selected' : '') + ' ' + disabled + '>' +
-                        'Pallet ' + pl.code + ' (tersedia ' + Math.max(0, avail) + ')</option>';
+                        'Pallet ' + pl.code + ' (maks ' + avail + ')</option>';
                 });
                 return html;
             }
@@ -522,7 +515,7 @@
                 let total = 0;
 
                 if (!planned.length) {
-                    $body.append('<tr><td colspan="5" class="text-center text-muted py-4">Belum ada karton dalam rencana.</td></tr>');
+                    $body.append('<tr><td colspan="5" class="text-center text-muted py-4">Belum ada karton. Scan barcode atau pilih dari daftar.</td></tr>');
                     $('#plannedTotalBadge').text('0 karton');
                     return;
                 }
@@ -530,28 +523,14 @@
                 planned.forEach(function (item) {
                     total += Number(item.qty_carton);
                     const row = rowById(item.jancode_id) || { pallets: [] };
-
-                    const usedReceive = plannedQty(p => p.uid !== item.uid && String(p.jancode_id) === String(item.jancode_id));
-                    const maxReceive = row.receive - usedReceive;
-
-                    let maxThis;
-                    if (item.pallet_address_id) {
-                        const pl = (row.pallets || []).find(x => String(x.address_id) === String(item.pallet_address_id));
-                        const plQty = pl ? pl.qty : 0;
-                        const usedPl = plannedQty(p => p.uid !== item.uid && String(p.jancode_id) === String(item.jancode_id) && String(p.pallet_address_id) === String(item.pallet_address_id));
-                        maxThis = Math.min(maxReceive, plQty - usedPl);
-                    } else {
-                        const usedUn = plannedQty(p => p.uid !== item.uid && String(p.jancode_id) === String(item.jancode_id) && !p.pallet_address_id);
-                        maxThis = Math.min(maxReceive, row.unplaced - usedUn);
-                    }
-                    maxThis = Math.max(1, maxThis);
+                    const maxThis = Math.max(1, maxFor(row, item.pallet_address_id, item.uid));
 
                     const tr =
                         '<tr data-uid="' + item.uid + '">' +
                           '<td><span class="font-weight-bold">' + item.jancode + '</span></td>' +
                           '<td><span class="small">' + (item.color || '-') + '</span><br><span class="small text-muted">' + (item.size || '-') + '</span></td>' +
                           '<td class="text-center"><input type="number" class="form-control form-control-sm qty-input text-center" value="' + item.qty_carton + '" min="1" max="' + maxThis + '" step="1"></td>' +
-                          '<td><select class="form-control form-control-sm pallet-select">' + optionPallet(row, item, item.pallet_address_id) + '</select></td>' +
+                          '<td><select class="form-control form-control-sm pallet-select">' + optionPallet(row, item) + '</select></td>' +
                           '<td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger btn-remove"><i class="fas fa-times"></i></button></td>' +
                         '</tr>';
 
@@ -561,14 +540,15 @@
                 $('#plannedTotalBadge').text(total + ' karton');
             }
 
-            // edit qty
+            // edit qty di log
             $(document).on('change', '.qty-input', function () {
-                const uid = $(this).closest('tr').data('uid');
+                const uid = parseInt($(this).closest('tr').data('uid'), 10);
                 const item = planned.find(p => p.uid === uid);
                 if (!item) return;
 
                 let val = parseInt($(this).val(), 10) || 1;
-                const max = parseInt($(this).attr('max'), 10) || 1;
+                let max = maxFor(rowById(item.jancode_id), item.pallet_address_id, item.uid);
+                if (max < 1) max = 1;
                 if (val > max) { val = max; toast('warning', 'Qty melebihi sisa yang tersedia (maks ' + max + ').'); }
                 if (val < 1) { val = 1; }
                 item.qty_carton = val;
@@ -576,40 +556,63 @@
                 renderPlanned();
             });
 
-            // ganti pallet
+            // Gabungkan entri yang punya kombinasi jancode + pallet sama.
+            function mergePlanned() {
+                const seen = {};
+                const result = [];
+                planned.forEach(function (p) {
+                    const key = p.jancode_id + '|' + (p.pallet_address_id || '');
+                    if (seen[key]) {
+                        seen[key].qty_carton += Number(p.qty_carton);
+                    } else {
+                        seen[key] = p;
+                        result.push(p);
+                    }
+                });
+                planned = result;
+            }
+
+            // ganti pallet asal
             $(document).on('change', '.pallet-select', function () {
-                const $tr = $(this).closest('tr');
-                const uid = $tr.data('uid');
+                const uid = parseInt($(this).closest('tr').data('uid'), 10);
                 const item = planned.find(p => p.uid === uid);
                 if (!item) return;
 
+                const prev = item.pallet_address_id;
                 const val = $(this).val();
-                item.pallet_address_id = val ? parseInt(val, 10) : null;
+                const newAddr = val ? parseInt(val, 10) : null;
 
-                // clamp qty ke sisa yang tersedia
+                // Cek kapasitas tujuan (pallet asal baru / belum di pallet).
                 const row = rowById(item.jancode_id) || { pallets: [] };
-                const usedReceive = plannedQty(p => p.uid !== item.uid && String(p.jancode_id) === String(item.jancode_id));
-                const maxReceive = row.receive - usedReceive;
-
-                let maxThis;
-                if (item.pallet_address_id) {
-                    const pl = (row.pallets || []).find(x => String(x.address_id) === String(item.pallet_address_id));
-                    const plQty = pl ? pl.qty : 0;
-                    const usedPl = plannedQty(p => p.uid !== item.uid && String(p.jancode_id) === String(item.jancode_id) && String(p.pallet_address_id) === String(item.pallet_address_id));
-                    maxThis = Math.min(maxReceive, plQty - usedPl);
-                } else {
-                    const usedUn = plannedQty(p => p.uid !== item.uid && String(p.jancode_id) === String(item.jancode_id) && !p.pallet_address_id);
-                    maxThis = Math.min(maxReceive, row.unplaced - usedUn);
+                const usedDest = logQty(p =>
+                    p.uid !== uid &&
+                    String(p.jancode_id) === String(item.jancode_id) &&
+                    String(p.pallet_address_id || '') === String(newAddr || '')
+                );
+                let capDest = row.unplaced;
+                if (newAddr) {
+                    const pl = (row.pallets || []).find(x => String(x.address_id) === String(newAddr));
+                    capDest = pl ? pl.qty : 0;
                 }
-                if (maxThis < 1) { maxThis = 1; }
-                if (item.qty_carton > maxThis) { item.qty_carton = maxThis; }
 
+                if (usedDest + Number(item.qty_carton) > capDest) {
+                    // Kembalikan pilihan sebelumnya bila tujuan tidak cukup.
+                    item.pallet_address_id = prev;
+                    renderPlanned();
+                    toast('warning', newAddr
+                        ? 'Pallet tujuan tidak cukup untuk ' + item.qty_carton + ' karton ini.'
+                        : 'Karton yang belum ditempatkan tidak cukup untuk ' + item.qty_carton + ' karton ini.');
+                    return;
+                }
+
+                item.pallet_address_id = newAddr;
+                mergePlanned();
                 renderPlanned();
             });
 
-            // hapus item
+            // hapus entri di log
             $(document).on('click', '.btn-remove', function () {
-                const uid = $(this).closest('tr').data('uid');
+                const uid = parseInt($(this).closest('tr').data('uid'), 10);
                 planned = planned.filter(p => p.uid !== uid);
                 renderPlanned();
             });
@@ -627,8 +630,8 @@
                         return;
                     }
 
-                    const usedReceive = plannedQty(p => String(p.jancode_id) === String(row.id));
-                    const sisa = row.receive - usedReceive;
+                    const used = logQty(p => String(p.jancode_id) === String(row.id));
+                    const sisa = row.receive - used;
 
                     const tr =
                         '<tr data-id="' + row.id + '">' +
@@ -668,9 +671,8 @@
                 const id = $tr.data('id');
                 const qty = parseInt($tr.find('.pick-qty').val(), 10) || 1;
                 const row = rowById(id);
-                const defPallet = (row && row.pallets && row.pallets.length) ? row.pallets[0].address_id : null;
 
-                if (addPlanned(id, qty, defPallet)) {
+                if (addToLog(id, qty, defaultPallet(row)) > 0) {
                     renderPick($('#pickSearch').val());
                 }
             });
@@ -682,7 +684,7 @@
                     return;
                 }
                 if (!planned.length) {
-                    toast('warning', 'Belum ada karton dalam rencana.');
+                    toast('warning', 'Belum ada karton pada log.');
                     return;
                 }
 
@@ -718,10 +720,10 @@
                         }
                         rows = res.rows || [];
                         planned = [];
-                        renderInfo(res);
                         renderPlanned();
                         renderPick('');
                         $('#outNotes').val('');
+                        $('#scanInfo').html('');
                         reloadHistory();
                         Swal.fire({
                             icon: 'success',
