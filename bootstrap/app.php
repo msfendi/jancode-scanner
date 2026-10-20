@@ -11,6 +11,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
+        // Percaya header proxy (ngrok/reverse proxy) supaya skema HTTPS
+        // terdeteksi dan asset() tidak menghasilkan URL http:// (mixed content).
+        $middleware->trustProxies(at: '*');
+
         // Middleware aliases (pengganti $middlewareAliases di Kernel.php)
         $middleware->alias([
             'auth'               => \App\Http\Middleware\Authenticate::class,

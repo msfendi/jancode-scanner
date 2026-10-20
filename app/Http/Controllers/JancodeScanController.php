@@ -567,7 +567,7 @@ class JancodeScanController extends Controller
     {
         $jancodes = Jancode::where('import_batch_id', $batch->id)
             ->when($includeRows, fn($q) => $q
-                ->orderByRaw('carton_no_from IS NULL, carton_no_from ASC')
+                ->orderByRaw('CASE WHEN carton_no_from IS NULL THEN 1 ELSE 0 END, carton_no_from ASC')
                 ->orderBy('id'))
             ->get();
 
