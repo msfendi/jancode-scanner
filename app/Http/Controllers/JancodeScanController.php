@@ -129,6 +129,10 @@ class JancodeScanController extends Controller
             ], 422);
         }
 
+        if ($guard = $this->finishedGuard($batch)) {
+            return response()->json($guard, 422);
+        }
+
         $lockedId = session(self::SESSION_KEY);
         if ($lockedId && (int)$lockedId !== (int)$batchId) {
             $unsubmitted = $this->unsubmittedCount((int)$lockedId);
@@ -291,6 +295,10 @@ class JancodeScanController extends Controller
             ], 409);
         }
 
+        if ($guard = $this->finishedGuard($batch)) {
+            return response()->json($guard, 409);
+        }
+
         if (!$currentSession->isOpen()) {
             return response()->json([
                 'success' => false,
@@ -409,6 +417,10 @@ class JancodeScanController extends Controller
                 'error'   => 'wrong_session',
                 'message' => 'Packing list ini bukan milik session aktif.',
             ], 403);
+        }
+
+        if ($guard = $this->finishedGuard($batch)) {
+            return response()->json($guard, 422);
         }
 
         try {
@@ -597,7 +609,7 @@ class JancodeScanController extends Controller
                     'batch_no'    => $b->batch_no,
                     'created_at'  => $b->created_at ? $b->created_at->format('d/m/Y H:i:s') : '-',
                     'session_code'=> $b->session?->code ?: '-',
-                    'packing_list'=> $ib ? ($ib->group_label . ' (' . strtoupper($ib->doc_type) . ' Rev.' . $ib->revision_no . ')') : '-',
+                    'packing_list'=> $ib ? ($ib->group_label . ' (' . strtoupper($ib->doc_type) . ' ' . $ib->revision_label . ')') : '-',
                     'jancode'     => $j ? $j->jancode : '-',
                     'color'       => $j ? $j->color : '-',
                     'size'        => $j ? $j->size : '-',
@@ -627,6 +639,10 @@ class JancodeScanController extends Controller
         $batch = $this->resolveSessionBatch();
         if (!$batch) {
             return response()->json(['success' => false, 'error' => 'Pilih packing list terlebih dahulu'], 400);
+        }
+
+        if ($guard = $this->finishedGuard($batch)) {
+            return response()->json($guard, 422);
         }
 
         try {
@@ -667,6 +683,10 @@ class JancodeScanController extends Controller
         $batch = $this->resolveSessionBatch();
         if (!$batch) {
             return response()->json(['success' => false, 'message' => 'Pilih packing list terlebih dahulu'], 400);
+        }
+
+        if ($guard = $this->finishedGuard($batch)) {
+            return response()->json($guard, 422);
         }
 
         try {
@@ -742,6 +762,26 @@ class JancodeScanController extends Controller
     }
 
     /**
+     * Packing list yang sudah Finished tidak boleh menambah scan baru.
+     * (Karton keluar tetap boleh — itu tahap berikutnya.)
+     */
+    private function finishedGuard(ImportBatch $batch): ?array
+    {
+        $packingList = $batch->packingList;
+
+        if ($packingList && $packingList->isFinishedForBatch($batch->id)) {
+            return [
+                'success' => false,
+                'error'   => 'finished',
+                'message' => 'Packing list ini sudah Finished, tidak bisa scan lagi. '
+                    . 'Report PDF/Excel tersedia di halaman Manage Packing List.',
+            ];
+        }
+
+        return null;
+    }
+
+    /**
      * State lengkap packing list: info header, counter, dan baris jancode.
      *
      * @param bool $includeRows  false = hanya header + counter (payload ringan,
@@ -801,6 +841,7 @@ class JancodeScanController extends Controller
                 'warehouse'   => $batch->warehouse,
                 'buyer'       => $batch->supplier_name,
                 'revision_no' => $batch->revision_no ?: 1,
+                'revision_label' => $batch->revision_label,
                 'is_active'   => (bool)$batch->is_active,
                 'import_date' => $batch->import_date ? $batch->import_date->format('d/m/Y') : '-',
             ],

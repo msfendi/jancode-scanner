@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Exports\JancodeSheet\JancodeTemplateExport;
+use App\Exports\JancodeSheet\PackingListReportExport;
 use App\Exports\JancodeSheet\ScanLogsExport;
 use App\Models\CartonOut;
 use App\Models\CartonOutDetail;
@@ -15,9 +16,13 @@ use App\Models\PackingList;
 use App\Models\PalletAssignment;
 use App\Models\PalletAssignmentDetail;
 use App\Models\ScanBatch;
+use App\Services\PackingListReportService;
+use App\Services\PackingListRevisionService;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Maatwebsite\Excel\Facades\Excel;
 use RealRashid\SweetAlert\Facades\Alert;
 
@@ -387,6 +392,7 @@ class JancodeController extends Controller
                         'group_label'  => $batch->group_label,
                         'doc_type'     => $batch->doc_type,
                         'revision_no'  => $batch->revision_no,
+                        'revision_label' => $batch->revision_label,
                         'imported'     => $result['imported'],
                         'skipped'      => $result['skipped'],
                         'total_carton' => $batch->total_carton,
@@ -566,7 +572,10 @@ class JancodeController extends Controller
 
         if ($request->ajax()) {
             $active = $this->applyPackingListFilters(
-                    ImportBatch::active()->where('session_id', $sessionId ?? 0)->withCount('jancodes'),
+                    ImportBatch::active()
+                        ->where('session_id', $sessionId ?? 0)
+                        ->with(['packingList.finishedBy'])
+                        ->withCount('jancodes'),
                     $request
                 )
                 ->orderByDesc('id')
@@ -590,8 +599,33 @@ class JancodeController extends Controller
                     ->groupBy('packing_list_id')
                     ->pluck('total', 'packing_list_id');
 
-            $data = $active->map(function ($b) use ($revisionCounts, $jancodeTotals) {
+            // Kelengkapan balance pada masing-masing revisi aktif.
+            $completionStats = $active->isEmpty()
+                ? collect()
+                : Jancode::whereIn('import_batch_id', $active->pluck('id'))
+                    ->where(function ($query) {
+                        $query->where('void', 'false')->orWhereNull('void');
+                    })
+                    ->selectRaw(
+                        'import_batch_id, COUNT(*) as row_count, '
+                        . 'SUM(COALESCE(packing_list_qty_carton, 0)) as packing_total, '
+                        . 'SUM(COALESCE(receive_qty_carton, 0)) as receive_total, '
+                        . 'SUM(COALESCE(balance, 0)) as balance_total, '
+                        . 'SUM(CASE WHEN COALESCE(balance, 0) > 0 THEN 1 ELSE 0 END) as incomplete_count'
+                    )
+                    ->groupBy('import_batch_id')
+                    ->get()
+                    ->keyBy('import_batch_id');
+
+            $data = $active->map(function ($b) use ($revisionCounts, $jancodeTotals, $completionStats) {
                 $failedCount = $b->failedRows()->count();
+                $completion  = $completionStats[$b->id] ?? null;
+                $packingList = $b->packingList;
+                $isFinished  = $packingList && $packingList->isFinishedForBatch($b->id);
+                $rowCount    = (int) ($completion->row_count ?? 0);
+                $incomplete  = (int) ($completion->incomplete_count ?? 0);
+                $isComplete  = $rowCount > 0 && $incomplete === 0;
+
                 return [
                     'id'              => $b->id,
                     'packing_list_id' => $b->packing_list_id,
@@ -606,12 +640,26 @@ class JancodeController extends Controller
                     'warehouse'       => $b->warehouse,
                     'supplier_name'   => $b->supplier_name,
                     'revision_no'     => $b->revision_no ?: 1,
+                    'revision_label'  => $b->revision_label,
                     'revision_count'  => $revisionCounts[$b->group_key] ?? 1,
                     'total_carton'    => $b->total_carton,
                     'valid_rows'      => $b->valid_rows,
                     'skipped_rows'    => $failedCount,
                     'import_date'     => $b->import_date ? $b->import_date->format('d/m/Y') : ($b->created_at ? $b->created_at->format('d/m/Y') : '-'),
                     'original_filename'=> $b->original_filename,
+                    // Kelengkapan & finished.
+                    'row_count'         => $rowCount,
+                    'packing_total'     => (int) ($completion->packing_total ?? 0),
+                    'receive_total'     => (int) ($completion->receive_total ?? 0),
+                    'balance_total'     => (int) ($completion->balance_total ?? 0),
+                    'incomplete_count'  => $incomplete,
+                    'is_complete'       => $isComplete,
+                    'is_finished'       => $isFinished,
+                    'can_finish'        => $isComplete && ! $isFinished,
+                    'finished_at'       => $isFinished && $packingList?->finished_at
+                        ? $packingList->finished_at->format('d/m/Y H:i')
+                        : null,
+                    'finished_by'       => $isFinished ? ($packingList?->finishedBy?->name ?: '-') : null,
                 ];
             });
 
@@ -695,6 +743,7 @@ class JancodeController extends Controller
                 'destination' => $packingList->destination,
                 'warehouse'   => $packingList->warehouse,
                 'session'     => $packingList->session?->code,
+                'finished_at' => $packingList->finished_at?->format('d/m/Y H:i'),
             ],
             'revisions' => $batches->map(function ($b) use ($counts) {
                 return [
@@ -702,6 +751,7 @@ class JancodeController extends Controller
                     'batch_number'  => $b->batch_number,
                     'doc_type'      => $b->doc_type ?: 'proforma',
                     'revision_no'   => $b->revision_no ?: 1,
+                    'revision_label'=> $b->revision_label,
                     'is_active'     => (bool) $b->is_active,
                     'valid_rows'    => (int) $b->valid_rows,
                     'total_carton'  => (int) $b->total_carton,
@@ -888,6 +938,163 @@ class JancodeController extends Controller
             'message' => "Packing list {$label} dihapus ({$summary['batches']} revisi, {$summary['jancodes']} jancode, {$summary['logs']} scan log).",
             'summary' => $summary,
         ]);
+    }
+
+    /**
+     * FINISH packing list: hanya boleh jika seluruh jancode pada revisi aktif
+     * sudah lengkap (balance 0). Saat finish, snapshot kondisi akhir disimpan
+     * agar report PDF/Excel tetap valid walau nanti ada carton out.
+     */
+    public function finishPackingList(
+        Request $request,
+        PackingList $packingList,
+        PackingListReportService $reports,
+        PackingListRevisionService $revisions
+    ) {
+        $sessionId = ImportSession::currentId();
+        if (!$sessionId || (int) $packingList->session_id !== (int) $sessionId) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Packing list tidak ditemukan pada session aktif.',
+            ], 404);
+        }
+
+        $batch = $reports->activeBatch($packingList);
+        if (!$batch) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Packing list belum memiliki revisi aktif yang bisa di-Finish.',
+            ], 422);
+        }
+
+        // Idempotent: sudah finished pada revisi yang sama.
+        if ($packingList->isFinishedForBatch($batch->id) && is_array($packingList->finished_snapshot)) {
+            return response()->json([
+                'success'     => true,
+                'message'     => 'Packing list ini sudah Finished.',
+                'finished_at' => $packingList->finished_at?->format('d/m/Y H:i'),
+            ]);
+        }
+
+        // Pastikan balance yang dipakai adalah hasil scan terbaru.
+        $revisions->recomputeBalances($batch);
+
+        try {
+            $packingList = DB::transaction(function () use ($packingList, $batch, $reports, $request) {
+                /** @var PackingList $locked */
+                $locked = PackingList::whereKey($packingList->id)->lockForUpdate()->firstOrFail();
+                $completion = $reports->completion($locked, $batch);
+
+                if (!$completion['is_complete']) {
+                    $detail = $completion['balance_carton'] > 0
+                        ? "Masih ada {$completion['balance_carton']} karton balance pada {$completion['incomplete_count']} jancode."
+                        : 'Masih ada jancode yang belum lengkap.';
+
+                    throw new \RuntimeException($detail);
+                }
+
+                $locked->loadMissing('session');
+                $finishedAt = now();
+                $snapshot = $reports->buildSnapshot($locked, $batch, $request->user());
+                $snapshot['finished_at'] = $finishedAt->format('Y-m-d H:i:s');
+
+                $locked->update([
+                    'finished_at'              => $finishedAt,
+                    'finished_by'              => $request->user()?->id,
+                    'finished_import_batch_id' => $batch->id,
+                    'finished_snapshot'        => $snapshot,
+                ]);
+
+                return $locked->refresh();
+            });
+        } catch (\RuntimeException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Packing list belum bisa di-Finish. ' . $e->getMessage(),
+            ], 422);
+        } catch (\Throwable $e) {
+            Log::error('Finish packing list gagal: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal menyimpan status Finished: ' . $e->getMessage(),
+            ], 500);
+        }
+
+        return response()->json([
+            'success'     => true,
+            'message'     => 'Packing list berhasil di-Finish. Report PDF & Excel sudah tersedia.',
+            'finished_at' => $packingList->finished_at?->format('d/m/Y H:i'),
+            'finished_by' => $packingList->finishedBy?->name ?: $request->user()?->name,
+        ]);
+    }
+
+    public function packingListReportPdf(PackingList $packingList)
+    {
+        $snapshot = $this->finishedReportSnapshot($packingList);
+        $filename = $this->finishedReportFilename($snapshot, 'pdf');
+
+        $pdf = Pdf::loadView('jancode.reports.packing-list-pdf', [
+                'snapshot'    => $snapshot,
+                'packingList' => $packingList,
+            ])
+            ->setPaper('a4', 'landscape');
+
+        // Footer halaman (dompdf tidak mendukung margin box @page).
+        $pdf->render();
+        $canvas = $pdf->getDomPDF()->getCanvas();
+        $canvas->page_text(28, 574, 'Halaman {PAGE_NUM} dari {PAGE_COUNT}', 'helvetica', 7, [0.35, 0.35, 0.35]);
+        $canvas->page_text(700, 574, 'Dicetak: ' . now()->format('d/m/Y H:i'), 'helvetica', 7, [0.35, 0.35, 0.35]);
+
+        return $pdf->download($filename);
+    }
+
+    public function packingListReportExcel(PackingList $packingList)
+    {
+        $snapshot = $this->finishedReportSnapshot($packingList);
+        $filename = $this->finishedReportFilename($snapshot, 'xlsx');
+
+        return Excel::download(new PackingListReportExport($snapshot), $filename);
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function finishedReportSnapshot(PackingList $packingList): array
+    {
+        $sessionId = ImportSession::currentId();
+        abort_unless(
+            $sessionId && (int) $packingList->session_id === (int) $sessionId,
+            404,
+            'Packing list tidak ditemukan pada session aktif.'
+        );
+
+        /** @var PackingListReportService $reports */
+        $reports = app(PackingListReportService::class);
+        $batch   = $reports->activeBatch($packingList);
+
+        abort_unless(
+            $batch && $packingList->isFinishedForBatch($batch->id),
+            404,
+            'Packing list belum Finished. Selesaikan semua jancode lalu tekan Finish.'
+        );
+
+        $snapshot = $packingList->finished_snapshot;
+        abort_unless(
+            is_array($snapshot) && !empty($snapshot['rows']),
+            404,
+            'Snapshot report tidak ditemukan. Silakan Finish ulang packing list ini.'
+        );
+
+        return $snapshot;
+    }
+
+    private function finishedReportFilename(array $snapshot, string $extension): string
+    {
+        $label = Str::slug($snapshot['packing_list']['label'] ?? 'packing-list') ?: 'packing-list';
+        $date  = now()->format('Ymd_His');
+
+        return "report_finished_{$label}_{$date}.{$extension}";
     }
 
     /**

@@ -203,7 +203,9 @@ class ImportBatch extends Model
 
     public function getRevisionLabelAttribute(): string
     {
-        return 'Rev.' . ($this->revision_no ?: 1);
+        $revision = (int) ($this->revision_no ?: 1);
+
+        return $revision <= 1 ? 'Original' : 'Rev.' . $revision;
     }
 
     /**
@@ -218,7 +220,7 @@ class ImportBatch extends Model
             '%s — %s %s (%d carton)',
             $label,
             $type,
-            'Rev.' . ($this->revision_no ?: 1),
+            $this->revision_label,
             (int) $this->total_carton
         );
     }

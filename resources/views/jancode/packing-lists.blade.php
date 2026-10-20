@@ -83,6 +83,11 @@
                                 Jika sudah ada dokumen <span class="badge badge-success">ACTUAL</span>, revisi itulah yang
                                 menjadi acuan scan; bila belum ada, revisi <span class="badge badge-primary">PROFORMA</span>
                                 terbaru yang dipakai.
+                                <hr class="my-2">
+                                Revisi pertama import ditampilkan sebagai <span class="badge badge-success">Original</span>.
+                                Tombol <span class="badge badge-success"><i class="fas fa-flag-checkered mr-1"></i>Finish</span>
+                                hanya aktif bila <strong>semua JAN code sudah lengkap (balance 0)</strong>; setelah di-Finish
+                                tersedia report <strong>PDF</strong> &amp; <strong>Excel</strong>.
                             </div>
                         </div>
                     </div>
@@ -170,6 +175,7 @@
                                             <th>File</th>
                                             <th width="90">Tanggal</th>
                                             <th class="text-center" width="85">Jancode</th>
+                                            <th class="text-center" width="175">Finish &amp; Report</th>
                                             <th class="text-center" width="150">Aksi</th>
                                         </tr>
                                     </thead>
@@ -252,6 +258,9 @@
             const FILTER_URL = "{{ route('jancode.packingListFilters') }}";
             const JANCODE_URL = "{{ route('jancode.packingListJancodes', ['packingList' => '__id__']) }}";
             const DESTROY_URL = "{{ route('jancode.packingListDestroy', ['packingList' => '__id__']) }}";
+            const FINISH_URL = "{{ route('jancode.packingListFinish', ['packingList' => '__id__']) }}";
+            const REPORT_PDF_URL = "{{ route('jancode.packingListReportPdf', ['packingList' => '__id__']) }}";
+            const REPORT_EXCEL_URL = "{{ route('jancode.packingListReportExcel', ['packingList' => '__id__']) }}";
             const CSRF_TOKEN = $('meta[name="csrf-token"]').attr('content');
 
             // Escape teks untuk dimasukkan ke HTML / atribut.
@@ -296,8 +305,15 @@
                     { data: 'warehouse', render: d => d ? `<span class="badge badge-light border">${d}</span>` : '<span class="text-muted">-</span>' },
                     {
                         data: null, className: 'text-center',
-                        render: d => `<span class="badge badge-dark">Rev.${d.revision_no}</span>
-                            <br><small class="text-muted">${d.revision_count} revisi</small>`
+                        render: d => {
+                            const isOriginal = Number(d.revision_no) === 1;
+                            const badge = isOriginal
+                                ? '<span class="badge badge-success">Original</span>'
+                                : `<span class="badge badge-dark">${d.revision_label || ('Rev.' + d.revision_no)}</span>`;
+
+                            return badge +
+                                `<br><small class="text-muted">${d.revision_count > 1 ? d.revision_count + ' revisi' : 'Revisi awal'}</small>`;
+                        }
                     },
                     { data: 'total_carton', className: 'text-right font-weight-bold text-primary' },
                     { data: 'valid_rows', className: 'text-center text-success font-weight-bold' },
@@ -327,11 +343,59 @@
                         }
                     },
                     {
+                        data: null, orderable: false, className: 'text-center text-nowrap', width: '175',
+                        render: (d) => {
+                            if (!d.packing_list_id) return '<span class="text-muted">-</span>';
+
+                            const plId = d.packing_list_id;
+                            const balance = Number(d.balance_total || 0);
+
+                            if (d.is_finished) {
+                                return `<span class="badge badge-success px-2 py-1" title="Finished ${d.finished_at || '-'} oleh ${d.finished_by || '-'}">
+                                        <i class="fas fa-check-circle mr-1"></i>Finished
+                                    </span>
+                                    <div class="mt-1">
+                                        <a href="${REPORT_PDF_URL.replace('__id__', plId)}" target="_blank"
+                                            class="btn btn-sm btn-outline-danger btn-circle" title="Download report PDF">
+                                            <i class="fas fa-file-pdf"></i>
+                                        </a>
+                                        <a href="${REPORT_EXCEL_URL.replace('__id__', plId)}" target="_blank"
+                                            class="btn btn-sm btn-outline-success btn-circle ml-1" title="Download report Excel">
+                                            <i class="fas fa-file-excel"></i>
+                                        </a>
+                                    </div>`;
+                            }
+
+                            if (d.can_finish) {
+                                return `<button type="button" class="btn btn-sm btn-success btn-finish-pl"
+                                        data-pl="${plId}"
+                                        data-label="${esc(d.group_label || d.batch_number)}"
+                                        data-rows="${d.row_count || 0}"
+                                        data-carton="${d.packing_total || 0}"
+                                        title="Semua JAN code sudah lengkap (balance 0) — tandai packing list ini selesai">
+                                        <i class="fas fa-flag-checkered mr-1"></i>Finish
+                                    </button>`;
+                            }
+
+                            return `<button type="button" class="btn btn-sm btn-outline-secondary" disabled
+                                        title="Belum bisa di-Finish: masih ada ${balance} karton balance">
+                                        <i class="fas fa-lock mr-1"></i>Sisa ${balance} ctn
+                                    </button>`;
+                        }
+                    },
+                    {
                         data: null, orderable: false, className: 'text-center text-nowrap', width: '150',
                         render: (d) => {
                             const detail = `{{ url('/jancode/import-batches') }}/${d.id}`;
+                            const scanTitle = d.is_finished
+                                ? 'Packing list sudah Finished'
+                                : 'Scan packing list ini';
+                            const scanClass = d.is_finished
+                                ? 'btn btn-secondary btn-sm btn-circle ml-1 disabled'
+                                : 'btn btn-success btn-sm btn-circle ml-1';
+
                             let html = `<a href="${detail}" class="btn btn-info btn-sm btn-circle" title="Detail & Riwayat Revisi"><i class="fas fa-eye"></i></a>
-                                <a href="{{ route('scanner.index') }}?packing_list=${d.id}" class="btn btn-success btn-sm btn-circle ml-1" title="Scan packing list ini"><i class="fas fa-barcode"></i></a>`;
+                                <a href="{{ route('scanner.index') }}?packing_list=${d.id}" class="${scanClass}" title="${scanTitle}"><i class="fas fa-barcode"></i></a>`;
 
                             if (d.packing_list_id) {
                                 html += `<button type="button" class="btn btn-danger btn-sm btn-circle ml-1 btn-delete-pl"
@@ -400,7 +464,7 @@
                         $rev.empty();
                         if (revisions.length > 1) {
                             revisions.forEach(function (r) {
-                                const label = 'Rev.' + r.revision_no + ' · ' +
+                                const label = (r.revision_label || ('Rev.' + r.revision_no)) + ' · ' +
                                     String(r.doc_type || '').toUpperCase() + ' · ' +
                                     r.batch_number + ' (' + r.jancode_count + ' JAN)' +
                                     (r.is_active ? ' · aktif' : '');
@@ -583,6 +647,80 @@
                     $(this).data('label'),
                     $(this).data('revisions'),
                     $(this).data('jancodes')
+                );
+            });
+
+            // ── Finish packing list ─────────────────────────────────────
+            function finishPackingList(plId, label, rows, carton) {
+                const html = '<div class="text-left small">' +
+                    '<p class="mb-1"><strong>' + esc(label) + '</strong></p>' +
+                    '<p class="mb-1">Seluruh JAN code pada revisi aktif sudah lengkap (balance 0 karton).</p>' +
+                    '<ul class="mb-0 pl-3">' +
+                    '<li>' + esc(String(rows)) + ' JAN code</li>' +
+                    '<li>' + esc(String(carton)) + ' karton packing list</li>' +
+                    '</ul>' +
+                    '<p class="mb-0 mt-2 text-muted">Setelah di-Finish, report PDF &amp; Excel bisa diunduh.</p></div>';
+
+                function run() {
+                    $.ajax({
+                        url: FINISH_URL.replace('__id__', plId),
+                        type: 'POST',
+                        headers: {
+                            'X-CSRF-TOKEN': CSRF_TOKEN,
+                            'Accept': 'application/json'
+                        },
+                    }).done(function (res) {
+                        if (typeof Swal !== 'undefined') {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Finished',
+                                text: res.message || 'Packing list berhasil di-Finish.',
+                                timer: 2800,
+                                showConfirmButton: false,
+                            });
+                        } else {
+                            alert(res.message || 'Packing list berhasil di-Finish.');
+                        }
+
+                        table.ajax.reload(null, false);
+                    }).fail(function (xhr) {
+                        const msg = (xhr.responseJSON && xhr.responseJSON.message) ||
+                            'Gagal menyimpan status Finished.';
+
+                        if (typeof Swal !== 'undefined') {
+                            Swal.fire({ icon: 'error', title: 'Gagal', text: msg });
+                        } else {
+                            alert(msg);
+                        }
+                    });
+                }
+
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'question',
+                        title: 'Tandai packing list Finished?',
+                        html: html,
+                        showCancelButton: true,
+                        confirmButtonText: 'Ya, Finish',
+                        cancelButtonText: 'Batal',
+                        confirmButtonColor: '#1cc88a',
+                        focusCancel: true,
+                    }).then(function (result) {
+                        if (result.isConfirmed) {
+                            run();
+                        }
+                    });
+                } else if (confirm('Tandai packing list ini sebagai Finished?')) {
+                    run();
+                }
+            }
+
+            $('#tablePackingLists').on('click', '.btn-finish-pl', function () {
+                finishPackingList(
+                    $(this).data('pl'),
+                    $(this).data('label'),
+                    $(this).data('rows'),
+                    $(this).data('carton')
                 );
             });
 

@@ -113,6 +113,13 @@ class PackingListImportService
             ),
         ]);
 
+        // Revisi baru membuat status FINISHED sebelumnya tidak berlaku lagi.
+        // Report lama tetap tersimpan di file yang sudah diunduh, tetapi packing
+        // list harus di-finish ulang setelah revisi ini selesai diproses.
+        if ($packingList && $imported > 0 && $packingList->isFinished()) {
+            $packingList->clearFinished();
+        }
+
         // Ikat group ke session saat import pertama, lalu tentukan revisi aktif
         // (ACTUAL mengalahkan PROFORMA) dan bawa scan lama ke revisi aktif.
         $session?->bindGroup($groupKey, $header, $meta['supplier_name'] ?? null);

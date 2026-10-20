@@ -516,7 +516,7 @@
                     html += `<li class="mb-1">
                         <strong>${r.group_label}</strong>${docTypes}<br>
                         <span class="text-muted">${r.sheets || ''}</span><br>
-                        &rarr; ${target} <span class="text-muted">(revisi ${r.next_revision}, ${r.total_items} baris / ${r.total_carton} carton)</span>
+                        &rarr; ${target} <span class="text-muted">(revisi ${Number(r.next_revision) === 1 ? 'Original' : 'Rev.' + r.next_revision}, ${r.total_items} baris / ${r.total_carton} carton)</span>
                     </li>`;
                 });
                 html += '</ul>';
@@ -533,7 +533,7 @@
                     const badge = docType === 'actual'
                         ? '<span class="badge badge-warning text-dark ml-1">ACTUAL</span>'
                         : '<span class="badge badge-info ml-1">PROFORMA</span>';
-                    const rev = sheet.next_revision ? `<small class="text-muted ml-1">rev ${sheet.next_revision}</small>` : '';
+                    const rev = sheet.next_revision ? `<small class="text-muted ml-1">${Number(sheet.next_revision) === 1 ? 'Original' : 'Rev.' + sheet.next_revision}</small>` : '';
                     html += `<button type="button" class="btn btn-sm ${active ? 'btn-primary' : 'btn-outline-secondary'} mb-1 mr-1 btn-ai-sheet" data-index="${idx}">
                         <i class="fas fa-file-alt mr-1"></i> ${sheet.sheet_name || ('Sheet ' + (idx + 1))} ${badge}${rev}
                     </button>`;
@@ -747,7 +747,7 @@
                                     if (res.batches && res.batches.length) {
                                         successMsg += '<hr class="my-2"><div class="text-left small">';
                                         res.batches.forEach(function (b) {
-                                            successMsg += `<div class="mb-1"><strong>${b.batch_number}</strong> &middot; <span class="text-primary">${b.session_code || ''}</span> &middot; ${b.group_label} &middot; <span class="badge badge-primary">${(b.doc_type || '').toUpperCase()}</span> rev ${b.revision_no} &middot; ${b.imported} baris`;
+                                            successMsg += `<div class="mb-1"><strong>${b.batch_number}</strong> &middot; <span class="text-primary">${b.session_code || ''}</span> &middot; ${b.group_label} &middot; <span class="badge badge-primary">${(b.doc_type || '').toUpperCase()}</span> ${b.revision_label || ('Rev.' + b.revision_no)} &middot; ${b.imported} baris`;
                                             if (b.skipped > 0) { successMsg += ` &middot; <span class="text-warning">${b.skipped} broken</span>`; }
                                             successMsg += '</div>';
                                         });

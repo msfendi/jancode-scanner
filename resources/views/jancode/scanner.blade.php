@@ -502,7 +502,7 @@
                     $('#pl-info').show();
                     $('#pl-label').text(pl.group_label || '-');
                     $('#pl-batch').text(pl.batch_number || '-');
-                    $('#pl-rev').text('Rev.' + pl.revision_no);
+                    $('#pl-rev').text(pl.revision_label || ('Rev.' + pl.revision_no));
                     $('#pl-type').text((pl.doc_type || 'proforma').toUpperCase())
                         .removeClass('badge-primary badge-success')
                         .addClass(pl.doc_type === 'actual' ? 'badge-success' : 'badge-primary');

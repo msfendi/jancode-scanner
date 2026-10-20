@@ -23,7 +23,7 @@
                             <p class="mb-0 text-muted small">
                                 <code>{{ $batch->batch_number }}</code> &mdash;
                                 <span class="badge badge-{{ $batch->doc_type === 'actual' ? 'success' : 'primary' }}">{{ $batch->doc_type_label }}</span>
-                                <span class="badge badge-dark">Rev.{{ $batch->revision_no }}</span>
+                                <span class="badge badge-{{ $batch->revision_no > 1 ? 'dark' : 'success' }}">{{ $batch->revision_label }}</span>
                                 @if($batch->sheet_name) &middot; sheet: <strong>{{ $batch->sheet_name }}</strong> @endif
                             </p>
                         </div>
@@ -133,7 +133,7 @@
                                     <tbody>
                                         @foreach($revisions as $rev)
                                         <tr class="{{ $rev->id === $batch->id ? 'table-primary' : '' }}">
-                                            <td class="text-center"><span class="badge badge-dark">Rev.{{ $rev->revision_no }}</span></td>
+                                            <td class="text-center"><span class="badge badge-{{ $rev->revision_no > 1 ? 'dark' : 'success' }}">{{ $rev->revision_label }}</span></td>
                                             <td class="text-center">
                                                 <span class="badge badge-{{ $rev->doc_type === 'actual' ? 'success' : 'primary' }}">{{ strtoupper($rev->doc_type) }}</span>
                                             </td>

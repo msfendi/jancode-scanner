@@ -88,6 +88,9 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/jancode/import-batches/{id}', [JancodeController::class, 'importBatchDetail'])->name('jancode.importBatchDetail')->middleware(['auth', 'role:Admin']);
     Route::get('/jancode/packing-lists', [JancodeController::class, 'packingLists'])->name('jancode.packingLists')->middleware(['auth', 'role:Admin']);
     Route::get('/jancode/packing-lists/{packingList}/jancodes', [JancodeController::class, 'packingListJancodes'])->name('jancode.packingListJancodes')->middleware(['auth', 'role:Admin']);
+    Route::post('/jancode/packing-lists/{packingList}/finish', [JancodeController::class, 'finishPackingList'])->name('jancode.packingListFinish')->middleware(['auth', 'role:Admin']);
+    Route::get('/jancode/packing-lists/{packingList}/report/pdf', [JancodeController::class, 'packingListReportPdf'])->name('jancode.packingListReportPdf')->middleware(['auth', 'role:Admin']);
+    Route::get('/jancode/packing-lists/{packingList}/report/excel', [JancodeController::class, 'packingListReportExcel'])->name('jancode.packingListReportExcel')->middleware(['auth', 'role:Admin']);
     Route::delete('/jancode/packing-lists/{packingList}', [JancodeController::class, 'destroyPackingList'])->name('jancode.packingListDestroy')->middleware(['auth', 'role:Admin']);
     Route::get('/jancode/packing-list-filters', [JancodeController::class, 'packingListFilters'])->name('jancode.packingListFilters')->middleware(['auth', 'role:Admin']);
 

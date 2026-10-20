@@ -28,6 +28,15 @@ class PackingList extends Model
         'warehouse',
         'supplier_name',
         'active_import_batch_id',
+        'finished_at',
+        'finished_by',
+        'finished_import_batch_id',
+        'finished_snapshot',
+    ];
+
+    protected $casts = [
+        'finished_at'       => 'datetime',
+        'finished_snapshot' => 'array',
     ];
 
     public function importBatches(): HasMany
@@ -43,6 +52,40 @@ class PackingList extends Model
     public function activeImportBatch(): BelongsTo
     {
         return $this->belongsTo(ImportBatch::class, 'active_import_batch_id');
+    }
+
+    public function finishedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'finished_by');
+    }
+
+    public function isFinished(): bool
+    {
+        return $this->finished_at !== null;
+    }
+
+    /**
+     * Finished hanya berlaku untuk revisi yang di-finish. Jika revisi aktif
+     * sudah berganti (mis. import revisi baru), status lama dianggap gugur.
+     */
+    public function isFinishedForBatch(?int $batchId): bool
+    {
+        return $this->isFinished()
+            && $batchId !== null
+            && (int) $this->finished_import_batch_id === (int) $batchId;
+    }
+
+    /**
+     * Batalkan status finished (dipakai saat ada revisi baru diimport).
+     */
+    public function clearFinished(): void
+    {
+        $this->update([
+            'finished_at'               => null,
+            'finished_by'               => null,
+            'finished_import_batch_id'  => null,
+            'finished_snapshot'         => null,
+        ]);
     }
 
     public function jancodes(): HasMany
