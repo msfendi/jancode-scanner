@@ -120,6 +120,7 @@ Route::group(['middleware' => 'auth'], function () {
         Route::post('/submit', [JancodeScanController::class, 'submit'])->name('submit')->middleware(['auth', 'role:Admin']);
         Route::delete('/rollback', [JancodeScanController::class, 'rollback'])->name('rollback')->middleware(['auth', 'role:Admin']);
         Route::get('/batches', [JancodeScanController::class, 'batchHistory'])->name('batches')->middleware(['auth', 'role:Admin']);
+        Route::get('/logs', [JancodeScanController::class, 'scanLogHistory'])->name('logs')->middleware(['auth', 'role:Admin']);
     });
 
     // Karton Keluar (scan out) — packing mengambil karton yang sudah discan / di pallet

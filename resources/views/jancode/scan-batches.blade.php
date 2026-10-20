@@ -16,7 +16,7 @@
                                 <i class="fas fa-history text-primary mr-1"></i> Riwayat Batch Scan Jancode
                             </h1>
                             <p class="mb-0 text-muted small">
-                                Daftar sesi <strong>submit</strong> hasil scanning karton per packing list.
+                                Daftar sesi <strong>submit</strong> hasil scanning karton per packing list — seluruh session.
                             </p>
                         </div>
                         <div>
@@ -30,6 +30,45 @@
                     </div>
 
                     @include('layout.workflow-steps', ['current' => 'scan'])
+
+                    <div class="card shadow mb-4">
+                        <div class="card-header py-3">
+                            <h6 class="m-0 font-weight-bold text-primary">
+                                <i class="fas fa-filter mr-1"></i> Filter Riwayat
+                            </h6>
+                        </div>
+                        <div class="card-body py-3">
+                            <div class="row align-items-end">
+                                <div class="col-md-4 mb-2">
+                                    <label for="filterSession" class="small font-weight-bold mb-1">Session</label>
+                                    <select id="filterSession" class="form-control form-control-sm">
+                                        <option value="">Semua Session</option>
+                                        @foreach($sessions as $s)
+                                            <option value="{{ $s->id }}">
+                                                {{ $s->code }}{{ (string) $currentSessionId === (string) $s->id ? ' (aktif)' : '' }}
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                <div class="col-md-3 mb-2">
+                                    <label for="filterDateFrom" class="small font-weight-bold mb-1">Tanggal Scan (Dari)</label>
+                                    <input type="date" id="filterDateFrom" class="form-control form-control-sm">
+                                </div>
+                                <div class="col-md-3 mb-2">
+                                    <label for="filterDateTo" class="small font-weight-bold mb-1">Tanggal Scan (Sampai)</label>
+                                    <input type="date" id="filterDateTo" class="form-control form-control-sm">
+                                </div>
+                                <div class="col-md-2 mb-2">
+                                    <button class="btn btn-sm btn-primary btn-block" id="btnFilter">
+                                        <i class="fas fa-search mr-1"></i> Terapkan
+                                    </button>
+                                    <button class="btn btn-sm btn-link btn-block text-muted" id="btnResetFilter">
+                                        Reset
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
 
                     <div class="card shadow mb-4">
                         <div class="card-header py-3 d-flex justify-content-between align-items-center">
@@ -47,6 +86,7 @@
                                         <tr>
                                             <th width="40">#</th>
                                             <th>Waktu Submit</th>
+                                            <th>Session</th>
                                             <th>Batch No</th>
                                             <th>Packing List</th>
                                             <th>JAN Code</th>
@@ -83,10 +123,16 @@
                     type: "GET",
                     dataType: "json",
                     dataSrc: "data",
+                    data: function (d) {
+                        d.session_id = $('#filterSession').val() || '';
+                        d.date_from = $('#filterDateFrom').val() || '';
+                        d.date_to = $('#filterDateTo').val() || '';
+                    }
                 },
                 columns: [
                     { data: null, render: (d, t, r, m) => m.row + 1, orderable: false },
                     { data: 'created_at', render: d => `<small class="text-muted">${d}</small>` },
+                    { data: 'session_code', render: d => `<span class="badge badge-light border">${d || '-'}</span>` },
                     { data: 'batch_no', render: d => `<span class="badge badge-dark font-mono px-2 py-1">${d}</span>` },
                     { data: 'packing_list', render: d => `<span class="small font-weight-bold text-primary">${d || '-'}</span>` },
                     { data: 'jancode', render: d => d && d !== '-' ? `<code>${d}</code>` : '<span class="text-muted">—</span>' },
@@ -102,6 +148,26 @@
                 ],
                 order: [[1, 'desc']],
                 pageLength: 25,
+            });
+
+            $('#btnFilter').click(function () {
+                table.ajax.reload();
+            });
+
+            $('#btnResetFilter').click(function () {
+                $('#filterSession').val('');
+                $('#filterDateFrom').val('');
+                $('#filterDateTo').val('');
+                table.ajax.reload();
+            });
+
+            // Enter pada filter tanggal langsung menerapkan filter.
+            $('#filterDateFrom, #filterDateTo').on('change', function () {
+                table.ajax.reload();
+            });
+
+            $('#filterSession').on('change', function () {
+                table.ajax.reload();
             });
 
             $('#btnRefresh').click(function () {

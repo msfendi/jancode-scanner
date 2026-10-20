@@ -40,7 +40,13 @@ class JancodeScanController extends Controller
                 ->value('id');
         }
 
-        return view('jancode.scanner', compact('currentSession', 'monitorBatchId'));
+        return view('jancode.scanner', [
+            'currentSession' => $currentSession,
+            'monitorBatchId' => $monitorBatchId,
+            // Saat halaman dibuka ulang, muat kembali packing list yang masih
+            // terkunci di session ini agar riwayat log scan langsung tampil.
+            'lockedBatchId'  => session(self::SESSION_KEY),
+        ]);
     }
 
     /**
@@ -492,18 +498,91 @@ class JancodeScanController extends Controller
     }
 
     /**
+     * Riwayat log scan tersimpan (jancode_logs) untuk packing list yang sedang
+     * dibuka. Dipakai oleh card "Log Scanning Realtime" agar riwayat scan dari
+     * sesi/perangkat sebelumnya tetap tampil saat halaman dibuka lagi.
+     */
+    public function scanLogHistory(Request $request)
+    {
+        $sessionId = ImportSession::currentId();
+        $batch = ImportBatch::find((int) $request->input('import_batch_id'));
+
+        if (!$batch || !$sessionId || (int) $batch->session_id !== (int) $sessionId) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Packing list tidak ditemukan pada session aktif.',
+            ], 404);
+        }
+
+        $request->validate([
+            'date' => 'nullable|date',
+        ]);
+
+        $query = JancodeLogs::with(['jancodeMaster', 'scanBatch', 'user'])
+            ->where('session_id', $sessionId)
+            ->where('packing_list_id', $batch->packing_list_id)
+            ->orderByDesc('created_at')
+            ->orderByDesc('id');
+
+        if ($request->filled('date')) {
+            $query->whereDate('created_at', $request->input('date'));
+        }
+
+        $limit = 200;
+        $logs = $query->limit($limit)->get()->map(function ($log) {
+            $j = $log->jancodeMaster;
+
+            return [
+                'id'           => $log->id,
+                'barcode'      => $log->jancode ?: '-',
+                'status'       => $log->status ?: JancodeLogs::STATUS_IN,
+                'is_submitted' => filter_var($log->is_submitted, FILTER_VALIDATE_BOOLEAN),
+                'time'         => $log->created_at ? $log->created_at->format('H:i:s') : '-',
+                'date'         => $log->created_at ? $log->created_at->format('d/m/Y') : '-',
+                'created_at'   => $log->created_at ? $log->created_at->format('Y-m-d H:i:s') : null,
+                'batch_no'     => $log->scanBatch?->batch_no,
+                'color'        => $j?->color,
+                'size'         => $j?->size,
+                'user'         => $log->user?->name,
+            ];
+        });
+
+        return response()->json([
+            'success'  => true,
+            'data'     => $logs,
+            'count'    => $logs->count(),
+            'has_more' => $logs->count() >= $limit,
+        ]);
+    }
+
+    /**
      * Riwayat Batch Scan.
      */
     public function batchHistory(Request $request)
     {
         if ($request->ajax()) {
+            $request->validate([
+                'session_id' => 'nullable|integer',
+                'date_from'  => 'nullable|date',
+                'date_to'    => 'nullable|date',
+            ]);
+
             $importBatchId = $request->input('import_batch_id');
 
             $query = ScanBatch::with(['jancode', 'user', 'importBatch', 'session'])->latest();
 
-            $sessionId = ImportSession::currentId();
-            if ($sessionId) {
-                $query->where('session_id', $sessionId);
+            // Filter session bersifat opsional. Bila dikosongkan ("Semua Session"),
+            // seluruh riwayat termasuk session sebelumnya tetap tampil.
+            if ($request->filled('session_id')) {
+                $query->where('session_id', $request->input('session_id'));
+            }
+
+            if ($request->filled('date_from')) {
+                $query->whereDate('created_at', '>=', $request->input('date_from'));
+            }
+
+            if ($request->filled('date_to')) {
+                $query->whereDate('created_at', '<=', $request->input('date_to'));
             }
 
             if ($importBatchId) {
@@ -536,7 +615,10 @@ class JancodeScanController extends Controller
             return response()->json(['data' => $batches]);
         }
 
-        return view('jancode.scan-batches');
+        return view('jancode.scan-batches', [
+            'sessions'         => ImportSession::orderByDesc('id')->get(['id', 'code']),
+            'currentSessionId' => ImportSession::currentId(),
+        ]);
     }
 
     // DELETE — void scan terakhir

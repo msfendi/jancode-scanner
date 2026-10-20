@@ -46,6 +46,14 @@ class JancodeLogs extends Model
         return $this->belongsTo(CartonOut::class, 'carton_out_id');
     }
 
+    /**
+     * Baris master jancode (warna, size, style) untuk ditampilkan di log.
+     */
+    public function jancodeMaster()
+    {
+        return $this->belongsTo(Jancode::class, 'jancode_id');
+    }
+
     public function user()
     {
         return $this->belongsTo(User::class, 'user_id');

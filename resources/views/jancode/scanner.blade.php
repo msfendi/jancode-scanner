@@ -255,16 +255,30 @@
 
                     <!-- Log Scan Realtime Card -->
                     <div class="card shadow mb-4" id="log-card" style="display:none;">
-                        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-                            <h6 class="m-0 font-weight-bold text-primary">
+                        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between flex-wrap">
+                            <h6 class="m-0 font-weight-bold text-primary mb-2 mb-md-0">
                                 <i class="fas fa-history mr-1"></i> Log Scanning Realtime
                             </h6>
-                            <div>
-                                <span class="badge badge-danger mr-2 p-2" id="log-error-badge" style="display:none;">
+                            <div class="d-flex align-items-center flex-wrap">
+                                <div class="input-group input-group-sm mr-2 mb-1" style="width: 210px;">
+                                    <div class="input-group-prepend">
+                                        <span class="input-group-text" title="Filter tanggal scan"><i class="fas fa-calendar-day"></i></span>
+                                    </div>
+                                    <input type="date" id="log-date" class="form-control" title="Filter tanggal scan (kosong = semua tanggal)">
+                                    <div class="input-group-append">
+                                        <button class="btn btn-outline-secondary" id="btn-log-date-clear" type="button" title="Tampilkan semua tanggal">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <button class="btn btn-sm btn-outline-primary mr-2 mb-1" id="btn-reload-log" type="button" title="Muat ulang riwayat scan dari database">
+                                    <i class="fas fa-sync-alt mr-1"></i> Muat
+                                </button>
+                                <span class="badge badge-danger mr-2 p-2 mb-1" id="log-error-badge" style="display:none;">
                                     <i class="fas fa-exclamation-triangle mr-1"></i> <span id="error-count-num">0</span>
                                     Scan Bermasalah
                                 </span>
-                                <button class="btn btn-sm btn-outline-secondary" id="btn-clear-log" type="button">
+                                <button class="btn btn-sm btn-outline-secondary mb-1" id="btn-clear-log" type="button">
                                     <i class="fas fa-trash-alt mr-1"></i> Bersihkan Log Tampilan
                                 </button>
                             </div>
@@ -275,7 +289,7 @@
                                     <thead class="thead-light" style="position: sticky; top: 0; z-index: 1;">
                                         <tr>
                                             <th style="width: 50px;" class="text-center">#</th>
-                                            <th style="width: 100px;">Waktu</th>
+                                            <th style="width: 120px;">Waktu</th>
                                             <th>Barcode</th>
                                             <th style="width: 170px;" class="text-center">Status</th>
                                             <th>Keterangan</th>
@@ -335,7 +349,7 @@
                 const $btnUnload = $('#btn-unload');
 
                 const presetPackingList = new URLSearchParams(window.location.search).get('packing_list')
-                    || @json($monitorBatchId ?? null);
+                    || @json($monitorBatchId ?? $lockedBatchId ?? null);
 
                 // ── Auto-focus input scan ──────────────────────────────────
                 // Alat scanner mengirim karakter seperti keyboard, jadi fokus harus
@@ -432,7 +446,9 @@
                             $btnUnload.show();
                             $('#scan-card').show();
                             $('#log-card').show();
+                            $('#log-date').val('');
                             clearScanLogs();
+                            loadScanLogHistory();
                             $input.val('').focus();
                             startScanStream();
                         },
@@ -467,6 +483,8 @@
                                 $('#counter-cards').hide();
                                 $('#pl-info').hide();
                                 $input.val('');
+                                $('#log-date').val('');
+                                logHistoryRequest++;
                                 clearScanLogs();
                                 stopScanStream();
                                 scanStreamHash = '';
@@ -854,7 +872,7 @@
                     $tr.find('.log-message').html('<small>' + escapeHtml(message) + '</small>');
                 }
 
-                function clearScanLogs() {
+                function clearScanLogs(emptyMessage) {
                     scanLogIndex = 0; errorCount = 0;
                     $('#error-count-num').text(0);
                     $('#log-error-badge').hide();
@@ -862,13 +880,124 @@
                         <tr id="empty-log-row">
                             <td colspan="5" class="text-center text-muted py-4">
                                 <i class="fas fa-barcode fa-2x mb-2 d-block"></i>
-                                Belum ada aktivitas scanning.
+                                ${escapeHtml(emptyMessage || 'Belum ada aktivitas scanning.')}
                             </td>
                         </tr>
                     `);
                 }
 
-                $('#btn-clear-log').click(clearScanLogs);
+                // ── Riwayat log scan tersimpan ─────────────────────────────
+                // Dimuat dari database agar scan dari sesi/perangkat sebelumnya
+                // tetap tampil saat halaman scanner dibuka kembali.
+                let logHistoryRequest = 0;
+
+                function logDateValue() {
+                    const v = $('#log-date').val();
+                    return v || '';
+                }
+
+                function addHistoryLogRow(log) {
+                    $('#empty-log-row').hide();
+                    scanLogIndex++;
+
+                    const detail = [log.color, log.size].filter(Boolean).join(' / ');
+                    let rowClass, badge, message;
+
+                    if (log.status === 'out') {
+                        rowClass = 'table-info';
+                        badge = '<span class="badge badge-info px-2 py-1"><i class="fas fa-dolly mr-1"></i> Karton Keluar</span>';
+                        message = 'Karton keluar' + (detail ? ' · ' + detail : '');
+                    } else if (log.is_submitted) {
+                        rowClass = 'table-success';
+                        badge = '<span class="badge badge-success px-2 py-1"><i class="fas fa-check-double mr-1"></i> Tersubmit</span>';
+                        message = 'Scan tersimpan' + (log.batch_no ? ' · ' + log.batch_no : '') + (detail ? ' · ' + detail : '');
+                    } else {
+                        rowClass = 'table-warning';
+                        badge = '<span class="badge badge-warning text-dark px-2 py-1"><i class="fas fa-clock mr-1"></i> Sementara</span>';
+                        message = 'Belum disubmit' + (detail ? ' · ' + detail : '');
+                    }
+
+                    if (log.user) { message += ' · ' + log.user; }
+
+                    const timeHtml = '<small class="font-weight-bold">' + escapeHtml(log.time || '-') + '</small>'
+                        + '<br><small class="text-muted">' + escapeHtml(log.date || '') + '</small>';
+
+                    $('#log-tbody').prepend(`
+                        <tr class="${rowClass}">
+                            <td class="text-center font-weight-bold">${scanLogIndex}</td>
+                            <td>${timeHtml}</td>
+                            <td class="log-barcode">${escapeHtml(log.barcode || '-')}</td>
+                            <td class="text-center log-status">${badge}</td>
+                            <td class="log-message"><small>${escapeHtml(message)}</small></td>
+                        </tr>
+                    `);
+                    $('#log-card').show();
+                }
+
+                function loadScanLogHistory() {
+                    if (!loadedBatchId) return;
+
+                    const requestId = ++logHistoryRequest;
+                    const date = logDateValue();
+
+                    $('#log-tbody').html(`
+                        <tr>
+                            <td colspan="5" class="text-center text-muted py-4">
+                                <i class="fas fa-spinner fa-spin mr-1"></i> Memuat riwayat scan...
+                            </td>
+                        </tr>
+                    `);
+
+                    $.ajax({
+                        url: "{{ route('scanner.logs') }}",
+                        type: 'GET',
+                        dataType: 'json',
+                        data: { import_batch_id: loadedBatchId, date: date }
+                    }).done(function (res) {
+                        if (requestId !== logHistoryRequest) return; // respon usang
+
+                        const rows = (res && res.data) ? res.data.slice() : [];
+
+                        if (!rows.length) {
+                            clearScanLogs(date
+                                ? 'Tidak ada log scan pada tanggal ini.'
+                                : 'Belum ada riwayat scan untuk packing list ini.');
+                            return;
+                        }
+
+                        // Data dari server urut terbaru -> terlama; render terbalik
+                        // agar nomor urut naik dan baris terbaru berada di atas.
+                        clearScanLogs();
+                        rows.reverse().forEach(addHistoryLogRow);
+
+                        if (res.has_more) {
+                            $('#log-tbody').append(`
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted small py-2">
+                                        <i class="fas fa-info-circle mr-1"></i> Menampilkan 200 log terbaru. Pilih tanggal untuk mempersempit.
+                                    </td>
+                                </tr>
+                            `);
+                        }
+
+                        // Tampilkan scan terbaru di bagian atas daftar.
+                        $('#log-card .table-responsive').scrollTop(0);
+                    }).fail(function (xhr) {
+                        if (requestId !== logHistoryRequest) return;
+                        const msg = (xhr.responseJSON && xhr.responseJSON.message)
+                            ? xhr.responseJSON.message
+                            : 'Gagal memuat riwayat scan.';
+                        clearScanLogs(msg);
+                    });
+                }
+
+                $('#btn-clear-log').click(function () { clearScanLogs(); });
+                $('#btn-reload-log').click(loadScanLogHistory);
+                $('#log-date').on('change', loadScanLogHistory);
+                $('#btn-log-date-clear').click(function () {
+                    $('#log-date').val('');
+                    loadScanLogHistory();
+                });
 
                 // ── Input handling ─────────────────────────────────────────
                 let lastQueued = '';
