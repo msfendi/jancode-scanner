@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\ImportSession;
+use App\Models\PackingList;
 use Illuminate\Http\Request;
 
 /**
@@ -28,7 +29,14 @@ class ImportSessionController extends Controller
             ->orderByDesc('id')
             ->get();
 
-        return view('jancode.sessions', compact('current', 'sessions', 'search', 'status'));
+        $stats = [
+            'total'         => ImportSession::count(),
+            'open'          => ImportSession::where('status', 'open')->count(),
+            'closed'        => ImportSession::where('status', 'closed')->count(),
+            'packing_lists' => PackingList::count(),
+        ];
+
+        return view('jancode.sessions', compact('current', 'sessions', 'search', 'status', 'stats'));
     }
 
     /**

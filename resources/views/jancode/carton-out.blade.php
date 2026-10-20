@@ -19,7 +19,7 @@
                     <div class="d-sm-flex align-items-center justify-content-between mb-4">
                         <div>
                             <h1 class="h4 mb-0 text-gray-800">
-                                <i class="fas fa-box-open text-primary mr-1"></i> Karton Keluar (Scan Out)
+                                <i class="fas fa-box-open text-primary mr-1"></i> Carton Outbound (Scan Out)
                             </h1>
                             <p class="mb-0 text-muted small">
                                 Ambil karton yang sudah discan / sudah di pallet dari sebuah packing list.
@@ -28,7 +28,7 @@
                         </div>
                         <div>
                             <a href="{{ route('scanner.index') }}" class="btn btn-sm btn-outline-primary shadow-sm mr-2">
-                                <i class="fas fa-barcode fa-sm mr-1"></i> Scanner Karton
+                                <i class="fas fa-barcode fa-sm mr-1"></i> Carton Inbound
                             </a>
                             <a href="{{ route('pallet.index') }}" class="btn btn-sm btn-info shadow-sm">
                                 <i class="fas fa-boxes fa-sm mr-1"></i> Manage Pallet
@@ -86,11 +86,11 @@
                         </div>
                     </div>
 
-                    <!-- 2. Scan / Input Karton Keluar + Log -->
+                    <!-- 2. Scan / Input Carton Outbound + Log -->
                     <div id="outWorkCard" class="card shadow mb-4 d-none">
                         <div class="card-header py-3 d-flex justify-content-between align-items-center">
                             <h6 class="m-0 font-weight-bold text-primary">
-                                <i class="fas fa-barcode mr-1"></i> 2. Scan / Input Karton Keluar
+                                <i class="fas fa-barcode mr-1"></i> 2. Scan / Input Carton Outbound
                             </h6>
                             <span class="badge badge-light border text-gray-700" id="plLabelBadge">-</span>
                         </div>
@@ -113,7 +113,7 @@
                             <!-- Log langsung di bawah input scan -->
                             <div class="d-flex justify-content-between align-items-center mb-2">
                                 <span class="text-xs font-weight-bold text-uppercase text-muted">
-                                    <i class="fas fa-stream mr-1"></i> Log Karton Keluar
+                                    <i class="fas fa-stream mr-1"></i> Log Carton Outbound
                                 </span>
                                 <span class="badge badge-primary badge-pill" id="plannedTotalBadge">0 karton</span>
                             </div>
@@ -138,7 +138,7 @@
                                 placeholder="mis. permintaan packing / revisi proforma baru">
 
                             <button id="btn-save" class="btn btn-primary btn-lg btn-block font-weight-bold">
-                                <i class="fas fa-save mr-1"></i> Simpan Karton Keluar
+                                <i class="fas fa-save mr-1"></i> Simpan Carton Outbound
                             </button>
                         </div>
                     </div>
@@ -147,7 +147,7 @@
                     <div class="card shadow mb-4">
                         <div class="card-header py-3">
                             <h6 class="m-0 font-weight-bold text-primary">
-                                <i class="fas fa-history mr-1"></i> Riwayat Karton Keluar
+                                <i class="fas fa-history mr-1"></i> Riwayat Carton Outbound
                                 <span class="text-muted small font-weight-normal">(session aktif)</span>
                             </h6>
                         </div>
@@ -721,7 +721,7 @@
                 const total = planned.reduce((s, p) => s + Number(p.qty_carton), 0);
 
                 Swal.fire({
-                    title: 'Simpan Karton Keluar?',
+                    title: 'Simpan Carton Outbound?',
                     html: 'Total <strong>' + total + ' karton</strong> akan dikeluarkan dari packing list ini.<br>' +
                           '<span class="text-muted small">Receive akan berkurang dan data pallet ikut berubah.</span>',
                     icon: 'question',

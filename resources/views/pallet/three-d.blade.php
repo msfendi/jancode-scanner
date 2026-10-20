@@ -121,7 +121,7 @@
                         <div class="hud" id="hudControls">
                             <div class="hud-title">Kontrol Simulasi</div>
                             <button type="button" class="btn btn-warning btn-block btn-sm" id="btnDemoOut">
-                                <i class="fas fa-dolly mr-1"></i> Demo Karton Keluar
+                                <i class="fas fa-dolly mr-1"></i> Demo Carton Outbound
                             </button>
                             <button type="button" class="btn btn-success btn-block btn-sm" id="btnDemoIn">
                                 <i class="fas fa-boxes mr-1"></i> Demo Karton Masuk

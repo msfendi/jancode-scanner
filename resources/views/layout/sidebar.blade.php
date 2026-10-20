@@ -74,7 +74,7 @@
         <a class="nav-link {{ request()->is('scanner*') ? '' : 'collapsed' }}" href="#" data-toggle="collapse" data-target="#collapseScanner"
             aria-expanded="{{ request()->is('scanner*') ? 'true' : 'false' }}" aria-controls="collapseScanner">
             <i class="fas fa-fw fa-barcode"></i>
-            <span>Scanner Karton</span>
+            <span>Carton Inbound</span>
         </a>
         <div id="collapseScanner" class="collapse {{ request()->is('scanner*') ? 'show' : '' }}" aria-labelledby="headingScanner" data-parent="#accordionSidebar">
             <div class="bg-white py-2 collapse-inner rounded">
@@ -91,7 +91,7 @@
     <li class="nav-item {{ request()->is('carton-out*') ? 'active' : '' }}">
         <a class="nav-link" href="{{ route('cartonOut.index') }}">
             <i class="fas fa-fw fa-box-open"></i>
-            <span>Karton Keluar</span>
+            <span>Carton Outbound</span>
         </a>
     </li>
 

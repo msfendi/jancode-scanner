@@ -905,7 +905,7 @@
 
                     if (log.status === 'out') {
                         rowClass = 'table-info';
-                        badge = '<span class="badge badge-info px-2 py-1"><i class="fas fa-dolly mr-1"></i> Karton Keluar</span>';
+                        badge = '<span class="badge badge-info px-2 py-1"><i class="fas fa-dolly mr-1"></i> Carton Outbound</span>';
                         message = 'Karton keluar' + (detail ? ' · ' + detail : '');
                     } else if (log.is_submitted) {
                         rowClass = 'table-success';
