@@ -19,7 +19,9 @@
                             </h1>
                             <p class="mb-0 text-muted small">
                                 Langkah <strong>3</strong>: satu baris = satu packing list (revisi <strong>aktif</strong>).
-                                Klik <i class="fas fa-eye"></i> untuk melihat riwayat revisi &amp; baris broken.
+                                Klik <i class="fas fa-eye"></i> untuk melihat riwayat revisi &amp; baris broken,
+                                klik <i class="fas fa-list text-primary"></i> untuk daftar jancode, dan
+                                <i class="fas fa-trash text-danger"></i> untuk menghapus packing list.
                             </p>
                         </div>
                         <div>
@@ -167,7 +169,8 @@
                                             <th>Batch Aktif</th>
                                             <th>File</th>
                                             <th width="90">Tanggal</th>
-                                            <th class="text-center" width="110">Aksi</th>
+                                            <th class="text-center" width="85">Jancode</th>
+                                            <th class="text-center" width="150">Aksi</th>
                                         </tr>
                                     </thead>
                                     <tbody></tbody>
@@ -179,12 +182,82 @@
             </div>
             @include('layout.footer')
 
+    <!-- Modal daftar jancode per packing list -->
+    <div class="modal fade" id="jancodeListModal" tabindex="-1" role="dialog" aria-labelledby="jlTitle" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable" role="document">
+            <div class="modal-content">
+                <div class="modal-header py-2">
+                    <div>
+                        <h6 class="modal-title mb-0" id="jlTitle">
+                            <i class="fas fa-list mr-1"></i> Daftar Jancode
+                        </h6>
+                        <small class="text-muted" id="jlSubtitle">-</small>
+                    </div>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Tutup">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body pb-2">
+                    <div class="d-flex flex-wrap align-items-center mb-2">
+                        <div class="d-flex align-items-center mr-3 mb-1">
+                            <label for="jlRevision" class="small font-weight-bold mb-0 mr-2">Revisi</label>
+                            <select id="jlRevision" class="form-control form-control-sm d-none"
+                                style="min-width: 260px; max-width: 100%"></select>
+                        </div>
+                        <div class="ml-auto mb-1">
+                            <input type="text" id="jlSearch" class="form-control form-control-sm"
+                                placeholder="Cari JAN code / color / size / carton..."
+                                style="min-width: 260px; max-width: 100%">
+                        </div>
+                    </div>
+
+                    <div class="alert alert-light border py-2 mb-2 small" id="jlSummary">-</div>
+
+                    <div class="table-responsive" style="max-height: 55vh">
+                        <table class="table table-sm table-bordered table-hover mb-0" id="jlTable" style="font-size: 12px">
+                            <thead class="thead-light">
+                                <tr>
+                                    <th width="40" class="text-center">#</th>
+                                    <th>JAN Code</th>
+                                    <th>Color</th>
+                                    <th width="60" class="text-center">Size</th>
+                                    <th>Carton No</th>
+                                    <th width="75" class="text-right">Qty/Ctn</th>
+                                    <th width="90" class="text-right">Carton PL</th>
+                                    <th width="85" class="text-right">Receive</th>
+                                    <th width="75" class="text-right">Balance</th>
+                                    <th width="110" class="text-right">Total Pcs</th>
+                                    <th width="95" class="text-center">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+
+                    <div id="jlEmpty" class="text-center text-muted py-4 d-none">Belum ada jancode.</div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-sm btn-secondary" data-dismiss="modal">Tutup</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="{{ asset('vendor/datatables/jquery.dataTables.min.js') }}"></script>
     <script src="{{ asset('vendor/datatables/dataTables.bootstrap4.min.js') }}"></script>
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <script>
         $(document).ready(function () {
             const FILTER_URL = "{{ route('jancode.packingListFilters') }}";
+            const JANCODE_URL = "{{ route('jancode.packingListJancodes', ['packingList' => '__id__']) }}";
+            const DESTROY_URL = "{{ route('jancode.packingListDestroy', ['packingList' => '__id__']) }}";
+            const CSRF_TOKEN = $('meta[name="csrf-token"]').attr('content');
+
+            // Escape teks untuk dimasukkan ke HTML / atribut.
+            function esc(value) {
+                return $('<div>').text(value === null || value === undefined ? '' : value).html();
+            }
 
             // ── DataTable ──────────────────────────────────────────────
             const table = $('#tablePackingLists').DataTable({
@@ -241,11 +314,35 @@
                     },
                     { data: 'import_date', className: 'text-nowrap' },
                     {
-                        data: null, orderable: false, className: 'text-center',
+                        data: null, orderable: false, className: 'text-center', width: '85',
+                        render: (d) => {
+                            if (!d.packing_list_id) return '<span class="text-muted">-</span>';
+                            return `<button type="button" class="btn btn-link btn-sm p-0 font-weight-bold btn-jancodes"
+                                        data-pl="${d.packing_list_id}"
+                                        data-batch="${d.id}"
+                                        data-label="${esc(d.group_label || d.batch_number)}"
+                                        title="Lihat daftar jancode">
+                                        <i class="fas fa-list mr-1"></i>${d.jancode_count}
+                                    </button>`;
+                        }
+                    },
+                    {
+                        data: null, orderable: false, className: 'text-center text-nowrap', width: '150',
                         render: (d) => {
                             const detail = `{{ url('/jancode/import-batches') }}/${d.id}`;
-                            return `<a href="${detail}" class="btn btn-info btn-sm btn-circle" title="Detail & Riwayat Revisi"><i class="fas fa-eye"></i></a>
+                            let html = `<a href="${detail}" class="btn btn-info btn-sm btn-circle" title="Detail & Riwayat Revisi"><i class="fas fa-eye"></i></a>
                                 <a href="{{ route('scanner.index') }}?packing_list=${d.id}" class="btn btn-success btn-sm btn-circle ml-1" title="Scan packing list ini"><i class="fas fa-barcode"></i></a>`;
+
+                            if (d.packing_list_id) {
+                                html += `<button type="button" class="btn btn-danger btn-sm btn-circle ml-1 btn-delete-pl"
+                                    data-pl="${d.packing_list_id}"
+                                    data-label="${esc(d.group_label || d.batch_number)}"
+                                    data-revisions="${d.revision_count}"
+                                    data-jancodes="${d.jancode_total}"
+                                    title="Hapus packing list"><i class="fas fa-trash"></i></button>`;
+                            }
+
+                            return html;
                         }
                     },
                 ],
@@ -261,6 +358,232 @@
                     emptyTable: '<div class="text-muted py-3"><i class="fas fa-inbox fa-2x d-block mb-2"></i>Belum ada packing list. Silakan <a href="{{ route('jancode.index') }}">import packing list</a> terlebih dahulu.</div>',
                     paginate: { previous: 'Sebelumnya', next: 'Berikutnya' },
                 },
+            });
+
+            // ── Daftar jancode per packing list ────────────────────────
+            let jlPackingListId = null;
+            let jlRows = [];
+            let jlRequestSeq = 0;
+
+            function openJancodeModal(plId, batchId, label) {
+                jlPackingListId = plId;
+                jlRows = [];
+
+                $('#jlTitle').html('<i class="fas fa-list mr-1"></i> Daftar Jancode');
+                $('#jlSubtitle').text(label || '');
+                $('#jlSummary').html('<span class="text-muted">Memuat data...</span>');
+                $('#jlTable tbody').empty();
+                $('#jlEmpty').addClass('d-none');
+                $('#jlRevision').empty().addClass('d-none');
+                $('#jlSearch').val('');
+
+                $('#jancodeListModal').modal('show');
+                loadJancodes(batchId);
+            }
+
+            function loadJancodes(batchId) {
+                const url = JANCODE_URL.replace('__id__', jlPackingListId);
+                const seq = ++jlRequestSeq;
+
+                $.getJSON(url, batchId ? { batch_id: batchId } : {})
+                    .done(function (res) {
+                        if (seq !== jlRequestSeq) return;
+
+                        const pl = res.packing_list || {};
+                        const sessionText = pl.session ? ' · ' + pl.session : '';
+
+                        $('#jlSubtitle').text((pl.label || '-') + sessionText);
+
+                        const revisions = res.revisions || [];
+                        const $rev = $('#jlRevision');
+
+                        $rev.empty();
+                        if (revisions.length > 1) {
+                            revisions.forEach(function (r) {
+                                const label = 'Rev.' + r.revision_no + ' · ' +
+                                    String(r.doc_type || '').toUpperCase() + ' · ' +
+                                    r.batch_number + ' (' + r.jancode_count + ' JAN)' +
+                                    (r.is_active ? ' · aktif' : '');
+
+                                $rev.append(new Option(
+                                    label,
+                                    r.id,
+                                    false,
+                                    String(r.id) === String(res.selected_batch_id)
+                                ));
+                            });
+                            $rev.removeClass('d-none');
+                        } else {
+                            $rev.addClass('d-none');
+                        }
+
+                        jlRows = res.data || [];
+                        renderJancodes();
+
+                        const s = res.summary || {};
+                        $('#jlSummary').html(
+                            '<i class="fas fa-boxes mr-1"></i>' +
+                            '<strong>' + (s.rows || 0) + '</strong> jancode · ' +
+                            '<strong>' + (s.total_carton || 0) + '</strong> karton · ' +
+                            '<strong>' + (s.total_pcs || 0).toLocaleString('id-ID') + '</strong> pcs' +
+                            '<span class="text-muted ml-2">(received: ' + (s.received || 0) +
+                            ', balance: ' + (s.balance || 0) + ')</span>'
+                        );
+                    })
+                    .fail(function (xhr) {
+                        if (seq !== jlRequestSeq) return;
+
+                        const msg = (xhr.responseJSON && xhr.responseJSON.message) ||
+                            'Gagal memuat daftar jancode.';
+
+                        $('#jlSummary').html('<span class="text-danger">' + esc(msg) + '</span>');
+                        $('#jlEmpty').removeClass('d-none').text(msg);
+                    });
+            }
+
+            function renderJancodes() {
+                const term = ($('#jlSearch').val() || '').toString().toLowerCase().trim();
+
+                const rows = term
+                    ? jlRows.filter(function (r) {
+                        return [r.jancode, r.color, r.size, r.carton_no_from, r.carton_no_to, r.country]
+                            .join(' ')
+                            .toLowerCase()
+                            .indexOf(term) !== -1;
+                    })
+                    : jlRows;
+
+                const $tbody = $('#jlTable tbody').empty();
+
+                rows.forEach(function (r, idx) {
+                    const receive = Number(r.receive_qty_carton || 0);
+                    const balance = Number(r.balance || 0);
+
+                    let status = '<span class="badge badge-secondary">Belum</span>';
+                    if (balance <= 0) {
+                        status = '<span class="badge badge-success">Lengkap</span>';
+                    } else if (receive > 0) {
+                        status = '<span class="badge badge-warning text-dark">Sebagian</span>';
+                    }
+
+                    let carton = '-';
+                    if (r.carton_no_from || r.carton_no_to) {
+                        carton = (!r.carton_no_to || r.carton_no_from === r.carton_no_to)
+                            ? (r.carton_no_from || '-')
+                            : (r.carton_no_from + '–' + r.carton_no_to);
+                    }
+
+                    $tbody.append(
+                        '<tr>' +
+                        '<td class="text-center text-muted">' + (idx + 1) + '</td>' +
+                        '<td><code>' + esc(r.jancode || '-') + '</code></td>' +
+                        '<td>' + esc(r.color || '-') + '</td>' +
+                        '<td class="text-center">' + esc(r.size || '-') + '</td>' +
+                        '<td>' + esc(carton) + '</td>' +
+                        '<td class="text-right">' + (r.qty_per_carton || 0) + '</td>' +
+                        '<td class="text-right font-weight-bold">' + (r.packing_list_qty_carton || 0) + '</td>' +
+                        '<td class="text-right text-success">' + receive + '</td>' +
+                        '<td class="text-right">' + balance + '</td>' +
+                        '<td class="text-right">' + (r.total_qty_pcs || 0).toLocaleString('id-ID') + '</td>' +
+                        '<td class="text-center">' + status + '</td>' +
+                        '</tr>'
+                    );
+                });
+
+                if (!rows.length) {
+                    $('#jlEmpty')
+                        .removeClass('d-none')
+                        .text(term ? 'Tidak ada jancode yang cocok.' : 'Belum ada jancode pada revisi ini.');
+                } else {
+                    $('#jlEmpty').addClass('d-none');
+                }
+            }
+
+            $('#jlSearch').on('input', renderJancodes);
+            $('#jlRevision').on('change', function () {
+                loadJancodes($(this).val());
+            });
+
+            // ── Hapus packing list ─────────────────────────────────────
+            function deletePackingList(plId, label, revisions, jancodes) {
+                const html = '<div class="text-left small">' +
+                    '<p class="mb-1"><strong>' + esc(label) + '</strong></p>' +
+                    '<p class="mb-1 text-danger">Semua data berikut akan dihapus permanen:</p>' +
+                    '<ul class="mb-0 pl-3">' +
+                    '<li>' + esc(String(revisions)) + ' revisi import</li>' +
+                    '<li>' + esc(String(jancodes)) + ' jancode</li>' +
+                    '<li>seluruh scan log, riwayat scan, penempatan pallet, dan karton keluar terkait</li>' +
+                    '</ul></div>';
+
+                function run() {
+                    $.ajax({
+                        url: DESTROY_URL.replace('__id__', plId),
+                        type: 'DELETE',
+                        headers: {
+                            'X-CSRF-TOKEN': CSRF_TOKEN,
+                            'Accept': 'application/json'
+                        },
+                    }).done(function (res) {
+                        if (typeof Swal !== 'undefined') {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Terhapus',
+                                text: res.message || 'Packing list berhasil dihapus.',
+                                timer: 2800,
+                                showConfirmButton: false,
+                            });
+                        } else {
+                            alert(res.message || 'Packing list berhasil dihapus.');
+                        }
+
+                        table.ajax.reload(null, false);
+                    }).fail(function (xhr) {
+                        const msg = (xhr.responseJSON && xhr.responseJSON.message) ||
+                            'Gagal menghapus packing list.';
+
+                        if (typeof Swal !== 'undefined') {
+                            Swal.fire({ icon: 'error', title: 'Gagal', text: msg });
+                        } else {
+                            alert(msg);
+                        }
+                    });
+                }
+
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Hapus packing list?',
+                        html: html,
+                        showCancelButton: true,
+                        confirmButtonText: 'Ya, hapus',
+                        cancelButtonText: 'Batal',
+                        confirmButtonColor: '#e74a3b',
+                        focusCancel: true,
+                    }).then(function (result) {
+                        if (result.isConfirmed) {
+                            run();
+                        }
+                    });
+                } else if (confirm('Hapus packing list ini beserta seluruh revisi, jancode, scan, dan penempatan palletnya?')) {
+                    run();
+                }
+            }
+
+            $('#tablePackingLists').on('click', '.btn-jancodes', function () {
+                openJancodeModal(
+                    $(this).data('pl'),
+                    $(this).data('batch'),
+                    $(this).data('label')
+                );
+            });
+
+            $('#tablePackingLists').on('click', '.btn-delete-pl', function () {
+                deletePackingList(
+                    $(this).data('pl'),
+                    $(this).data('label'),
+                    $(this).data('revisions'),
+                    $(this).data('jancodes')
+                );
             });
 
             // ── Select2 bertingkat (dependent dropdown) ────────────────

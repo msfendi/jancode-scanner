@@ -4,11 +4,16 @@ namespace App\Http\Controllers;
 
 use App\Exports\JancodeSheet\JancodeTemplateExport;
 use App\Exports\JancodeSheet\ScanLogsExport;
+use App\Models\CartonOut;
+use App\Models\CartonOutDetail;
 use App\Models\Jancode;
 use App\Models\JancodeLogs;
 use App\Models\ImportBatch;
 use App\Models\ImportFailedRow;
 use App\Models\ImportSession;
+use App\Models\PackingList;
+use App\Models\PalletAssignment;
+use App\Models\PalletAssignmentDetail;
 use App\Models\ScanBatch;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -561,13 +566,14 @@ class JancodeController extends Controller
 
         if ($request->ajax()) {
             $active = $this->applyPackingListFilters(
-                    ImportBatch::active()->where('session_id', $sessionId ?? 0),
+                    ImportBatch::active()->where('session_id', $sessionId ?? 0)->withCount('jancodes'),
                     $request
                 )
                 ->orderByDesc('id')
                 ->get();
 
             $groupKeys = $active->pluck('group_key')->filter()->unique()->values();
+            $packingListIds = $active->pluck('packing_list_id')->filter()->unique()->values();
 
             // Hitung jumlah revisi per group dalam session yang sama
             $revisionCounts = ImportBatch::whereIn('group_key', $groupKeys)
@@ -576,10 +582,21 @@ class JancodeController extends Controller
                 ->groupBy('group_key')
                 ->pluck('total', 'group_key');
 
-            $data = $active->map(function ($b) use ($revisionCounts) {
+            // Total jancode seluruh revisi per packing list (untuk konfirmasi hapus).
+            $jancodeTotals = $packingListIds->isEmpty()
+                ? collect()
+                : Jancode::whereIn('packing_list_id', $packingListIds)
+                    ->selectRaw('packing_list_id, COUNT(*) as total')
+                    ->groupBy('packing_list_id')
+                    ->pluck('total', 'packing_list_id');
+
+            $data = $active->map(function ($b) use ($revisionCounts, $jancodeTotals) {
                 $failedCount = $b->failedRows()->count();
                 return [
                     'id'              => $b->id,
+                    'packing_list_id' => $b->packing_list_id,
+                    'jancode_count'   => (int) ($b->jancodes_count ?? 0),
+                    'jancode_total'   => (int) ($jancodeTotals[$b->packing_list_id] ?? ($b->jancodes_count ?? 0)),
                     'batch_number'    => $b->batch_number,
                     'doc_type'        => $b->doc_type ?: 'proforma',
                     'group_label'     => $b->group_label,
@@ -602,6 +619,275 @@ class JancodeController extends Controller
         }
 
         return view('jancode.packing-lists', compact('currentSession'));
+    }
+
+    /**
+     * Daftar jancode pada satu packing list (session aktif).
+     *
+     * Default menampilkan revisi aktif. Jika packing list punya beberapa
+     * revisi, UI bisa mengirim ?batch_id=... untuk melihat revisi lain.
+     */
+    public function packingListJancodes(Request $request, PackingList $packingList)
+    {
+        $sessionId = ImportSession::currentId();
+
+        if (!$sessionId || (int) $packingList->session_id !== (int) $sessionId) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Packing list tidak ditemukan pada session aktif.',
+            ], 404);
+        }
+
+        $batches = ImportBatch::where('packing_list_id', $packingList->id)
+            ->where('session_id', $sessionId)
+            ->orderByDesc('revision_no')
+            ->orderByDesc('id')
+            ->get();
+
+        $selected = null;
+        if ($request->filled('batch_id')) {
+            $selected = $batches->firstWhere('id', (int) $request->input('batch_id'));
+        }
+        if (!$selected) {
+            $selected = $batches->firstWhere('is_active', true) ?: $batches->first();
+        }
+
+        $counts = $batches->isEmpty()
+            ? collect()
+            : Jancode::whereIn('import_batch_id', $batches->pluck('id'))
+                ->selectRaw('import_batch_id, COUNT(*) as total')
+                ->groupBy('import_batch_id')
+                ->pluck('total', 'import_batch_id');
+
+        $rows = collect();
+        if ($selected) {
+            $rows = Jancode::where('import_batch_id', $selected->id)
+                ->orderBy('carton_no_from')
+                ->orderBy('id')
+                ->get()
+                ->map(function ($j) {
+                    return [
+                        'id'                      => $j->id,
+                        'source_row'              => $j->source_row,
+                        'country'                 => $j->country,
+                        'buyer'                   => $j->buyer,
+                        'color'                   => $j->color,
+                        'size'                    => $j->size,
+                        'carton_no_from'          => $j->carton_no_from,
+                        'carton_no_to'            => $j->carton_no_to,
+                        'jancode'                 => $j->jancode,
+                        'qty_per_carton'          => (int) $j->qty_per_carton,
+                        'packing_list_qty_carton' => (int) $j->packing_list_qty_carton,
+                        'receive_qty_carton'      => (int) $j->receive_qty_carton,
+                        'balance'                 => (int) $j->balance,
+                        'total_qty_pcs'           => (int) $j->total_qty_pcs,
+                    ];
+                });
+        }
+
+        return response()->json([
+            'success'    => true,
+            'packing_list' => [
+                'id'          => $packingList->id,
+                'label'       => $packingList->group_label ?: $packingList->group_key,
+                'style'       => $packingList->style_number,
+                'ocf'         => $packingList->ocf_number,
+                'destination' => $packingList->destination,
+                'warehouse'   => $packingList->warehouse,
+                'session'     => $packingList->session?->code,
+            ],
+            'revisions' => $batches->map(function ($b) use ($counts) {
+                return [
+                    'id'            => $b->id,
+                    'batch_number'  => $b->batch_number,
+                    'doc_type'      => $b->doc_type ?: 'proforma',
+                    'revision_no'   => $b->revision_no ?: 1,
+                    'is_active'     => (bool) $b->is_active,
+                    'valid_rows'    => (int) $b->valid_rows,
+                    'total_carton'  => (int) $b->total_carton,
+                    'jancode_count' => (int) ($counts[$b->id] ?? 0),
+                    'import_date'   => $b->import_date
+                        ? $b->import_date->format('d/m/Y')
+                        : ($b->created_at ? $b->created_at->format('d/m/Y') : '-'),
+                ];
+            })->values(),
+            'selected_batch_id' => $selected?->id,
+            'summary' => [
+                'rows'         => $rows->count(),
+                'total_carton' => (int) $rows->sum('packing_list_qty_carton'),
+                'received'     => (int) $rows->sum('receive_qty_carton'),
+                'balance'      => (int) $rows->sum('balance'),
+                'total_pcs'    => (int) $rows->sum('total_qty_pcs'),
+            ],
+            'data' => $rows->values(),
+        ]);
+    }
+
+    /**
+     * Hapus satu packing list beserta seluruh revisinya pada session aktif.
+     *
+     * Yang ikut dibersihkan:
+     * - semua ImportBatch (revisi) + baris failed-nya
+     * - semua jancode + scan log + scan batch
+     * - penempatan pallet (detail dihapus, total pallet dihitung ulang,
+     *   pallet kosong ikut dihapus)
+     * - riwayat karton keluar yang memakai jancode tersebut
+     */
+    public function destroyPackingList(Request $request, PackingList $packingList)
+    {
+        $sessionId = ImportSession::currentId();
+
+        if (!$sessionId || (int) $packingList->session_id !== (int) $sessionId) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Packing list tidak ditemukan pada session aktif.',
+            ], 404);
+        }
+
+        $label = $packingList->group_label ?: $packingList->group_key;
+
+        $summary = DB::transaction(function () use ($packingList, $sessionId) {
+            $batchIds = ImportBatch::where('packing_list_id', $packingList->id)
+                ->where('session_id', $sessionId)
+                ->pluck('id')
+                ->all();
+
+            $jancodeIds = Jancode::where('packing_list_id', $packingList->id)
+                ->pluck('id')
+                ->all();
+
+            // Jaga-jaga untuk baris lama yang import_batch_id-nya cocok tetapi
+            // packing_list_id-nya belum terisi.
+            if (!empty($batchIds)) {
+                $extraIds = Jancode::whereIn('import_batch_id', $batchIds)->pluck('id')->all();
+                $jancodeIds = array_values(array_unique(array_merge($jancodeIds, $extraIds)));
+            }
+
+            $summary = [
+                'batches'        => count($batchIds),
+                'jancodes'       => count($jancodeIds),
+                'logs'           => 0,
+                'scan_batches'   => 0,
+                'pallet_details' => 0,
+                'carton_outs'    => 0,
+            ];
+
+            // ── 1. Karton keluar (detail + header yang menjadi kosong) ──
+            $plOutIds = CartonOut::where('packing_list_id', $packingList->id)->pluck('id')->all();
+
+            $outIds = $plOutIds;
+            if (!empty($jancodeIds)) {
+                $outIds = array_values(array_unique(array_merge(
+                    $outIds,
+                    CartonOutDetail::whereIn('jancode_id', $jancodeIds)->pluck('carton_out_id')->all()
+                )));
+            }
+
+            foreach ($outIds as $outId) {
+                $out = CartonOut::find($outId);
+                if (!$out) {
+                    continue;
+                }
+
+                if (in_array($outId, $plOutIds, true)) {
+                    CartonOutDetail::where('carton_out_id', $outId)->delete();
+                } elseif (!empty($jancodeIds)) {
+                    CartonOutDetail::where('carton_out_id', $outId)
+                        ->whereIn('jancode_id', $jancodeIds)
+                        ->delete();
+                }
+
+                $remaining = (int) CartonOutDetail::where('carton_out_id', $outId)->sum('qty_carton');
+                if ($remaining <= 0) {
+                    $out->delete();
+                    $summary['carton_outs']++;
+                } else {
+                    $out->update(['total_carton' => $remaining]);
+                }
+            }
+
+            // ── 2. Penempatan pallet ────────────────────────────────────
+            $assignmentIds = PalletAssignmentDetail::where(function ($q) use ($jancodeIds, $packingList) {
+                if (!empty($jancodeIds)) {
+                    $q->whereIn('jancode_id', $jancodeIds);
+                }
+                $q->orWhere('packing_list_id', $packingList->id);
+            })->pluck('assignment_id')->unique()->all();
+
+            $palletDetailQuery = PalletAssignmentDetail::where(function ($q) use ($jancodeIds, $packingList) {
+                if (!empty($jancodeIds)) {
+                    $q->whereIn('jancode_id', $jancodeIds);
+                }
+                $q->orWhere('packing_list_id', $packingList->id);
+            });
+
+            $summary['pallet_details'] = (clone $palletDetailQuery)->count();
+            $palletDetailQuery->delete();
+
+            foreach ($assignmentIds as $assignmentId) {
+                $assignment = PalletAssignment::lockForUpdate()->find($assignmentId);
+                if (!$assignment) {
+                    continue;
+                }
+
+                $total = (int) PalletAssignmentDetail::where('assignment_id', $assignmentId)->sum('qty_carton');
+                if ($total <= 0) {
+                    $assignment->delete();
+                } else {
+                    $assignment->update(['total_carton' => $total]);
+                }
+            }
+
+            // ── 3. Scan log ─────────────────────────────────────────────
+            $logQuery = JancodeLogs::where(function ($q) use ($jancodeIds, $packingList) {
+                if (!empty($jancodeIds)) {
+                    $q->whereIn('jancode_id', $jancodeIds);
+                }
+                $q->orWhere('packing_list_id', $packingList->id);
+            });
+
+            $summary['logs'] = (clone $logQuery)->count();
+            $logQuery->delete();
+
+            // ── 4. Scan batch ───────────────────────────────────────────
+            $scanQuery = ScanBatch::where(function ($q) use ($jancodeIds, $packingList) {
+                if (!empty($jancodeIds)) {
+                    $q->whereIn('jancode_id', $jancodeIds);
+                }
+                $q->orWhere('packing_list_id', $packingList->id);
+            });
+
+            $summary['scan_batches'] = (clone $scanQuery)->count();
+            $scanQuery->delete();
+
+            // ── 5. Jancode ──────────────────────────────────────────────
+            if (!empty($jancodeIds)) {
+                Jancode::whereIn('id', $jancodeIds)->delete();
+            }
+            if (!empty($batchIds)) {
+                Jancode::whereIn('import_batch_id', $batchIds)->delete();
+            }
+
+            // ── 6. Baris gagal + revisi ─────────────────────────────────
+            if (!empty($batchIds)) {
+                ImportFailedRow::whereIn('import_batch_id', $batchIds)->delete();
+                ImportBatch::whereIn('id', $batchIds)->delete();
+            }
+
+            // ── 7. Packing list ─────────────────────────────────────────
+            $packingList->delete();
+
+            return $summary;
+        });
+
+        // Lock scan di session user tidak boleh menunjuk batch yang sudah hilang.
+        session()->forget('scan_import_batch_id');
+
+        return response()->json([
+            'success' => true,
+            'message' => "Packing list {$label} dihapus ({$summary['batches']} revisi, {$summary['jancodes']} jancode, {$summary['logs']} scan log).",
+            'summary' => $summary,
+        ]);
     }
 
     /**
