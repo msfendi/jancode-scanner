@@ -38,6 +38,7 @@ Route::group(['middleware' => 'guest'], function () {
 
 Route::get('/display/pallet', [\App\Http\Controllers\PalletController::class, 'publicDisplay'])->name('pallet.public');
 Route::get('/display/pallet/stream', [\App\Http\Controllers\PalletController::class, 'stream'])->name('pallet.public.stream');
+Route::get('/display/pallet/detail/{id}', [\App\Http\Controllers\PalletController::class, 'publicDetail'])->name('pallet.public.detail');
 
 Route::group(['middleware' => 'auth'], function () {
     Route::get('/home', [HomeController::class, 'index'])->name('home');

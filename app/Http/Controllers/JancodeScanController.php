@@ -184,6 +184,7 @@ class JancodeScanController extends Controller
         return new StreamedResponse(function () use ($batch, $lastHash, $maxSeconds) {
             @set_time_limit(0);
             ignore_user_abort(true);
+            if (ob_get_level() > 0) { @ob_end_clean(); }
 
             $prev = $lastHash;
             $start = time();

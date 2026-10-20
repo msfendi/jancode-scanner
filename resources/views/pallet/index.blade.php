@@ -242,6 +242,30 @@
         cursor: pointer;
     }
     .search-result-tag:hover { background: #2e59d9; }
+
+    /* ========================= MOBILE ========================= */
+    @media (max-width: 768px) {
+        .card-header .input-group {
+            max-width: none !important;
+            width: 100%;
+            margin-right: 0 !important;
+            margin-bottom: .4rem;
+        }
+        .card-header .btn-group { flex-wrap: wrap; }
+        .card-header .d-flex.align-items-center { width: 100%; }
+        .pallet-board-scroll { padding: 8px; }
+        #fullscreenTopBar {
+            flex-wrap: wrap;
+            height: auto;
+            padding: 6px 8px;
+            gap: 6px;
+        }
+        #fullscreenTopBar .fs-title { width: 100%; font-size: 14px; }
+        #fullscreenTopBar input { width: 120px !important; }
+        #fullscreenBoard { padding: 8px; }
+        #fullscreenBoard .pallet-board-scroll { min-height: calc(100vh - 120px); }
+        #palletDetailModal .modal-body { padding: 1rem; }
+    }
 </style>
 
 <body id="page-top">
@@ -1011,7 +1035,11 @@
             $.ajax({
                 url: countryModeUrl.replace('__id__', currentOpenPalletId),
                 type: 'POST',
-                data: { country_mode: mode },
+                data: {
+                    country_mode: mode,
+                    _token: $('meta[name="csrf-token"]').attr('content')
+                },
+                headers: { 'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content') },
                 success: function(res) {
                     $cb.data('initial', mode === 'multi');
                     $('#toggleMultiCountryLabel').text('Multi Negara: ' + (mode === 'multi' ? 'Aktif' : 'Nonaktif'));

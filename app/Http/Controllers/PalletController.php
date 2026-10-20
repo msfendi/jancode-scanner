@@ -330,6 +330,66 @@ class PalletController extends Controller
     }
 
     /**
+     * Detail pallet untuk halaman public (tanpa auth).
+     */
+    public function publicDetail($id)
+    {
+        $address = PalletAddress::with(['assignment.details.jancode'])->findOrFail($id);
+        $assignment = $address->assignment;
+
+        $items = [];
+        $countries = [];
+        $totalPcs = 0;
+
+        if ($assignment) {
+            foreach ($assignment->details as $detail) {
+                $jancode = $detail->jancode;
+                $qtyCarton = (int) $detail->qty_carton;
+                $pcsPerCarton = (int) ($jancode?->qty_per_carton ?? 0);
+                $pcs = $qtyCarton * $pcsPerCarton;
+                $totalPcs += $pcs;
+
+                $country = strtoupper(trim((string) ($jancode?->country ?? '')));
+                if ($country !== '') {
+                    $countries[$country] = true;
+                }
+
+                $items[] = [
+                    'jancode'        => $jancode?->jancode ?? '-',
+                    'color'          => $jancode?->color ?? '-',
+                    'size'           => $jancode?->size ?? '-',
+                    'qty_carton'     => $qtyCarton,
+                    'pcs_per_carton' => $pcsPerCarton,
+                    'total_pcs'      => $pcs,
+                ];
+            }
+        }
+
+        $cartons = $assignment ? (int) $assignment->total_carton : 0;
+        $maxCarton = (int) ($address->max_carton ?: 42);
+
+        return response()->json([
+            'success' => true,
+            'pallet'  => [
+                'id'           => $address->id,
+                'code'         => $address->code,
+                'row'          => $address->row_label,
+                'col'          => $address->col_label,
+                'pos'          => $address->position_no,
+                'max_carton'   => $maxCarton,
+                'country_mode' => $address->country_mode ?: 'single',
+                'cartons'      => $cartons,
+                'style'        => $assignment->style ?? null,
+                'ocf'          => $assignment->ocf ?? null,
+                'countries'    => array_keys($countries),
+                'total_pcs'    => $totalPcs,
+                'status'       => $cartons <= 0 ? 'empty' : ($cartons >= $maxCarton ? 'full' : 'partial'),
+            ],
+            'items' => $items,
+        ]);
+    }
+
+    /**
      * SSE stream untuk live update pallet (tanpa Vite / WebSocket).
      * Emit event 'pallet' tiap ada perubahan assignment/detail.
      */

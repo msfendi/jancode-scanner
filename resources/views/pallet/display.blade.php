@@ -226,6 +226,12 @@
             background: var(--green);
             transition: background-color 0.2s ease, box-shadow 0.2s ease;
             user-select: none;
+            cursor: pointer;
+        }
+
+        .box:hover {
+            filter: brightness(1.18);
+            box-shadow: 0 0 0 1px #fff;
         }
 
         .box.vacant { background: var(--green); color: #05210f; }
@@ -262,10 +268,217 @@
         .legend .lg-red { background: var(--red); }
         .legend .lg-multi { background: transparent; box-shadow: inset 0 0 0 2px var(--accent); }
 
+        /* ================= DETAIL PALLET (PUBLIC) ================= */
+        #detailOverlay {
+            position: fixed;
+            inset: 0;
+            z-index: 100;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            background: rgba(3, 7, 18, 0.74);
+        }
+
+        #detailOverlay.active { display: flex; }
+
+        .detail-card {
+            width: min(940px, 96vw);
+            max-height: 88vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background: #101728;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+        }
+
+        .detail-head {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--line);
+            background: #0d1526;
+        }
+
+        .detail-head .code {
+            font-size: 18px;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+            color: #fff;
+        }
+
+        .detail-badge {
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            padding: 3px 8px;
+            border-radius: 999px;
+            background: #1f2a44;
+            color: var(--muted);
+        }
+
+        .detail-badge.empty { background: rgba(34, 197, 94, 0.16); color: #86efac; }
+        .detail-badge.partial { background: rgba(245, 158, 11, 0.16); color: #fcd34d; }
+        .detail-badge.full { background: rgba(239, 68, 68, 0.18); color: #fca5a5; }
+
+        .detail-close {
+            margin-left: auto;
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            border: 1px solid var(--line);
+            background: #182140;
+            color: var(--text);
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .detail-close:hover { background: #223059; }
+
+        .detail-body {
+            padding: 12px 14px 16px;
+            overflow: auto;
+        }
+
+        .detail-meta {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+
+        .meta-item {
+            background: #0c1424;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            padding: 7px 9px;
+            min-width: 0;
+        }
+
+        .meta-label {
+            font-size: 9px;
+            letter-spacing: 0.09em;
+            text-transform: uppercase;
+            color: var(--muted);
+            font-weight: 700;
+        }
+
+        .meta-value {
+            margin-top: 2px;
+            font-size: 13px;
+            font-weight: 700;
+            overflow-wrap: anywhere;
+        }
+
+        .detail-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+        }
+
+        .detail-table th {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            padding: 6px;
+            text-align: left;
+            font-size: 9px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--muted);
+            background: #101728;
+            border-bottom: 1px solid var(--line);
+        }
+
+        .detail-table td {
+            padding: 6px;
+            border-bottom: 1px solid rgba(38, 48, 77, 0.6);
+        }
+
+        .detail-table td.num,
+        .detail-table th.num { text-align: right; }
+
+        .detail-empty {
+            padding: 20px 6px;
+            text-align: center;
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        .detail-loading {
+            padding: 28px 6px;
+            text-align: center;
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        /* ================= MOBILE ================= */
         @media (max-width: 900px) {
-            .stat, .legend { display: none; }
-            #board { gap: 2px; padding: 2px; }
-            .row-card { padding: 2px; }
+            html, body {
+                height: auto;
+                overflow-x: hidden;
+                overflow-y: auto;
+            }
+
+            header {
+                flex: 0 0 auto;
+                flex-wrap: wrap;
+                min-height: 48px;
+                height: auto;
+                padding: 7px 10px;
+                gap: 8px;
+            }
+
+            .brand { font-size: 13px; }
+            .brand small { font-size: 8px; }
+            .stat, .legend, #clock, .spacer { display: none; }
+            .live { margin-left: auto; }
+
+            #board {
+                flex-direction: column;
+                height: auto;
+                padding: 8px;
+                gap: 8px;
+            }
+
+            .row-card {
+                flex: none;
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                grid-template-rows: auto auto;
+                column-gap: 8px;
+                row-gap: 3px;
+                padding: 8px;
+            }
+
+            .row-title { grid-column: 1 / -1; }
+            .row-label { font-size: 14px; }
+            .row-sub { font-size: 10px; }
+            .half-title { font-size: 9px; }
+
+            .positions { grid-template-rows: none !important; flex: none; }
+            .half { flex: none; }
+            .pos-row { min-height: 20px; }
+            .box { font-size: 9px; border-radius: 3px; }
+
+            #detailOverlay { padding: 8px; }
+            .detail-card { width: 100%; max-height: 92vh; }
+            .detail-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .detail-table { font-size: 10px; }
+        }
+
+        @media (max-width: 420px) {
+            .row-card { padding: 6px; column-gap: 6px; }
+            .pos-row { min-height: 19px; }
+            .box { font-size: 9px; }
+            .detail-head { padding: 10px; }
+            .detail-head .code { font-size: 15px; }
+            .detail-body { padding: 10px; }
         }
     </style>
 </head>
@@ -301,12 +514,28 @@
 
     <main id="board"></main>
 
+    <!-- Detail pallet (klik kotak pallet) -->
+    <div id="detailOverlay" aria-hidden="true">
+        <div class="detail-card" role="dialog" aria-modal="true" aria-labelledby="dCode">
+            <div class="detail-head">
+                <span class="code" id="dCode">-</span>
+                <span class="detail-badge" id="dStatus">-</span>
+                <button class="detail-close" type="button" id="dClose" aria-label="Tutup">✕</button>
+            </div>
+            <div class="detail-body">
+                <div class="detail-meta" id="dMeta"></div>
+                <div id="dItemsWrap" class="detail-loading">Memuat…</div>
+            </div>
+        </div>
+    </div>
+
     <script>
         (function () {
             'use strict';
 
             const ROWS = ['B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'];
             const STREAM_URL = @json(route('pallet.public.stream'));
+            const DETAIL_URL = @json(route('pallet.public.detail', ['id' => '__id__']));
             const boxMap = new Map();
             let es = null;
             let reconnectTimer = null;
@@ -406,6 +635,7 @@
                     box.classList.add(next);
                     box.classList.toggle('multi', p.country_mode === 'multi');
                     box.textContent = c > 0 ? c : '';
+                    box.setAttribute('data-pallet-id', p.id);
                     box.title = p.code + ' — ' + (c > 0
                         ? (c + '/' + m + ' karton · ' + (p.style || '-') + ' · ' + (p.country || '-'))
                         : 'Kosong') + (p.country_mode === 'multi' ? ' · multi-negara' : '');
@@ -509,6 +739,126 @@
                 if (!document.hidden && !es) {
                     connect();
                 }
+            });
+
+            // ── Detail pallet saat kotak diklik ────────────────────────
+            const detailOverlay = document.getElementById('detailOverlay');
+
+            function esc(value) {
+                return String(value === null || value === undefined || value === '' ? '-' : value)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+            }
+
+            function closeDetail() {
+                detailOverlay.classList.remove('active');
+                detailOverlay.setAttribute('aria-hidden', 'true');
+            }
+
+            function statusLabel(status) {
+                if (status === 'full') return 'Penuh';
+                if (status === 'partial') return 'Terisi';
+                return 'Kosong';
+            }
+
+            function metaItem(label, value) {
+                return '<div class="meta-item"><div class="meta-label">' + esc(label) + '</div>' +
+                    '<div class="meta-value">' + esc(value) + '</div></div>';
+            }
+
+            function renderDetail(data) {
+                const p = data.pallet;
+
+                document.getElementById('dCode').textContent = p.code;
+
+                const badge = document.getElementById('dStatus');
+                badge.className = 'detail-badge ' + (p.status || 'empty');
+                badge.textContent = statusLabel(p.status) + ' · ' + p.cartons + '/' + p.max_carton;
+
+                const countries = (p.countries || []).join(', ') || '-';
+                document.getElementById('dMeta').innerHTML = [
+                    metaItem('Row / Posisi', p.row + ' · ' + p.col + ' · ' + p.pos),
+                    metaItem('Style', p.style || '-'),
+                    metaItem('OCF', p.ocf || '-'),
+                    metaItem('Negara', countries),
+                    metaItem('Mode Negara', p.country_mode === 'multi' ? 'Multi negara' : '1 negara'),
+                    metaItem('Kapasitas', p.cartons + ' / ' + p.max_carton + ' karton'),
+                    metaItem('Total Pcs', (p.total_pcs || 0).toLocaleString('id-ID')),
+                    metaItem('Jumlah Item', ((data.items || []).length) + ' baris')
+                ].join('');
+
+                const wrap = document.getElementById('dItemsWrap');
+                const items = data.items || [];
+
+                if (!items.length) {
+                    wrap.className = 'detail-empty';
+                    wrap.textContent = 'Pallet masih kosong — belum ada karton.';
+                    return;
+                }
+
+                let html = '<table class="detail-table"><thead><tr>' +
+                    '<th>JAN Code</th><th>Color</th><th>Size</th>' +
+                    '<th class="num">Carton</th><th class="num">Pcs/Ctn</th><th class="num">Total Pcs</th>' +
+                    '</tr></thead><tbody>';
+
+                items.forEach(function (it) {
+                    html += '<tr>' +
+                        '<td>' + esc(it.jancode) + '</td>' +
+                        '<td>' + esc(it.color) + '</td>' +
+                        '<td>' + esc(it.size) + '</td>' +
+                        '<td class="num">' + it.qty_carton + '</td>' +
+                        '<td class="num">' + (it.pcs_per_carton || '-') + '</td>' +
+                        '<td class="num">' + (it.total_pcs || 0).toLocaleString('id-ID') + '</td>' +
+                        '</tr>';
+                });
+
+                html += '</tbody></table>';
+                wrap.className = '';
+                wrap.innerHTML = html;
+            }
+
+            function openDetail(id) {
+                document.getElementById('dCode').textContent = 'Memuat…';
+                document.getElementById('dStatus').className = 'detail-badge';
+                document.getElementById('dStatus').textContent = '-';
+                document.getElementById('dMeta').innerHTML = '';
+                document.getElementById('dItemsWrap').className = 'detail-loading';
+                document.getElementById('dItemsWrap').textContent = 'Memuat detail pallet…';
+
+                detailOverlay.classList.add('active');
+                detailOverlay.setAttribute('aria-hidden', 'false');
+
+                fetch(DETAIL_URL.replace('__id__', id), { headers: { 'Accept': 'application/json' } })
+                    .then(function (res) { return res.json(); })
+                    .then(function (data) {
+                        if (!data.success) throw new Error('not_found');
+                        renderDetail(data);
+                    })
+                    .catch(function () {
+                        document.getElementById('dCode').textContent = 'Gagal';
+                        document.getElementById('dStatus').className = 'detail-badge';
+                        document.getElementById('dStatus').textContent = '-';
+                        document.getElementById('dItemsWrap').className = 'detail-empty';
+                        document.getElementById('dItemsWrap').textContent = 'Detail pallet tidak bisa dimuat.';
+                    });
+            }
+
+            document.getElementById('board').addEventListener('click', function (e) {
+                const box = e.target.closest('.box');
+                if (!box) return;
+                const id = box.getAttribute('data-pallet-id');
+                if (id) openDetail(id);
+            });
+
+            document.getElementById('dClose').addEventListener('click', closeDetail);
+            detailOverlay.addEventListener('click', function (e) {
+                if (e.target === detailOverlay) closeDetail();
+            });
+            document.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape') closeDetail();
             });
 
             buildBoard();

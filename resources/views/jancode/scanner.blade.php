@@ -321,6 +321,7 @@
                 let scanStream = null;
                 let scanStreamHash = '';
                 let scanStreamRetry = null;
+                let scanStreamOpenTimer = null;
                 let pendingLiveState = null;
                 let isScanning = false;
                 let bufferTimer = null;
@@ -362,19 +363,33 @@
                 });
 
                 // ── Select2 Init ───────────────────────────────────────────
-                $select.select2({
-                    theme: 'bootstrap4',
-                    placeholder: 'Cari packing list (style / CPO / destination / warehouse)...',
-                    allowClear: true,
-                    ajax: {
-                        url: "{{ route('scanner.packingLists') }}",
-                        dataType: 'json',
-                        delay: 250,
-                        data: params => ({ q: params.term }),
-                        processResults: data => ({ results: data }),
-                        cache: true
+                // select2 dimuat dari CDN; jika gagal, tetap bisa pakai <select> biasa.
+                const hasSelect2 = typeof $.fn.select2 === 'function';
+
+                function selectedPackingList() {
+                    if (hasSelect2) {
+                        const data = $select.select2('data')[0];
+                        return data && data.id ? data : null;
                     }
-                });
+                    const opt = $select.find('option:selected').get(0);
+                    return opt && opt.value ? { id: opt.value, text: opt.text } : null;
+                }
+
+                if (hasSelect2) {
+                    $select.select2({
+                        theme: 'bootstrap4',
+                        placeholder: 'Cari packing list (style / CPO / destination / warehouse)...',
+                        allowClear: true,
+                        ajax: {
+                            url: "{{ route('scanner.packingLists') }}",
+                            dataType: 'json',
+                            delay: 250,
+                            data: params => ({ q: params.term }),
+                            processResults: data => ({ results: data }),
+                            cache: true
+                        }
+                    });
+                }
 
                 // Prefill jika dibuka dari halaman packing list
                 if (presetPackingList) {
@@ -390,7 +405,7 @@
 
                 // ── Load Packing List ──────────────────────────────────────
                 $btnLoad.click(function () {
-                    const data = $select.select2('data')[0];
+                    const data = selectedPackingList();
                     if (!data || !data.id) {
                         Swal.fire('Peringatan', 'Silakan pilih packing list terlebih dahulu', 'warning');
                         return;
@@ -399,7 +414,7 @@
                 });
 
                 function loadPackingList() {
-                    const data = $select.select2('data')[0];
+                    const data = selectedPackingList();
                     if (!data || !data.id) return;
 
                     $btnLoad.prop('disabled', true).html('<i class="fas fa-spinner fa-spin mr-1"></i> Memuat...');
@@ -624,6 +639,9 @@
                     } else if (state === 'connecting') {
                         $badge.addClass('badge-warning text-dark');
                         $text.text('LIVE: menghubungkan…');
+                    } else if (state === 'polling') {
+                        $badge.addClass('badge-warning text-dark');
+                        $text.text('LIVE: polling 15s');
                     } else {
                         $badge.addClass('badge-secondary');
                         $text.text('LIVE: off');
@@ -639,6 +657,10 @@
                         clearTimeout(scanStreamRetry);
                         scanStreamRetry = null;
                     }
+                    if (scanStreamOpenTimer) {
+                        clearTimeout(scanStreamOpenTimer);
+                        scanStreamOpenTimer = null;
+                    }
                 }
 
                 function startScanStream() {
@@ -653,6 +675,21 @@
 
                     const url = "{{ route('scanner.stream') }}" + '?t=' + encodeURIComponent(scanStreamHash || '');
                     scanStream = new EventSource(url);
+
+                    // Bila koneksi tidak terbuka dalam 8 detik, pakai polling sebagai fallback.
+                    scanStreamOpenTimer = setTimeout(function () {
+                        if (scanStream && scanStream.readyState === 0) {
+                            setScanLive('polling');
+                        }
+                    }, 8000);
+
+                    scanStream.addEventListener('open', function () {
+                        if (scanStreamOpenTimer) {
+                            clearTimeout(scanStreamOpenTimer);
+                            scanStreamOpenTimer = null;
+                        }
+                        setScanLive('on');
+                    });
 
                     scanStream.addEventListener('state', function (ev) {
                         let data = null;
