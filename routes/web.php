@@ -36,6 +36,9 @@ Route::group(['middleware' => 'guest'], function () {
     Route::post('/login', [LoginController::class, 'authenticate'])->name('login.post');
 });
 
+Route::get('/display/pallet', [\App\Http\Controllers\PalletController::class, 'publicDisplay'])->name('pallet.public');
+Route::get('/display/pallet/stream', [\App\Http\Controllers\PalletController::class, 'stream'])->name('pallet.public.stream');
+
 Route::group(['middleware' => 'auth'], function () {
     Route::get('/home', [HomeController::class, 'index'])->name('home');
     Route::get('/logout', [LoginController::class, 'logout'])->name('logout');
@@ -91,6 +94,8 @@ Route::group(['middleware' => 'auth'], function () {
         Route::get('/3d', [\App\Http\Controllers\PalletController::class, 'threeD'])->name('threeD');
         Route::get('/3d-data', [\App\Http\Controllers\PalletController::class, 'threeDData'])->name('threeDData');
         Route::get('/stream', [\App\Http\Controllers\PalletController::class, 'stream'])->name('stream');
+        Route::get('/find-jancode', [\App\Http\Controllers\PalletController::class, 'findJancode'])->name('findJancode');
+        Route::post('/{id}/country-mode', [\App\Http\Controllers\PalletController::class, 'updateCountryMode'])->name('countryMode');
         Route::get('/detail/{id}', [\App\Http\Controllers\PalletController::class, 'getDetail'])->name('detail');
         Route::post('/store', [\App\Http\Controllers\PalletController::class, 'storeAssignment'])->name('store');
         Route::post('/move', [\App\Http\Controllers\PalletController::class, 'moveCarton'])->name('move');
@@ -103,6 +108,7 @@ Route::group(['middleware' => 'auth'], function () {
         Route::get('/packing-lists', [JancodeScanController::class, 'packingLists'])->name('packingLists')->middleware(['auth', 'role:Admin']);
         Route::post('/load', [JancodeScanController::class, 'load'])->name('load')->middleware(['auth', 'role:Admin']);
         Route::get('/rows', [JancodeScanController::class, 'rows'])->name('rows')->middleware(['auth', 'role:Admin']);
+        Route::get('/stream', [JancodeScanController::class, 'stream'])->name('stream')->middleware(['auth', 'role:Admin']);
         Route::get('/search', [JancodeScanController::class, 'search'])->name('search')->middleware(['auth', 'role:Admin']);
         Route::get('/count', [JancodeScanController::class, 'count'])->name('count')->middleware(['auth', 'role:Admin']);
         Route::post('/scan', [JancodeScanController::class, 'scan'])->name('scan')->middleware(['auth', 'role:Admin']);

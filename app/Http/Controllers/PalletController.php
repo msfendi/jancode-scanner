@@ -97,12 +97,18 @@ class PalletController extends Controller
             $colorBreakdown = [];
             $rowTotalCartons = 0;
             $rowTotalPcs = 0;
+            $countriesSeen = [];
+            $stylesSeen = [];
 
             foreach ($assignmentsInRow as $asg) {
                 $rowTotalCartons += $asg->total_carton;
+                if ($asg->country) { $countriesSeen[strtoupper(trim($asg->country))] = true; }
+                if ($asg->style) { $stylesSeen[strtoupper(trim($asg->style))] = true; }
                 foreach ($asg->details as $det) {
                     $jc = $det->jancode;
                     if ($jc) {
+                        if ($jc->country) { $countriesSeen[strtoupper(trim($jc->country))] = true; }
+                        if ($jc->style) { $stylesSeen[strtoupper(trim($jc->style))] = true; }
                         $cName = $jc->color;
                         $sName = $jc->size;
                         $ctn = (int)$det->qty_carton;
@@ -129,10 +135,18 @@ class PalletController extends Controller
             $firstJc = $firstAssign ? $firstAssign->details->first()?->jancode : null;
             $rowOcf = $firstAssign ? ($firstAssign->ocf ?: ($firstJc ? $firstJc->ocf : '-')) : null;
 
+            $distinctCountries = collect(array_keys($countriesSeen));
+            $distinctStyles = collect(array_keys($stylesSeen));
+
             $rowSummaries[$r] = [
                 'is_locked'       => $isLocked,
-                'country'         => $isLocked ? $firstAssign->country : null,
-                'style'           => $isLocked ? $firstAssign->style : null,
+                'country'         => $isLocked
+                    ? ($distinctCountries->count() > 1 ? 'CAMPURAN (' . $distinctCountries->count() . ' negara)' : $distinctCountries->first())
+                    : null,
+                'country_list'    => $distinctCountries->values(),
+                'style'           => $isLocked
+                    ? ($distinctStyles->count() > 1 ? 'CAMPURAN (' . $distinctStyles->count() . ' style)' : $distinctStyles->first())
+                    : null,
                 'ocf'             => $rowOcf,
                 'total_cartons'   => $rowTotalCartons,
                 'total_pcs'       => $rowTotalPcs,
@@ -238,6 +252,84 @@ class PalletController extends Controller
     }
 
     /**
+     * Halaman display publik (tanpa auth) — board ringkas 1 layar + live SSE.
+     */
+    public function publicDisplay()
+    {
+        $this->ensureAddressesSeeded();
+
+        return view('pallet.display');
+    }
+
+    /**
+     * Ubah mode negara per pallet: single | multi.
+     */
+    public function updateCountryMode(Request $request, $id)
+    {
+        $data = $request->validate([
+            'country_mode' => 'required|in:single,multi',
+        ]);
+
+        $address = PalletAddress::with('assignment.details.jancode')->findOrFail($id);
+
+        if ($data['country_mode'] === 'single' && $address->assignment) {
+            $countries = collect($address->assignment->details)
+                ->map(fn($d) => strtoupper(trim((string) ($d->jancode->country ?? ''))))
+                ->filter()
+                ->unique();
+
+            if ($countries->count() > 1) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Pallet {$address->code} sudah berisi " . $countries->count() . " negara (" . $countries->implode(', ') . "). Kosongkan/pindahkan item terlebih dahulu sebelum mengubah ke mode 1 negara.",
+                ], 422);
+            }
+        }
+
+        $address->country_mode = $data['country_mode'];
+        $address->save();
+
+        return response()->json([
+            'success' => true,
+            'country_mode' => $address->country_mode,
+            'message' => $data['country_mode'] === 'multi'
+                ? "Pallet {$address->code} sekarang boleh diisi beberapa negara."
+                : "Pallet {$address->code} sekarang HANYA boleh 1 negara.",
+        ]);
+    }
+
+    /**
+     * Cari pallet yang berisi JAN code tertentu (untuk highlight di board).
+     */
+    public function findJancode(Request $request)
+    {
+        $raw = trim((string) $request->input('code'));
+        if ($raw === '') {
+            return response()->json(['success' => false, 'message' => 'JAN code tidak boleh kosong.'], 422);
+        }
+
+        $digits = preg_replace('/[^0-9]/', '', $raw);
+        $term = $digits !== '' ? $digits : $raw;
+
+        $rows = PalletAssignmentDetail::query()
+            ->join('pallet_assignment', 'pallet_assignment.id', '=', 'pallet_assignment_detail.assignment_id')
+            ->join('pallet_address', 'pallet_address.id', '=', 'pallet_assignment.pallet_address_id')
+            ->join('jancode', 'jancode.id', '=', 'pallet_assignment_detail.jancode_id')
+            ->where('jancode.jancode', 'like', '%' . $term . '%')
+            ->groupBy('pallet_address.id', 'pallet_address.code', 'pallet_address.row_label', 'pallet_address.col_label', 'pallet_address.position_no')
+            ->selectRaw('pallet_address.id, pallet_address.code, pallet_address.row_label, pallet_address.col_label, pallet_address.position_no, SUM(pallet_assignment_detail.qty_carton) as qty')
+            ->orderBy('pallet_address.code')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'query'   => $term,
+            'count'   => $rows->count(),
+            'pallets' => $rows,
+        ]);
+    }
+
+    /**
      * SSE stream untuk live update pallet (tanpa Vite / WebSocket).
      * Emit event 'pallet' tiap ada perubahan assignment/detail.
      */
@@ -292,13 +384,14 @@ class PalletController extends Controller
 
     private function buildLiveSnapshot(): array
     {
-        $addresses = PalletAddress::with('assignment')->orderBy('id')->get(['id','code','row_label','col_label','position_no','max_carton']);
+        $addresses = PalletAddress::with('assignment')->orderBy('id')->get(['id','code','row_label','col_label','position_no','max_carton','country_mode']);
         $assignments = PalletAssignment::with(['details.jancode','address'])->get();
         $maxA = PalletAssignment::max('updated_at') ?: '0';
         $maxD = PalletAssignmentDetail::max('updated_at') ?: '0';
+        $maxAddr = PalletAddress::max('updated_at') ?: '0';
         $sum = (int) $assignments->sum('total_carton');
         $cnt = $assignments->count();
-        $hash = md5($maxA . '|' . $maxD . '|' . $sum . '|' . $cnt);
+        $hash = md5($maxA . '|' . $maxD . '|' . $maxAddr . '|' . $sum . '|' . $cnt);
         $pallets = [];
         foreach ($addresses as $a) {
             $asg = $a->assignment;
@@ -312,6 +405,8 @@ class PalletController extends Controller
                 'style' => $asg ? $asg->style : null,
                 'country' => $asg ? $asg->country : null,
                 'ocf' => $asg ? ($asg->ocf ?? null) : null,
+                'country_mode' => $a->country_mode ?: 'single',
+                'max_carton' => (int) ($a->max_carton ?: 42),
             ];
         }
         $occupied = collect($pallets)->where('cartons','>',0)->count();
@@ -324,10 +419,16 @@ class PalletController extends Controller
             $totalCartons = (int) $inRow->sum('total_carton');
             $totalPcs = 0;
             $colorBreakdown = [];
+            $countriesSeen = [];
+            $stylesSeen = [];
             foreach ($inRow as $asg) {
+                if ($asg->country) { $countriesSeen[strtoupper(trim($asg->country))] = true; }
+                if ($asg->style) { $stylesSeen[strtoupper(trim($asg->style))] = true; }
                 foreach ($asg->details as $det) {
                     $jc = $det->jancode;
                     if (!$jc) continue;
+                    if ($jc->country) { $countriesSeen[strtoupper(trim($jc->country))] = true; }
+                    if ($jc->style) { $stylesSeen[strtoupper(trim($jc->style))] = true; }
                     $cName = $jc->color ?: '-';
                     $sName = $jc->size ?: '-';
                     $ctn = (int)$det->qty_carton;
@@ -344,17 +445,20 @@ class PalletController extends Controller
             }
             if ($first) {
                 $firstJc = $first->details->first()?->jancode;
+                $rowCountries = array_keys($countriesSeen);
+                $rowStyles = array_keys($stylesSeen);
                 $rowSummaries[$r] = [
                     'is_locked' => true,
-                    'country' => $first->country,
-                    'style' => $first->style,
+                    'country' => count($rowCountries) > 1 ? ('CAMPURAN (' . count($rowCountries) . ' negara)') : ($rowCountries[0] ?? $first->country),
+                    'country_list' => $rowCountries,
+                    'style' => count($rowStyles) > 1 ? ('CAMPURAN (' . count($rowStyles) . ' style)') : ($rowStyles[0] ?? $first->style),
                     'ocf' => $first->ocf ?: ($firstJc ? ($firstJc->ocf ?? null) : null),
                     'total_cartons' => $totalCartons,
                     'total_pcs' => $totalPcs,
                     'color_breakdown' => $colorBreakdown,
                 ];
             } else {
-                $rowSummaries[$r] = ['is_locked'=>false,'country'=>null,'style'=>null,'ocf'=>null,'total_cartons'=>0,'total_pcs'=>0,'color_breakdown'=>[]];
+                $rowSummaries[$r] = ['is_locked'=>false,'country'=>null,'country_list'=>[],'style'=>null,'ocf'=>null,'total_cartons'=>0,'total_pcs'=>0,'color_breakdown'=>[]];
             }
         }
         $payload = [
@@ -417,6 +521,7 @@ class PalletController extends Controller
                 'col'         => $address->col_label,
                 'pos'         => $address->position_no,
                 'max_carton'  => $address->max_carton,
+                'country_mode' => $address->country_mode ?: 'single',
                 'is_occupied' => $currentCartons > 0,
             ],
             'assignment'      => $assignment ? [
@@ -496,22 +601,23 @@ class PalletController extends Controller
                 ], 422);
             }
 
-            // 1. ATURAN ROW LOCKING: Seluruh Row B-I harus satu Country, Style, dan OCF yang sama
+            // 1. ATURAN ROW LOCKING: Seluruh Row B-I harus satu Style & OCF.
+            //    Country TIDAK lagi dikunci per row supaya pallet mode "multi negara" bisa dipakai.
             $rowActiveAssignment = PalletAssignment::with('details.jancode')
                 ->whereHas('address', fn($q) => $q->where('row_label', $address->row_label))
                 ->where('total_carton', '>', 0)
                 ->first();
 
             if ($rowActiveAssignment) {
-                $rowCountry = strtoupper(trim($rowActiveAssignment->country));
                 $rowStyle = strtoupper(trim($rowActiveAssignment->style));
                 $firstJc = $rowActiveAssignment->details->first()?->jancode;
                 $rowOcf = strtoupper(trim($rowActiveAssignment->ocf ?: ($firstJc ? $firstJc->ocf : '')));
 
-                if ($rowCountry !== $jancodeCountry || $rowStyle !== $jancodeStyle || ($rowOcf && $rowOcf !== $jancodeOcf)) {
+                if ($rowStyle !== $jancodeStyle || ($rowOcf && $rowOcf !== $jancodeOcf)) {
                     return response()->json([
                         'success' => false,
-                        'message' => "Pelanggaran Aturan Row: Seluruh Row {$address->row_label} sudah dikunci untuk Country [{$rowCountry}], Style [{$rowStyle}], OCF [{$rowOcf}]. Pallet pada Row {$address->row_label} tidak dapat dicampur dengan Negara/Style/OCF lain."
+                        'error'   => 'row_locked',
+                        'message' => "Pelanggaran Aturan Row: Seluruh Row {$address->row_label} sudah dikunci untuk Style [{$rowStyle}], OCF [{$rowOcf}]. Pallet pada Row {$address->row_label} tidak dapat dicampur dengan Style/OCF lain."
                     ], 422);
                 }
             }
@@ -528,14 +634,26 @@ class PalletController extends Controller
             $assignment = PalletAssignment::where('pallet_address_id', $addressId)->lockForUpdate()->first();
 
             if ($assignment && $assignment->total_carton > 0) {
-                // BR-09: Satu alamat hanya boleh berisi item dengan style dan country yang sama
+                // BR-09: Style selalu dikunci per pallet.
                 $existingCountry = strtoupper(trim($assignment->country));
                 $existingStyle = strtoupper(trim($assignment->style));
 
-                if ($existingCountry !== $jancodeCountry || $existingStyle !== $jancodeStyle) {
+                if ($existingStyle !== $jancodeStyle) {
                     return response()->json([
                         'success' => false,
-                        'message' => "Pelanggaran BR-09: Pallet {$address->code} sudah terisi Style [{$existingStyle}] / Country [{$existingCountry}]. Tidak bisa mencampur dengan Style [{$jancodeStyle}] / Country [{$jancodeCountry}]."
+                        'error'   => 'style_locked',
+                        'message' => "Pelanggaran BR-09: Pallet {$address->code} sudah terisi Style [{$existingStyle}]. Tidak bisa mencampur dengan Style [{$jancodeStyle}]."
+                    ], 422);
+                }
+
+                // Mode negara per pallet:
+                // - single (default): hanya boleh 1 negara
+                // - multi: boleh beberapa negara
+                if (!$address->isMultiCountry() && $existingCountry !== $jancodeCountry) {
+                    return response()->json([
+                        'success' => false,
+                        'error'   => 'country_locked',
+                        'message' => "Pallet {$address->code} diset HANYA 1 NEGARA (saat ini: {$existingCountry}). Negara [{$jancodeCountry}] tidak bisa ditempatkan di sini. Ubah toggle pallet ke \"Multi Negara\" bila ingin mencampur negara."
                     ], 422);
                 }
 

@@ -9,6 +9,7 @@ use App\Models\JancodeLogs;
 use App\Models\ScanBatch;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * Scanner Jancode per PACKING LIST.
@@ -25,11 +26,21 @@ class JancodeScanController extends Controller
     private const SESSION_KEY = 'scan_import_batch_id';
 
     // Halaman utama scanner
-    public function index()
+    public function index(Request $request)
     {
         $currentSession = ImportSession::current();
 
-        return view('jancode.scanner', compact('currentSession'));
+        // Mode monitor: device lain membuka session yang sama tanpa memilih packing list.
+        // Otomatis muat packing list aktif terakhir pada session tersebut.
+        $monitorBatchId = null;
+        if ($request->boolean('monitor') && $currentSession && !$request->session()->has(self::SESSION_KEY)) {
+            $monitorBatchId = ImportBatch::active()
+                ->where('session_id', $currentSession->id)
+                ->orderByDesc('id')
+                ->value('id');
+        }
+
+        return view('jancode.scanner', compact('currentSession', 'monitorBatchId'));
     }
 
     /**
@@ -143,6 +154,96 @@ class JancodeScanController extends Controller
         }
 
         return response()->json($this->batchState($batch) + ['success' => true]);
+    }
+
+    /**
+     * SSE live monitor: kirim state baris setiap ada scan baru.
+     * Dipakai agar device lain (monitor) melihat progres scan secara realtime.
+     */
+    public function stream(Request $request): StreamedResponse
+    {
+        $batch = $this->resolveSessionBatch();
+        if (!$batch) {
+            return response()->json([
+                'success' => false,
+                'error'   => 'no_packing_list',
+                'message' => 'Pilih packing list terlebih dahulu.',
+            ], 400);
+        }
+
+        $lastHash = (string) $request->query('t', '');
+
+        // max detik bisa diperkecil untuk pengujian; default 55 detik.
+        $maxSeconds = min(55, max(1, (int) $request->query('max', 55)));
+
+        // Lepas session lock supaya request lain (scan/submit) tidak ikut tertahan.
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_write_close();
+        }
+
+        return new StreamedResponse(function () use ($batch, $lastHash, $maxSeconds) {
+            @set_time_limit(0);
+            ignore_user_abort(true);
+
+            $prev = $lastHash;
+            $start = time();
+
+            $emit = function () use ($batch, &$prev) {
+                $hash = $this->scanHash($batch);
+                if ($hash === $prev) {
+                    return false;
+                }
+
+                $payload = $this->batchState($batch) + ['success' => true, 'hash' => $hash];
+                echo "event: state\n";
+                echo 'data: ' . json_encode($payload, JSON_UNESCAPED_UNICODE) . "\n\n";
+                @ob_flush();
+                @flush();
+                $prev = $hash;
+
+                return true;
+            };
+
+            $emit();
+
+            while ((time() - $start) < $maxSeconds) {
+                if (connection_aborted()) {
+                    break;
+                }
+                usleep(1500000); // 1.5 detik
+                $emit();
+                echo ': hb ' . time() . "\n\n";
+                @ob_flush();
+                @flush();
+            }
+
+            echo "event: done\ndata: closing\n\n";
+            @ob_flush();
+            @flush();
+        }, 200, [
+            'Content-Type'      => 'text/event-stream',
+            'Cache-Control'     => 'no-cache, no-transform',
+            'Connection'        => 'keep-alive',
+            'X-Accel-Buffering' => 'no',
+        ]);
+    }
+
+    /**
+     * Hash ringan untuk mendeteksi perubahan scan pada satu packing list.
+     */
+    private function scanHash(ImportBatch $batch): string
+    {
+        $ids = Jancode::where('import_batch_id', $batch->id)->pluck('id');
+        if ($ids->isEmpty()) {
+            return 'empty';
+        }
+
+        $logs = JancodeLogs::whereIn('jancode_id', $ids);
+        $maxUpdated = (clone $logs)->max('updated_at') ?: '0';
+        $count = (clone $logs)->count();
+        $unsubmitted = (clone $logs)->where('is_submitted', 'false')->count();
+
+        return md5($maxUpdated . '|' . $count . '|' . $unsubmitted);
     }
 
     // POST scan — 1 scan = 1 carton

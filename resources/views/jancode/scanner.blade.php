@@ -84,7 +84,12 @@
                                             </button>
                                         </div>
                                     </div>
-                                    <small class="form-text text-muted">Hanya packing list dengan revisi <strong>aktif</strong> yang muncul di daftar.</small>
+                                    <small class="form-text text-muted">
+                                        Hanya packing list dengan revisi <strong>aktif</strong> yang muncul di daftar.
+                                        <a href="{{ route('scanner.index') }}?monitor=1" class="font-weight-bold ml-1">
+                                            <i class="fas fa-satellite-dish mr-1"></i>Mode Monitor Live
+                                        </a>
+                                    </small>
                                 </div>
                                 <div class="col-lg-4 mb-2" id="pl-info" style="display:none;">
                                     <div class="border rounded p-2 bg-light">
@@ -209,6 +214,9 @@
                                 <i class="fas fa-list-ol mr-1"></i> Daftar Jancode pada Packing List (<span id="rows-done">0</span>/<span id="rows-total">0</span> selesai)
                             </h6>
                             <div class="d-flex align-items-center">
+                                <span class="badge badge-secondary mr-3" id="scan-live-badge" title="Perubahan scan dari device lain tampil otomatis">
+                                    <i class="fas fa-circle mr-1" style="font-size:8px;"></i><span id="scan-live-text">LIVE: -</span>
+                                </span>
                                 <small class="text-muted mr-3 d-none d-md-inline">
                                     <i class="fas fa-clock mr-1"></i> Terakhir diperbarui: <span id="rows-updated">-</span>
                                 </small>
@@ -303,8 +311,17 @@
                     headers: { 'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content') }
                 });
 
+                // Aman bila CDN SweetAlert belum termuat
+                function swalVisible() {
+                    return typeof Swal !== 'undefined' && Swal.isVisible();
+                }
+
                 // ── Variables ──────────────────────────────────────────────
                 let loadedBatchId = null;
+                let scanStream = null;
+                let scanStreamHash = '';
+                let scanStreamRetry = null;
+                let pendingLiveState = null;
                 let isScanning = false;
                 let bufferTimer = null;
                 let scanQueue = [];
@@ -316,7 +333,8 @@
                 const $btnLoad = $('#btn-load');
                 const $btnUnload = $('#btn-unload');
 
-                const presetPackingList = new URLSearchParams(window.location.search).get('packing_list');
+                const presetPackingList = new URLSearchParams(window.location.search).get('packing_list')
+                    || @json($monitorBatchId ?? null);
 
                 // ── Auto-focus input scan ──────────────────────────────────
                 // Alat scanner mengirim karakter seperti keyboard, jadi fokus harus
@@ -324,7 +342,7 @@
                 // aktif akan mengembalikan fokus ke input.
                 function focusScanInput() {
                     if (!$('#scan-card').is(':visible')) return;
-                    if (Swal.isVisible()) return;
+                    if (swalVisible()) return;
                     $input.trigger('focus');
                 }
 
@@ -338,7 +356,7 @@
                 // Fallback: bila fokus jatuh ke body, kembalikan ke input scan
                 // begitu operator mulai mengetik / scan.
                 $(document).on('keydown', function () {
-                    if (Swal.isVisible()) return;
+                    if (swalVisible()) return;
                     const tag = (document.activeElement && document.activeElement.tagName) || '';
                     if (tag === 'BODY' || tag === 'HTML') { $input.trigger('focus'); }
                 });
@@ -401,6 +419,7 @@
                             $('#log-card').show();
                             clearScanLogs();
                             $input.val('').focus();
+                            startScanStream();
                         },
                         error: function (xhr) {
                             const msg = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : 'Gagal memuat packing list';
@@ -434,6 +453,9 @@
                                 $('#pl-info').hide();
                                 $input.val('');
                                 clearScanLogs();
+                                stopScanStream();
+                                scanStreamHash = '';
+                                pendingLiveState = null;
                             });
                         }
                     });
@@ -565,29 +587,133 @@
                     });
                 }
 
-                // ── Auto-refresh (polling) ─────────────────────────────────
-                // Memperbarui daftar jancode secara berkala agar progres & balance
-                // selalu sinkron, tanpa mengganggu operator saat sedang scan.
+                // ── Live update (SSE) + fallback polling ──────────────────
+                // Perubahan scan dari device lain dikirim server lewat SSE
+                // (/scanner/stream), polling 15 detik tetap dipakai sebagai cadangan.
                 const AUTO_REFRESH_MS = 15000;
                 let autoRefreshTimer = null;
 
                 function startAutoRefresh() {
                     stopAutoRefresh();
                     autoRefreshTimer = setInterval(pollRows, AUTO_REFRESH_MS);
+                    startScanStream();
                 }
 
                 function stopAutoRefresh() {
                     if (autoRefreshTimer) { clearInterval(autoRefreshTimer); autoRefreshTimer = null; }
+                    stopScanStream();
                 }
 
                 function pollRows() {
                     if (!loadedBatchId) return;
                     if (isScanning || scanQueue.length > 0) return;   // sedang scan
                     if (document.hidden) return;                        // tab tidak aktif
-                    if (Swal.isVisible()) return;                       // ada dialog
+                    if (swalVisible()) return;                       // ada dialog
                     if ($('#row-filter').val()) return;                 // sedang memfilter
                     refreshRows();
                 }
+
+                function setScanLive(state) {
+                    const $badge = $('#scan-live-badge');
+                    const $text = $('#scan-live-text');
+                    $badge.removeClass('badge-secondary badge-success badge-warning badge-danger');
+
+                    if (state === 'on') {
+                        $badge.addClass('badge-success');
+                        $text.text('LIVE');
+                    } else if (state === 'connecting') {
+                        $badge.addClass('badge-warning text-dark');
+                        $text.text('LIVE: menghubungkan…');
+                    } else {
+                        $badge.addClass('badge-secondary');
+                        $text.text('LIVE: off');
+                    }
+                }
+
+                function stopScanStream() {
+                    if (scanStream) {
+                        scanStream.close();
+                        scanStream = null;
+                    }
+                    if (scanStreamRetry) {
+                        clearTimeout(scanStreamRetry);
+                        scanStreamRetry = null;
+                    }
+                }
+
+                function startScanStream() {
+                    stopScanStream();
+
+                    if (!loadedBatchId || !window.EventSource) {
+                        setScanLive('off');
+                        return;
+                    }
+
+                    setScanLive('connecting');
+
+                    const url = "{{ route('scanner.stream') }}" + '?t=' + encodeURIComponent(scanStreamHash || '');
+                    scanStream = new EventSource(url);
+
+                    scanStream.addEventListener('state', function (ev) {
+                        let data = null;
+                        try { data = JSON.parse(ev.data); } catch (e) { return; }
+
+                        scanStreamHash = data.hash || scanStreamHash;
+
+                        // Jangan ganggu operator yang sedang scan / memfilter / ada dialog.
+                        if (isScanning || scanQueue.length > 0 || swalVisible() || $('#row-filter').val() || document.hidden) {
+                            pendingLiveState = data;
+                            return;
+                        }
+
+                        applyLiveState(data);
+                    });
+
+                    scanStream.addEventListener('done', function () {
+                        stopScanStream();
+                        setScanLive('connecting');
+                        scanStreamRetry = setTimeout(startScanStream, 1500);
+                    });
+
+                    scanStream.onerror = function () {
+                        stopScanStream();
+                        setScanLive('off');
+                        scanStreamRetry = setTimeout(startScanStream, 3000);
+                    };
+                }
+
+                function applyLiveState(data) {
+                    if (!data || !data.packing_list) return;
+
+                    // Simpan nilai received sebelum render, untuk highlight baris yang berubah.
+                    const before = {};
+                    $('#rows-tbody tr[data-jancode-id]').each(function () {
+                        before[String($(this).attr('data-jancode-id'))] = $.trim($(this).find('.cell-receive').text());
+                    });
+
+                    renderState(data);
+
+                    Object.keys(before).forEach(function (id) {
+                        const $tr = $('#rows-tbody tr[data-jancode-id="' + id + '"]');
+                        if (!$tr.length) return;
+                        const now = $.trim($tr.find('.cell-receive').text());
+                        if (now !== before[id]) {
+                            $tr.addClass('table-info');
+                            setTimeout(function () { $tr.removeClass('table-info'); }, 2500);
+                        }
+                    });
+
+                    setScanLive('on');
+                }
+
+                // Terapkan state yang tertunda setelah operator selesai scan / menutup dialog.
+                setInterval(function () {
+                    if (!pendingLiveState) return;
+                    if (isScanning || scanQueue.length > 0 || swalVisible() || $('#row-filter').val() || document.hidden) return;
+                    const data = pendingLiveState;
+                    pendingLiveState = null;
+                    applyLiveState(data);
+                }, 1200);
 
                 $('#auto-refresh-toggle').on('change', function () {
                     if ($(this).is(':checked')) { startAutoRefresh(); } else { stopAutoRefresh(); }
@@ -597,8 +723,11 @@
                 document.addEventListener('visibilitychange', function () {
                     if (!document.hidden && $('#auto-refresh-toggle').is(':checked')) {
                         pollRows();
+                        startScanStream();
                     }
                 });
+
+                window.addEventListener('beforeunload', stopScanStream);
 
                 startAutoRefresh();
 
@@ -776,7 +905,7 @@
                         },
                         complete: function () {
                             isScanning = false;
-                            if (loadedBatchId && !Swal.isVisible()) $input.focus();
+                            if (loadedBatchId && !swalVisible()) $input.focus();
                             processQueue();
                         }
                     });

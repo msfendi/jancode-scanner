@@ -17,7 +17,13 @@ class PalletAddress extends Model
         'position_no',
         'code',
         'max_carton',
+        'country_mode',
     ];
+
+    public function isMultiCountry(): bool
+    {
+        return $this->country_mode === 'multi';
+    }
 
     public function assignment()
     {

@@ -137,6 +137,30 @@
         background-color: #e74a3b;
         color: #fff;
     }
+    /* Status isi pallet: kosong (hijau), terisi belum penuh (kuning), penuh 42 (merah) */
+    .pallet-partial {
+        background-color: #f6c23e;
+        color: #3d2f00;
+    }
+    .pallet-full {
+        background-color: #e74a3b;
+        color: #fff;
+    }
+    /* Penanda pallet mode multi-negara */
+    .pallet-multi {
+        box-shadow: inset 0 0 0 2px rgba(78, 115, 223, 0.9);
+    }
+    /* Highlight hasil pencarian JAN code */
+    .pallet-hit {
+        outline: 3px solid #224abe;
+        outline-offset: 1px;
+        animation: palletPulse 1s infinite;
+        z-index: 4;
+    }
+    @keyframes palletPulse {
+        0%, 100% { transform: scale(1); }
+        50%      { transform: scale(1.09); }
+    }
     .font-mono {
         font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
     }
@@ -378,8 +402,13 @@
                                     </div>
                                 </div>
                                 <div class="d-flex align-items-center gap-2">
-                                    <span class="badge badge-success px-2 py-1 mr-2"><i class="fas fa-circle mr-1"></i> Hijau: Kosong</span>
-                                    <span class="badge badge-danger px-2 py-1 mr-2"><i class="fas fa-circle mr-1"></i> Merah: Terisi</span>
+                                    <span class="badge badge-success px-2 py-1 mr-2"><i class="fas fa-circle mr-1"></i> Kosong</span>
+                                    <span class="badge badge-warning px-2 py-1 mr-2"><i class="fas fa-circle mr-1"></i> Terisi (belum penuh)</span>
+                                    <span class="badge badge-danger px-2 py-1 mr-2"><i class="fas fa-circle mr-1"></i> Penuh 42</span>
+                                    <span class="badge badge-primary px-2 py-1 mr-2"><i class="fas fa-globe mr-1"></i> Bingkai biru = Multi Negara</span>
+                                    <a href="{{ route('pallet.public') }}" target="_blank" class="btn btn-sm btn-outline-dark ml-1" title="Display publik tanpa login">
+                                        <i class="fas fa-tv mr-1"></i> Public Display
+                                    </a>
                                     <button type="button" class="btn btn-sm btn-dark ml-1" id="btnFullscreen" title="Fullscreen View">
                                         <i class="fas fa-expand mr-1"></i> Fullscreen
                                     </button>
@@ -401,6 +430,16 @@
                                         <div class="input-group-prepend"><span class="input-group-text"><i class="fas fa-tshirt"></i></span></div>
                                         <input type="text" class="form-control" id="searchStyle" placeholder="Style (mis. AB1234)">
                                     </div>
+                                    <div class="input-group input-group-sm mr-2" style="max-width: 240px;">
+                                        <div class="input-group-prepend"><span class="input-group-text"><i class="fas fa-barcode"></i></span></div>
+                                        <input type="text" class="form-control" id="searchJancode" placeholder="JAN code (cari pallet)">
+                                        <div class="input-group-append">
+                                            <button class="btn btn-outline-primary" type="button" id="btnSearchJancode" title="Cari lokasi pallet dari JAN code">
+                                                <i class="fas fa-crosshairs"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <span id="jancodeSearchInfo" class="small font-weight-bold text-primary mr-2"></span>
                                     <button type="button" class="btn btn-sm btn-warning font-weight-bold" id="btnSearch">
                                         <i class="fas fa-search mr-1"></i> Cari
                                     </button>
@@ -505,23 +544,27 @@
                                                             $addrA = $groupedRows[$rowLetter]['a'][$p] ?? null;
                                                             $isOccA = $addrA && $addrA->assignment && $addrA->assignment->total_carton > 0;
                                                             $cartonsA = $isOccA ? $addrA->assignment->total_carton : 0;
+                                                            $stateA = !$isOccA ? 'pallet-vacant' : ($cartonsA >= (int) $addrA->max_carton ? 'pallet-full' : 'pallet-partial');
+                                                            $multiA = ($addrA && $addrA->country_mode === 'multi') ? ' pallet-multi' : '';
 
                                                             $addrB = $groupedRows[$rowLetter]['b'][$p] ?? null;
                                                             $isOccB = $addrB && $addrB->assignment && $addrB->assignment->total_carton > 0;
                                                             $cartonsB = $isOccB ? $addrB->assignment->total_carton : 0;
+                                                            $stateB = !$isOccB ? 'pallet-vacant' : ($cartonsB >= (int) $addrB->max_carton ? 'pallet-full' : 'pallet-partial');
+                                                            $multiB = ($addrB && $addrB->country_mode === 'multi') ? ' pallet-multi' : '';
                                                         @endphp
                                                         <div class="pallet-vert-row">
                                                             <span class="pallet-pos-tag">{{ $p }}</span>
                                                             @if($addrA)
-                                                                <div class="pallet-box {{ $isOccA ? 'pallet-occupied' : 'pallet-vacant' }}" data-pallet-id="{{ $addrA->id }}" data-code="{{ $addrA->code }}" onclick="openPalletModal({{ $addrA->id }})"
-                                                                     title="{{ $addrA->code }}: {{ $isOccA ? $cartonsA . '/42 Karton (' . $addrA->assignment->style . ' - ' . $addrA->assignment->country . ')' : 'Kosong (Maks 42)' }}">
+                                                                <div class="pallet-box {{ $stateA }}{{ $multiA }}" data-pallet-id="{{ $addrA->id }}" data-code="{{ $addrA->code }}" onclick="openPalletModal({{ $addrA->id }})"
+                                                                     title="{{ $addrA->code }}: {{ $isOccA ? $cartonsA . '/42 Karton (' . $addrA->assignment->style . ' - ' . $addrA->assignment->country . ')' : 'Kosong (Maks 42)' }}{{ $addrA->country_mode === 'multi' ? ' [Multi Negara]' : ' [1 Negara]' }}">
                                                                     <span class="font-weight-bold">{{ $addrA->code }}</span>
                                                                     <span class="small font-weight-bold">{{ $isOccA ? $cartonsA . ' ctn' : '0' }}</span>
                                                                 </div>
                                                             @endif
                                                             @if($addrB)
-                                                                <div class="pallet-box {{ $isOccB ? 'pallet-occupied' : 'pallet-vacant' }}" data-pallet-id="{{ $addrB->id }}" data-code="{{ $addrB->code }}" onclick="openPalletModal({{ $addrB->id }})"
-                                                                     title="{{ $addrB->code }}: {{ $isOccB ? $cartonsB . '/42 Karton (' . $addrB->assignment->style . ' - ' . $addrB->assignment->country . ')' : 'Kosong (Maks 42)' }}">
+                                                                <div class="pallet-box {{ $stateB }}{{ $multiB }}" data-pallet-id="{{ $addrB->id }}" data-code="{{ $addrB->code }}" onclick="openPalletModal({{ $addrB->id }})"
+                                                                     title="{{ $addrB->code }}: {{ $isOccB ? $cartonsB . '/42 Karton (' . $addrB->assignment->style . ' - ' . $addrB->assignment->country . ')' : 'Kosong (Maks 42)' }}{{ $addrB->country_mode === 'multi' ? ' [Multi Negara]' : ' [1 Negara]' }}">
                                                                     <span class="font-weight-bold">{{ $addrB->code }}</span>
                                                                     <span class="small font-weight-bold">{{ $isOccB ? $cartonsB . ' ctn' : '0' }}</span>
                                                                 </div>
@@ -547,23 +590,27 @@
                                                             $addrC = $groupedRows[$rowLetter]['c'][$p] ?? null;
                                                             $isOccC = $addrC && $addrC->assignment && $addrC->assignment->total_carton > 0;
                                                             $cartonsC = $isOccC ? $addrC->assignment->total_carton : 0;
+                                                            $stateC = !$isOccC ? 'pallet-vacant' : ($cartonsC >= (int) $addrC->max_carton ? 'pallet-full' : 'pallet-partial');
+                                                            $multiC = ($addrC && $addrC->country_mode === 'multi') ? ' pallet-multi' : '';
 
                                                             $addrD = $groupedRows[$rowLetter]['d'][$p] ?? null;
                                                             $isOccD = $addrD && $addrD->assignment && $addrD->assignment->total_carton > 0;
                                                             $cartonsD = $isOccD ? $addrD->assignment->total_carton : 0;
+                                                            $stateD = !$isOccD ? 'pallet-vacant' : ($cartonsD >= (int) $addrD->max_carton ? 'pallet-full' : 'pallet-partial');
+                                                            $multiD = ($addrD && $addrD->country_mode === 'multi') ? ' pallet-multi' : '';
                                                         @endphp
                                                         <div class="pallet-vert-row">
                                                             <span class="pallet-pos-tag">{{ $p }}</span>
                                                             @if($addrC)
-                                                                <div class="pallet-box {{ $isOccC ? 'pallet-occupied' : 'pallet-vacant' }}" data-pallet-id="{{ $addrC->id }}" data-code="{{ $addrC->code }}" onclick="openPalletModal({{ $addrC->id }})"
-                                                                     title="{{ $addrC->code }}: {{ $isOccC ? $cartonsC . '/42 Karton (' . $addrC->assignment->style . ' - ' . $addrC->assignment->country . ')' : 'Kosong (Maks 42)' }}">
+                                                                <div class="pallet-box {{ $stateC }}{{ $multiC }}" data-pallet-id="{{ $addrC->id }}" data-code="{{ $addrC->code }}" onclick="openPalletModal({{ $addrC->id }})"
+                                                                     title="{{ $addrC->code }}: {{ $isOccC ? $cartonsC . '/42 Karton (' . $addrC->assignment->style . ' - ' . $addrC->assignment->country . ')' : 'Kosong (Maks 42)' }}{{ $addrC->country_mode === 'multi' ? ' [Multi Negara]' : ' [1 Negara]' }}">
                                                                     <span class="font-weight-bold">{{ $addrC->code }}</span>
                                                                     <span class="small font-weight-bold">{{ $isOccC ? $cartonsC . ' ctn' : '0' }}</span>
                                                                 </div>
                                                             @endif
                                                             @if($addrD)
-                                                                <div class="pallet-box {{ $isOccD ? 'pallet-occupied' : 'pallet-vacant' }}" data-pallet-id="{{ $addrD->id }}" data-code="{{ $addrD->code }}" onclick="openPalletModal({{ $addrD->id }})"
-                                                                     title="{{ $addrD->code }}: {{ $isOccD ? $cartonsD . '/42 Karton (' . $addrD->assignment->style . ' - ' . $addrD->assignment->country . ')' : 'Kosong (Maks 42)' }}">
+                                                                <div class="pallet-box {{ $stateD }}{{ $multiD }}" data-pallet-id="{{ $addrD->id }}" data-code="{{ $addrD->code }}" onclick="openPalletModal({{ $addrD->id }})"
+                                                                     title="{{ $addrD->code }}: {{ $isOccD ? $cartonsD . '/42 Karton (' . $addrD->assignment->style . ' - ' . $addrD->assignment->country . ')' : 'Kosong (Maks 42)' }}{{ $addrD->country_mode === 'multi' ? ' [Multi Negara]' : ' [1 Negara]' }}">
                                                                     <span class="font-weight-bold">{{ $addrD->code }}</span>
                                                                     <span class="small font-weight-bold">{{ $isOccD ? $cartonsD . ' ctn' : '0' }}</span>
                                                                 </div>
@@ -625,8 +672,25 @@
                                 <div class="card-body py-2">
                                     <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Terkunci Country</div>
                                     <div class="h5 mb-0 font-weight-bold text-gray-800" id="modalLockedCountry">-</div>
-                                    <div class="small text-muted">Aturan BR-09 (1 Country/Pallet)</div>
+                                    <div class="small text-muted" id="modalCountryRule">Aturan BR-09 (1 Negara/Pallet)</div>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Toggle Mode Negara (1 negara / multi negara) -->
+                    <div class="card border-left-warning shadow-sm mb-3">
+                        <div class="card-body py-2 d-flex justify-content-between align-items-center flex-wrap">
+                            <div class="pr-3">
+                                <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">Mode Negara Pallet</div>
+                                <div class="small text-muted">
+                                    <strong>Nonaktif</strong> = pallet hanya boleh 1 negara (muncul notifikasi bila beda negara).
+                                    <strong>Aktif</strong> = pallet boleh diisi beberapa negara.
+                                </div>
+                            </div>
+                            <div class="custom-control custom-switch">
+                                <input type="checkbox" class="custom-control-input" id="toggleMultiCountry">
+                                <label class="custom-control-label font-weight-bold text-dark" for="toggleMultiCountry" id="toggleMultiCountryLabel">Multi Negara: Nonaktif</label>
                             </div>
                         </div>
                     </div>
@@ -841,6 +905,8 @@
             <span class="fs-title"><i class="fas fa-warehouse mr-2"></i> Visualisasi Pallet — Fullscreen Mode</span>
             <div class="fs-controls">
                 <!-- Search in fullscreen -->
+                <input type="text" id="fsSearchJancode" class="form-control form-control-sm" placeholder="JAN code" style="width:150px; background:#3a3f5c; color:#fff; border-color:#5a6080;">
+                <button class="btn btn-sm btn-info" id="fsBtnSearchJancode" title="Cari lokasi pallet dari JAN code"><i class="fas fa-crosshairs"></i></button>
                 <input type="text" id="fsSearchCountry" class="form-control form-control-sm" placeholder="Country" style="width:130px; background:#3a3f5c; color:#fff; border-color:#5a6080;">
                 <input type="text" id="fsSearchOcf" class="form-control form-control-sm" placeholder="OCF" style="width:110px; background:#3a3f5c; color:#fff; border-color:#5a6080;">
                 <input type="text" id="fsSearchStyle" class="form-control form-control-sm" placeholder="Style" style="width:140px; background:#3a3f5c; color:#fff; border-color:#5a6080;">
@@ -880,6 +946,12 @@
                 $('#modalAvailableSpace').text(res.available_space);
                 $('#modalLockedStyle').text(assign ? assign.style : '- (Bebas)');
                 $('#modalLockedCountry').text(assign ? assign.country : '- (Bebas)');
+
+                // Mode negara pallet (single / multi)
+                const isMulti = (addr.country_mode === 'multi');
+                $('#toggleMultiCountry').prop('checked', isMulti).data('initial', isMulti);
+                $('#toggleMultiCountryLabel').text('Multi Negara: ' + (isMulti ? 'Aktif' : 'Nonaktif'));
+                $('#modalCountryRule').text(isMulti ? 'Mode multi-negara: boleh campur negara' : 'Aturan BR-09 (1 Negara/Pallet)');
 
                 if (assign && assign.total_carton > 0) {
                     $('#btnClearPallet').show();
@@ -928,6 +1000,118 @@
             });
         }
 
+        // ================= MODE NEGARA PER PALLET =================
+        const countryModeUrl = "{{ route('pallet.countryMode', ['id' => '__id__']) }}";
+
+        $('#toggleMultiCountry').on('change', function() {
+            const $cb = $(this);
+            const mode = $cb.is(':checked') ? 'multi' : 'single';
+            const wasMulti = $cb.data('initial') === true;
+
+            $.ajax({
+                url: countryModeUrl.replace('__id__', currentOpenPalletId),
+                type: 'POST',
+                data: { country_mode: mode },
+                success: function(res) {
+                    $cb.data('initial', mode === 'multi');
+                    $('#toggleMultiCountryLabel').text('Multi Negara: ' + (mode === 'multi' ? 'Aktif' : 'Nonaktif'));
+                    $('#modalCountryRule').text(mode === 'multi' ? 'Mode multi-negara: boleh campur negara' : 'Aturan BR-09 (1 Negara/Pallet)');
+
+                    const $box = $('.pallet-box[data-pallet-id="' + currentOpenPalletId + '"]');
+                    $box.toggleClass('pallet-multi', mode === 'multi');
+
+                    Swal.fire({ icon: 'success', title: 'Tersimpan', text: res.message, timer: 1600, showConfirmButton: false });
+                },
+                error: function(xhr) {
+                    $cb.prop('checked', wasMulti);
+                    const msg = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : 'Gagal mengubah mode negara.';
+                    Swal.fire({ icon: 'warning', title: 'Tidak Bisa Diubah', text: msg });
+                }
+            });
+        });
+
+        // ================= STATUS WARNA PALLET =================
+        // Kosong = hijau, terisi belum penuh = kuning, penuh = merah
+        function palletStatusClass(cartons, max) {
+            const c = parseInt(cartons) || 0;
+            const m = parseInt(max) || 42;
+            if (c <= 0) return 'pallet-vacant';
+            return c >= m ? 'pallet-full' : 'pallet-partial';
+        }
+
+        function applyPalletStatus(box, cartons, max) {
+            const next = palletStatusClass(cartons, max);
+            box.classList.remove('pallet-vacant', 'pallet-partial', 'pallet-full', 'pallet-occupied');
+            box.classList.add(next);
+        }
+
+        // ================= CARI JANCODE → LOKASI PALLET =================
+        function clearJancodeHits() {
+            document.querySelectorAll('.pallet-hit').forEach(function(el) { el.classList.remove('pallet-hit'); });
+            $('#jancodeSearchInfo').text('');
+        }
+
+        function highlightJancodePallets(pallets) {
+            const ids = new Set((pallets || []).map(function(p) { return String(p.id); }));
+            document.querySelectorAll('.pallet-box[data-pallet-id]').forEach(function(box) {
+                box.classList.toggle('pallet-hit', ids.has(String(box.getAttribute('data-pallet-id'))));
+            });
+        }
+
+        function runJancodeSearch(code) {
+            code = (code || '').trim();
+            if (!code) { clearJancodeHits(); return; }
+
+            $.get("{{ route('pallet.findJancode') }}", { code: code }, function(res) {
+                clearJancodeHits();
+
+                if (!res.pallets || !res.pallets.length) {
+                    Swal.fire({ icon: 'info', title: 'Tidak Ditemukan', text: 'JAN code ' + code + ' belum ditempatkan di pallet mana pun.' });
+                    return;
+                }
+
+                highlightJancodePallets(res.pallets);
+                $('#jancodeSearchInfo').text(res.count + ' pallet: ' + res.pallets.map(function(p) { return p.code; }).join(', '));
+
+                const first = document.querySelector('.pallet-box.pallet-hit');
+                if (first) {
+                    first.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+                }
+            }).fail(function(xhr) {
+                const msg = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : 'Gagal mencari JAN code.';
+                Swal.fire({ icon: 'warning', title: 'Pencarian Gagal', text: msg });
+            });
+        }
+
+        $('#btnSearchJancode').on('click', function() {
+            runJancodeSearch($('#searchJancode').val());
+        });
+        $('#searchJancode').on('keypress', function(e) {
+            if (e.which === 13) { e.preventDefault(); runJancodeSearch($(this).val()); }
+        });
+        $('#searchJancode').on('input', function() {
+            if (!$(this).val()) clearJancodeHits();
+        });
+        $('#fsBtnSearchJancode').on('click', function() {
+            const code = document.getElementById('fsSearchJancode').value;
+            $('#searchJancode').val(code);
+            runJancodeSearch(code);
+        });
+        document.getElementById('fsSearchJancode').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') document.getElementById('fsBtnSearchJancode').click();
+        });
+
+        // Bawa hasil pencarian ke board fullscreen (clone)
+        function syncJancodeHitsToFullscreen() {
+            const hitIds = Array.from(document.querySelectorAll('#palletBoardScroll .pallet-box.pallet-hit'))
+                .map(function(b) { return String(b.getAttribute('data-pallet-id')); });
+            const fs = document.getElementById('fullscreenBoard');
+            if (!fs) return;
+            fs.querySelectorAll('.pallet-box[data-pallet-id]').forEach(function(box) {
+                box.classList.toggle('pallet-hit', hitIds.includes(String(box.getAttribute('data-pallet-id'))));
+            });
+        }
+
         // Hitung otomatis Qty Karton saat item dipilih di modal detail pallet
         $('#selectAddJancode').on('change', function() {
             const opt = $(this).find(':selected');
@@ -965,6 +1149,29 @@
         }
         $('#quickJancodeSelect, #quickPalletSelect').on('change', updateQuickPlotAutoQty);
 
+        // Notifikasi khusus bila pallet dikunci 1 negara
+        function showPalletPlacementError(xhr) {
+            const data = xhr.responseJSON || {};
+            const msg = data.message || 'Gagal menempatkan karton.';
+
+            if (data.error === 'country_locked') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Pallet Hanya 1 Negara',
+                    html: msg,
+                    confirmButtonText: 'Mengerti'
+                });
+                return;
+            }
+
+            if (data.error === 'row_locked') {
+                Swal.fire({ icon: 'error', title: 'Aturan Row Terkunci', text: msg });
+                return;
+            }
+
+            Swal.fire('Validasi Penempatan Gagal', msg, 'error');
+        }
+
         // Submit Plot Karton ke Pallet Tertentu
         $('#formAddCartonToPallet').on('submit', function(e) {
             e.preventDefault();
@@ -982,8 +1189,7 @@
                     }
                 },
                 error: function(xhr) {
-                    const msg = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : 'Gagal menempatkan karton.';
-                    Swal.fire('Validasi Penempatan Gagal', msg, 'error');
+                    showPalletPlacementError(xhr);
                 }
             });
         });
@@ -1005,8 +1211,7 @@
                     }
                 },
                 error: function(xhr) {
-                    const msg = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : 'Gagal menempatkan karton.';
-                    Swal.fire('Validasi Penempatan Gagal', msg, 'error');
+                    showPalletPlacementError(xhr);
                 }
             });
         });
@@ -1274,6 +1479,9 @@
             fsBoardScroll = clone;
             setupDragScroll(fsBoardScroll);
 
+            // Bawa highlight hasil pencarian JAN code ke board fullscreen
+            syncJancodeHitsToFullscreen();
+
             fsZoom = 1.0;
             applyFsZoom();
 
@@ -1473,28 +1681,32 @@
                         })();
                     });
                 }
-                // pallets: patch color + count + title
+                // pallets: patch warna status (kosong/partial/penuh) + count + title
                 const map = new Map(data.pallets.map(function(x){ return [String(x.id), x]; }));
                 let changedCount = 0;
                 document.querySelectorAll('.pallet-box[data-pallet-id]').forEach(function(box){
                     const id = box.getAttribute('data-pallet-id');
                     const info = map.get(String(id));
                     if(!info) return;
-                    const wantOccupied = (info.cartons||0) > 0;
-                    const hasOccupied = box.classList.contains('pallet-occupied');
-                    const was = hasOccupied ? 1 : 0;
-                    const now = wantOccupied ? 1 : 0;
-                    if(was !== now) changedCount++;
-                    box.classList.toggle('pallet-occupied', wantOccupied);
-                    box.classList.toggle('pallet-vacant', !wantOccupied);
+                    const cartons = parseInt(info.cartons) || 0;
+                    const maxCtn = parseInt(info.max_carton) || 42;
+                    const nextClass = palletStatusClass(cartons, maxCtn);
+                    const hadClass = box.classList.contains(nextClass);
+                    if(!hadClass) changedCount++;
+                    applyPalletStatus(box, cartons, maxCtn);
+                    box.classList.toggle('pallet-multi', info.country_mode === 'multi');
                     // update inner count text (second span)
                     const spans = box.querySelectorAll('span');
-                    if(spans[1]) spans[1].textContent = wantOccupied ? (info.cartons + ' ctn') : '0';
+                    if(spans[1]) spans[1].textContent = cartons > 0 ? (cartons + ' ctn') : '0';
                     // title
-                    box.title = info.code + ': ' + (wantOccupied ? (info.cartons + '/42 Karton ('+(info.style||'-')+' - '+(info.country||'-')+')') : 'Kosong (Maks 42)');
-                    if(was !== now){
+                    box.title = info.code + ': ' + (cartons > 0
+                        ? (cartons + '/' + maxCtn + ' Karton (' + (info.style || '-') + ' - ' + (info.country || '-') + ')')
+                        : 'Kosong (Maks ' + maxCtn + ')') + (info.country_mode === 'multi' ? ' [Multi Negara]' : ' [1 Negara]');
+                    if(!hadClass){
                         box.style.transition = 'transform 0.12s ease';
-                        box.style.boxShadow = wantOccupied ? '0 0 0 3px rgba(231,74,59,0.35)' : '0 0 0 3px rgba(28,200,138,0.35)';
+                        box.style.boxShadow = nextClass === 'pallet-full'
+                            ? '0 0 0 3px rgba(231,74,59,0.45)'
+                            : (nextClass === 'pallet-partial' ? '0 0 0 3px rgba(246,194,62,0.45)' : '0 0 0 3px rgba(28,200,138,0.4)');
                         setTimeout(function(){ box.style.boxShadow=''; }, 900);
                     }
                 });
@@ -1505,23 +1717,17 @@
                 // also refresh fullscreen clone if open
                 const fs = document.getElementById('fullscreenBoard');
                 if(fs && fs.querySelector('.pallet-box')){
-                    // re-apply same logic to fullscreen clone
                     fs.querySelectorAll('.pallet-box').forEach(function(box){
-                        // fullscreen clone lost data-pallet-id? we preserved via clone? ensure fallback via code text
-                        let id = box.getAttribute('data-pallet-id');
-                        if(!id){
-                            // fallback: find by code text match
-                            const code = (box.querySelector('span')||{}).textContent||'';
-                            // skip if no mapping
-                            return;
-                        }
+                        const id = box.getAttribute('data-pallet-id');
+                        if(!id) return;
                         const info = map.get(String(id));
                         if(!info) return;
-                        const wantOccupied = (info.cartons||0) > 0;
-                        box.classList.toggle('pallet-occupied', wantOccupied);
-                        box.classList.toggle('pallet-vacant', !wantOccupied);
+                        applyPalletStatus(box, info.cartons, info.max_carton);
+                        box.classList.toggle('pallet-multi', info.country_mode === 'multi');
                     });
                 }
+                // keep highlight pencarian JAN code tetap sinkron
+                if(document.querySelector('.pallet-hit')) syncJancodeHitsToFullscreen();
             }
             function connect(){
                 if(paused) return;
