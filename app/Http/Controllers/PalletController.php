@@ -651,8 +651,30 @@ class PalletController extends Controller
                 ], 422);
             }
 
-            // Otomatis tentukan jumlah karton yang ditempatkan (tanpa perlu input manual)
-            $addQty = $requestedQty ? min($requestedQty, $availableScannedToPlace) : min($availableScannedToPlace, $palletSpace);
+            // Jumlah karton yang ditempatkan boleh dikustom (tidak harus full).
+            // Sisa karton hasil scan tetap bisa ditempatkan di pallet lain.
+            if ($requestedQty !== null) {
+                if ($requestedQty > $availableScannedToPlace) {
+                    return response()->json([
+                        'success' => false,
+                        'error'   => 'exceed_scanned',
+                        'message' => "Jumlah yang ditempatkan ({$requestedQty} karton) melebihi sisa hasil scan ({$availableScannedToPlace} karton). Maksimal {$availableScannedToPlace} karton untuk jancode ini.",
+                    ], 422);
+                }
+
+                if ($requestedQty > $palletSpace) {
+                    return response()->json([
+                        'success' => false,
+                        'error'   => 'exceed_capacity',
+                        'message' => "Jumlah yang ditempatkan ({$requestedQty} karton) melebihi sisa kapasitas Pallet {$address->code} ({$palletSpace} karton).",
+                    ], 422);
+                }
+
+                $addQty = $requestedQty;
+            } else {
+                // Tanpa input manual: isi otomatis sebatas scan & kapasitas pallet.
+                $addQty = min($availableScannedToPlace, $palletSpace);
+            }
 
             if ($addQty <= 0) {
                 return response()->json([
@@ -782,9 +804,18 @@ class PalletController extends Controller
                 ]);
             }
 
+            $remaining = max(0, $availableScannedToPlace - $addQty);
+            $message   = "Berhasil menempatkan {$addQty} karton ke Pallet {$address->code}.";
+
+            if ($remaining > 0) {
+                $message .= " Sisa {$remaining} karton masih bisa ditempatkan di pallet lain.";
+            }
+
             return response()->json([
-                'success' => true,
-                'message' => "Berhasil menempatkan {$addQty} karton ke Pallet {$address->code}."
+                'success'   => true,
+                'message'   => $message,
+                'placed'    => $addQty,
+                'remaining' => $remaining,
             ]);
         });
     }

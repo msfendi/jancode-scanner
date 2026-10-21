@@ -46,8 +46,14 @@ class PackingListImportService
         // Satu kombinasi style|OCF|destination|warehouse = satu session.
         // Jika kombinasi ini sudah dimiliki session lain, tolak agar packing
         // list antar session tidak tercampur.
+        //
+        // Pengecualian: sheet lain pada file import yang sama boleh memakai
+        // group_key yang sama (setiap sheet = 1 session), selama session tsb
+        // dibuat pada operasi import yang sama.
         $owner = ImportSession::findByGroup($groupKey, $sessionId);
-        if ($owner) {
+        $allowedSessionIds = array_map('intval', (array) ($meta['allow_group_session_ids'] ?? []));
+
+        if ($owner && !in_array((int) $owner->id, $allowedSessionIds, true)) {
             throw new \InvalidArgumentException(
                 "Kombinasi {$groupLabel} sudah menjadi milik session {$owner->code}. "
                 . 'Gunakan / buka kembali session tersebut agar data tidak tercampur dengan session lain.'

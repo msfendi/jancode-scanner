@@ -769,8 +769,8 @@
                                 </div>
                                 <div class="col-md-3 mb-2">
                                     <label class="small font-weight-bold mb-1">Qty Karton Ditempatkan:</label>
-                                    <input type="number" class="form-control form-control-sm bg-white" id="inputAddQtyCarton" name="qty_carton" readonly placeholder="Otomatis dari scan">
-                                    <small class="text-muted d-block" id="infoAddQty">Otomatis dari hasil scan</small>
+                                    <input type="number" class="form-control form-control-sm bg-white" id="inputAddQtyCarton" name="qty_carton" min="1" placeholder="Jumlah karton">
+                                    <small class="text-muted d-block" id="infoAddQty">Pilih item hasil scan</small>
                                 </div>
                                 <div class="col-md-2 mb-2">
                                     <button type="submit" class="btn btn-sm btn-primary btn-block">
@@ -908,8 +908,8 @@
 
                         <div class="form-group">
                             <label class="font-weight-bold">Qty Karton yang Ditempatkan:</label>
-                            <input type="number" class="form-control bg-white" name="qty_carton" id="quickQtyInput" readonly placeholder="Otomatis dari hasil scan">
-                            <small class="text-muted d-block" id="quickQtyInfo">Otomatis dari hasil scan dan sisa kapasitas pallet.</small>
+                            <input type="number" class="form-control bg-white" name="qty_carton" id="quickQtyInput" min="1" placeholder="Jumlah karton">
+                            <small class="text-muted d-block" id="quickQtyInfo">Boleh sebagian karton; sisanya bisa ditempatkan di pallet lain.</small>
                         </div>
                     </div>
                     <div class="modal-footer">
@@ -1017,7 +1017,7 @@
 
                 // Reset pilihan form tambah di dalam modal
                 $('#selectAddJancode').val('').trigger('change');
-                $('#inputAddQtyCarton').val('');
+                $('#inputAddQtyCarton').val('').removeAttr('max').removeClass('is-invalid');
                 $('#infoAddQty').text('Pilih item hasil scan');
 
                 $('#palletDetailModal').modal('show');
@@ -1140,19 +1140,72 @@
             });
         }
 
+        // ── Qty karton custom: boleh sebagian, sisanya ke pallet lain ──
+        // Terapkan batas maksimal (sisa hasil scan & sisa slot pallet) + info.
+        function applyQtyLimit($input, maxQty, infoHtml) {
+            const max = parseInt(maxQty) || 0;
+
+            $input.attr('min', 1);
+            if (max > 0) {
+                $input.attr('max', max);
+            } else {
+                $input.removeAttr('max');
+            }
+
+            if (infoHtml !== undefined) {
+                $(infoHtml.selector).html(infoHtml.html);
+            }
+        }
+
+        function validateQtyInput($input) {
+            const max = parseInt($input.attr('max')) || 0;
+            const val = parseInt($input.val()) || 0;
+
+            if (!val || val < 1) {
+                $input.addClass('is-invalid');
+                return false;
+            }
+
+            if (max > 0 && val > max) {
+                $input.addClass('is-invalid');
+                return false;
+            }
+
+            $input.removeClass('is-invalid');
+            return true;
+        }
+
         // Hitung otomatis Qty Karton saat item dipilih di modal detail pallet
         $('#selectAddJancode').on('change', function() {
             const opt = $(this).find(':selected');
             const unplaced = parseInt(opt.data('unplaced')) || 0;
             const availableSpace = parseInt($('#modalAvailableSpace').text()) || 0;
+            const $input = $('#inputAddQtyCarton');
 
             if (unplaced > 0) {
                 const autoQty = Math.min(unplaced, availableSpace);
-                $('#inputAddQtyCarton').val(autoQty);
-                $('#infoAddQty').html(`Siap ditempatkan: <strong>${unplaced} ctn</strong> (Slot muat: <strong class="text-primary">${autoQty} ctn</strong>)`);
+                $input.val(autoQty).removeClass('is-invalid');
+                applyQtyLimit($input, autoQty, {
+                    selector: '#infoAddQty',
+                    html: `Siap: <strong>${unplaced} ctn</strong> · Maksimal di pallet ini: <strong class="text-primary">${autoQty} ctn</strong>. ` +
+                          `<span class="text-muted">Boleh sebagian; sisanya ke pallet lain.</span>`
+                });
             } else {
-                $('#inputAddQtyCarton').val('');
+                $input.val('').removeAttr('max').removeClass('is-invalid');
                 $('#infoAddQty').text('Pilih item hasil scan');
+            }
+        });
+
+        $('#inputAddQtyCarton').on('input', function() {
+            const $input = $(this);
+            const max = parseInt($input.attr('max')) || 0;
+            const val = parseInt($input.val()) || 0;
+
+            if (val > 0 && max > 0 && val > max) {
+                $input.addClass('is-invalid');
+                $('#infoAddQty').html(`<span class="text-danger">Maksimal ${max} karton (sisa scan &amp; kapasitas pallet).</span>`);
+            } else {
+                $input.removeClass('is-invalid');
             }
         });
 
@@ -1162,20 +1215,41 @@
             const pOpt = $('#quickPalletSelect').find(':selected');
             const unplaced = parseInt(jOpt.data('unplaced')) || 0;
             const sisaSlot = parseInt(pOpt.data('sisa')) || 42;
+            const $input = $('#quickQtyInput');
 
             if (unplaced > 0 && pOpt.val()) {
                 const autoQty = Math.min(unplaced, sisaSlot);
-                $('#quickQtyInput').val(autoQty);
-                $('#quickQtyInfo').html(`Karton hasil scan siap: <strong>${unplaced} ctn</strong>, slot muat: <strong class="text-primary">${autoQty} ctn</strong>.`);
+                $input.val(autoQty).removeClass('is-invalid');
+                applyQtyLimit($input, autoQty, {
+                    selector: '#quickQtyInfo',
+                    html: `Siap: <strong>${unplaced} ctn</strong> · Maksimal: <strong class="text-primary">${autoQty} ctn</strong>. ` +
+                          `<span class="text-muted">Boleh sebagian; sisanya ke pallet lain.</span>`
+                });
             } else if (unplaced > 0) {
-                $('#quickQtyInput').val(unplaced);
-                $('#quickQtyInfo').html(`Karton hasil scan siap: <strong>${unplaced} ctn</strong>. Silakan pilih pallet tujuan.`);
+                $input.val(unplaced).removeClass('is-invalid');
+                applyQtyLimit($input, unplaced, {
+                    selector: '#quickQtyInfo',
+                    html: `Karton hasil scan siap: <strong>${unplaced} ctn</strong>. Silakan pilih pallet tujuan.`
+                });
             } else {
-                $('#quickQtyInput').val('');
-                $('#quickQtyInfo').text('Otomatis dari akumulasi scan dan sisa kapasitas pallet.');
+                $input.val('').removeAttr('max').removeClass('is-invalid');
+                $('#quickQtyInfo').text('Boleh sebagian karton; sisanya bisa ditempatkan di pallet lain.');
             }
         }
         $('#quickJancodeSelect, #quickPalletSelect').on('change', updateQuickPlotAutoQty);
+
+        $('#quickQtyInput').on('input', function() {
+            const $input = $(this);
+            const max = parseInt($input.attr('max')) || 0;
+            const val = parseInt($input.val()) || 0;
+
+            if (val > 0 && max > 0 && val > max) {
+                $input.addClass('is-invalid');
+                $('#quickQtyInfo').html(`<span class="text-danger">Maksimal ${max} karton (sisa scan &amp; kapasitas pallet).</span>`);
+            } else {
+                $input.removeClass('is-invalid');
+            }
+        });
 
         // Notifikasi khusus bila pallet dikunci 1 negara
         function showPalletPlacementError(xhr) {
@@ -1204,6 +1278,18 @@
         $('#formAddCartonToPallet').on('submit', function(e) {
             e.preventDefault();
             const form = $(this);
+            const $input = $('#inputAddQtyCarton');
+
+            if (!validateQtyInput($input)) {
+                const max = parseInt($input.attr('max')) || 0;
+                Swal.fire(
+                    'Jumlah Karton Tidak Valid',
+                    max ? `Isi jumlah karton (1 - ${max} karton).` : 'Isi jumlah karton yang mau ditempatkan.',
+                    'warning'
+                );
+                return;
+            }
+
             $.ajax({
                 url: "{{ route('pallet.store') }}",
                 type: "POST",
@@ -1226,6 +1312,18 @@
         $('#formQuickPlot').on('submit', function(e) {
             e.preventDefault();
             const form = $(this);
+            const $input = $('#quickQtyInput');
+
+            if (!validateQtyInput($input)) {
+                const max = parseInt($input.attr('max')) || 0;
+                Swal.fire(
+                    'Jumlah Karton Tidak Valid',
+                    max ? `Isi jumlah karton (1 - ${max} karton).` : 'Isi jumlah karton yang mau ditempatkan.',
+                    'warning'
+                );
+                return;
+            }
+
             $.ajax({
                 url: "{{ route('pallet.store') }}",
                 type: "POST",

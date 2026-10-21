@@ -13,6 +13,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * Satu session mengikat satu kombinasi style | OCF | destination | warehouse.
  * Semua import (revisi PROFORMA/ACTUAL), scan, dan pallet di dalamnya berada
  * pada session ini. Kode dibuat otomatis: IMP-YYYYMMDD-HHMMSS-001.
+ *
+ * Catatan: pada satu file import, SETIAP SHEET menjadi session sendiri
+ * (bukan revisi). Revisi tetap dipakai ketika file dengan group key yang sama
+ * diimport pada file berikutnya.
  */
 class ImportSession extends Model
 {

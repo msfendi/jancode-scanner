@@ -215,18 +215,17 @@ class JancodeController extends Controller
                 ], 422);
             }
 
-            // ROUTING: satu kombinasi style|OCF|destination|warehouse = satu
-            // session. Satu file boleh memuat beberapa packing list (mis.
-            // warehouse berbeda); setiap group diarahkan ke session-nya
-            // masing-masing (reuse session yang ada, atau buat session baru).
+            // ROUTING: SETIAP SHEET -> SATU SESSION. Satu file boleh memuat
+            // beberapa sheet; setiap sheet diarahkan ke session-nya masing-masing
+            // (reuse session yang sudah ada, atau buat session baru).
             $plan = $this->planGroupSessions($preview['sheets'], $importSession, true);
 
-            // Tandai duplikat + susun ringkasan routing per group.
+            // Tandai duplikat + susun ringkasan routing per sheet.
             $routing = [];
 
-            foreach ($preview['sheets'] as &$sheet) {
+            foreach (array_values($preview['sheets']) as $index => &$sheet) {
                 $groupKey = ImportBatch::buildGroupKey($sheet['header']);
-                $target   = $plan[$groupKey] ?? ['session' => null, 'is_new' => true];
+                $target   = $plan[$index] ?? ['session' => null, 'is_new' => true];
                 $targetId = $target['session']?->id;
 
                 $active = $targetId ? ImportBatch::activeForGroup($groupKey, $targetId) : null;
@@ -256,34 +255,21 @@ class JancodeController extends Controller
                     : 1;
                 $sheet['active_batch_no']     = $active->batch_number ?? null;
 
-                if (!isset($routing[$groupKey])) {
-                    $routing[$groupKey] = [
-                        'group_key'     => $groupKey,
-                        'group_label'   => $sheet['group_label'],
-                        'session_id'    => $targetId,
-                        'session_code'  => $target['session']?->code,
-                        'session_status'=> $target['session']?->status,
-                        'is_new'        => (bool) $target['is_new'],
-                        'next_revision' => $sheet['next_revision'],
-                        'doc_types'     => [],
-                        'total_items'   => 0,
-                        'total_carton'  => 0,
-                        'sheets'        => [],
-                    ];
-                }
-
-                $routing[$groupKey]['doc_types'][strtoupper($sheet['doc_type'])] = true;
-                $routing[$groupKey]['total_items']  += $sheet['total_items'];
-                $routing[$groupKey]['total_carton'] += $sheet['total_carton'];
-                $routing[$groupKey]['sheets'][]     = $sheet['sheet_name'];
+                $routing[] = [
+                    'group_key'     => $groupKey,
+                    'group_label'   => $sheet['group_label'],
+                    'session_id'    => $targetId,
+                    'session_code'  => $target['session']?->code,
+                    'session_status'=> $target['session']?->status,
+                    'is_new'        => (bool) $target['is_new'],
+                    'next_revision' => $sheet['next_revision'],
+                    'doc_types'     => strtoupper($sheet['doc_type'] ?: 'proforma'),
+                    'total_items'   => (int) $sheet['total_items'],
+                    'total_carton'  => (int) $sheet['total_carton'],
+                    'sheets'        => $sheet['sheet_name'] ?: ('Sheet ' . ($index + 1)),
+                ];
             }
             unset($sheet);
-
-            $routing = array_values(array_map(function (array $r) {
-                $r['doc_types'] = implode(' + ', array_keys($r['doc_types']));
-                $r['sheets']    = implode(', ', $r['sheets']);
-                return $r;
-            }, $routing));
 
             return response()->json([
                 'success'          => true,
@@ -360,9 +346,13 @@ class JancodeController extends Controller
 
         try {
             DB::transaction(function () use ($sheets, $plan, $request, $importService, &$created, &$importedCount, &$skippedCount) {
-                foreach ($sheets as $sheet) {
-                    $gk = ImportBatch::buildGroupKey($sheet['header'] ?? []);
-                    $targetSession = $plan[$gk]['session'] ?? null;
+                // Session yang dipakai sheet lain pada file yang sama boleh
+                // memakai group_key yang sama (tiap sheet = 1 session).
+                $siblingSessionIds = [];
+
+                foreach (array_values($sheets) as $index => $sheet) {
+                    $target       = $plan[$index] ?? null;
+                    $targetSession = $target['session'] ?? null;
 
                     if (!$targetSession) {
                         throw new \InvalidArgumentException('Session tujuan untuk packing list ini tidak dapat ditentukan.');
@@ -374,9 +364,12 @@ class JancodeController extends Controller
                         'batch_name'        => $request->input('batch_name'),
                         'supplier_name'     => $request->input('supplier_name'),
                         'imported_by'       => auth()->id(),
+                        'allow_group_session_ids' => $siblingSessionIds,
                     ];
 
                     $result = $importService->importSheet($sheet, $meta);
+                    $siblingSessionIds[] = (int) $targetSession->id;
+
                     if (!$result) {
                         continue;
                     }
@@ -424,16 +417,20 @@ class JancodeController extends Controller
             ], 422);
         }
 
-        $sessionSummary = collect($plan)->map(fn ($p) => [
-            'id'     => $p['session']->id,
-            'code'   => $p['session']->code,
-            'is_new' => (bool) $p['is_new'],
-            'status' => $p['session']->status,
-        ])->unique('id')->values();
+        $sessionSummary = collect($plan)
+            ->filter(fn ($p) => !empty($p['session']))
+            ->map(fn ($p) => [
+                'id'     => $p['session']->id,
+                'code'   => $p['session']->code,
+                'is_new' => (bool) $p['is_new'],
+                'status' => $p['session']->status,
+            ])->unique('id')->values();
+
+        $sessionCount = $sessionSummary->count();
 
         return response()->json([
             'success'      => true,
-            'message'      => "Import berhasil: {$importedCount} baris valid pada " . count($created) . " packing list. {$skippedCount} baris broken disimpan terpisah.",
+            'message'      => "Import berhasil: {$importedCount} baris valid pada " . count($created) . " packing list ({$sessionCount} session). {$skippedCount} baris broken disimpan terpisah.",
             'batches'      => $created,
             'sessions'     => $sessionSummary,
             'batch_number' => $created[0]['batch_number'],
@@ -479,69 +476,80 @@ class JancodeController extends Controller
     /**
      * Susun rencana routing group -> session.
      *
-     * Aturan (satu kombinasi style|OCF|destination|warehouse = satu session):
-     *  1. Jika kombinasi sudah dimiliki session lain, pakai session itu
-     *     (dibuka kembali bila sedang ditutup).
-     *  2. Jika session aktif masih kosong (baru di-start), pakai untuk group
-     *     pertama pada file ini.
-     *  3. Sisanya dibuatkan session baru khusus untuk kombinasi tersebut.
+     * Aturan (SETIAP SHEET = SATU SESSION):
+     *  1. Jika session lain sudah memegang kombinasi group_key ini (dan belum
+     *     dipakai sheet lain pada file yang sama) -> pakai session itu, agar
+     *     import file berikutnya menjadi revisi baru.
+     *  2. Jika session aktif masih kosong (baru di-start) -> pakai untuk
+     *     sheet pertama.
+     *  3. Selain itu -> buat session baru KHUSUS untuk sheet tersebut.
      *
      * @param  array<int, array>  $sheets
-     * @return array<string, array{session: ?ImportSession, is_new: bool}>
+     * @return array<int, array{group_key:string, session:?ImportSession, is_new:bool}>
      */
     private function planGroupSessions(array $sheets, ImportSession $current, bool $dryRun = false): array
     {
-        $groups = [];
-        foreach ($sheets as $sheet) {
-            $groupKey = ImportBatch::buildGroupKey($sheet['header'] ?? []);
-            if (!array_key_exists($groupKey, $groups)) {
-                $groups[$groupKey] = $sheet['header'] ?? [];
-            }
-        }
+        $plan           = [];
+        $usedSessionIds = [];
+        $currentUsed    = false;
 
-        $plan        = [];
-        $currentUsed = false;
+        foreach (array_values($sheets) as $index => $sheet) {
+            $header   = $sheet['header'] ?? [];
+            $groupKey = ImportBatch::buildGroupKey($header);
 
-        foreach ($groups as $groupKey => $header) {
-            // 1. Session yang sudah memegang kombinasi ini.
+            // 1. Session yang sudah memegang kombinasi ini (belum dipakai file ini).
             $owner = ImportSession::findByGroup($groupKey, null);
 
-            if ($owner) {
+            if ($owner && !in_array((int) $owner->id, $usedSessionIds, true)) {
                 if (!$dryRun && $owner->isClosed()) {
                     $owner->reopen();
                 }
 
-                $plan[$groupKey] = ['session' => $owner, 'is_new' => false];
-
-                if ((int) $owner->id === (int) $current->id) {
-                    $currentUsed = true;
-                }
+                $plan[$index] = [
+                    'group_key' => $groupKey,
+                    'session'   => $owner,
+                    'is_new'    => false,
+                ];
+                $usedSessionIds[] = (int) $owner->id;
                 continue;
             }
 
-            // 2. Session aktif yang masih kosong -> group pertama.
+            // 2. Session aktif yang masih kosong -> sheet pertama.
             if (!$currentUsed && $current->isOpen() && !$current->group_key) {
-                $plan[$groupKey] = ['session' => $current, 'is_new' => false];
+                $plan[$index] = [
+                    'group_key' => $groupKey,
+                    'session'   => $current,
+                    'is_new'    => false,
+                ];
                 $currentUsed     = true;
+                $usedSessionIds[] = (int) $current->id;
                 continue;
             }
 
-            // 3. Session baru untuk kombinasi ini.
+            // 3. Session baru khusus untuk sheet ini.
             if ($dryRun) {
-                $plan[$groupKey] = ['session' => null, 'is_new' => true];
+                $plan[$index] = [
+                    'group_key' => $groupKey,
+                    'session'   => null,
+                    'is_new'    => true,
+                ];
                 continue;
             }
 
-            $plan[$groupKey] = [
-                'session' => ImportSession::create([
-                    'code'       => ImportSession::generateCode(),
-                    'status'     => 'open',
-                    'notes'      => 'Otomatis dibuat saat import: ' . ImportBatch::buildGroupLabel($header),
-                    'user_id'    => auth()->id(),
-                    'started_at' => now(),
-                ]),
-                'is_new' => true,
+            $session = ImportSession::create([
+                'code'       => ImportSession::generateCode(),
+                'status'     => 'open',
+                'notes'      => 'Otomatis dibuat saat import: ' . ImportBatch::buildGroupLabel($header),
+                'user_id'    => auth()->id(),
+                'started_at' => now(),
+            ]);
+
+            $plan[$index] = [
+                'group_key' => $groupKey,
+                'session'   => $session,
+                'is_new'    => true,
             ];
+            $usedSessionIds[] = (int) $session->id;
         }
 
         return $plan;

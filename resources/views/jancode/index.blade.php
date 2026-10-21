@@ -20,7 +20,7 @@
                             </h1>
                             <p class="mb-0 text-muted small">
                                 Langkah <strong>2</strong>: upload file Excel packing list. Setiap sheet disimpan
-                                sebagai satu <strong>revisi</strong> di dalam session aktif.
+                                sebagai <strong>session terpisah</strong> (1 sheet = 1 session).
                             </p>
                         </div>
                         <a href="{{ route('jancode.packingLists') }}" class="btn btn-sm btn-primary shadow-sm">
@@ -61,10 +61,10 @@
                             <i class="fas fa-info-circle fa-lg mr-3 text-info"></i>
                             <div class="small">
                                 <strong>Cara kerja:</strong>
-                                Upload file &rarr; sistem membaca seluruh sheet &amp; mendeteksi revisi &rarr;
+                                Upload file &rarr; sistem membaca seluruh sheet &rarr; setiap sheet menjadi
+                                <strong>session sendiri</strong> (1 sheet = 1 session, bukan revisi) &rarr;
                                 hanya baris <strong>SOLID</strong> yang masuk, baris lain disimpan sebagai
-                                <strong>broken</strong> &rarr; setelah disimpan, revisi terbaru otomatis jadi
-                                <strong>aktif</strong> dan siap di-scan.
+                                <strong>broken</strong> &rarr; setelah disimpan, packing list siap di-scan.
                             </div>
                         </div>
                     </div>
@@ -158,10 +158,15 @@
                                 Hasil ekstraksi tidak sepenuhnya sinkron dengan hitungan carton deterministik. Harap tinjau dengan seksama sebelum konfirmasi.
                             </div>
 
-                            <!-- Rencana pengelompokan session (satu kombinasi = satu session) -->
+                            <!-- Rencana session per sheet (setiap sheet = 1 session) -->
                             <div id="aiRoutingAlert" class="alert alert-info border-left-info py-2 d-none">
                                 <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
                                     <i class="fas fa-sitemap mr-1"></i> Pengelompokan Session
+                                </div>
+                                <div class="small mb-1">
+                                    <i class="fas fa-info-circle mr-1"></i>
+                                    Setiap <strong>sheet</strong> di file ini diimport sebagai
+                                    <strong>session terpisah</strong> (bukan sebagai revisi).
                                 </div>
                                 <div id="aiRoutingList" class="small"></div>
                             </div>
@@ -503,6 +508,7 @@
                 let html = '<ul class="mb-0 pl-3">';
                 aiRouting.forEach(function (r) {
                     const docTypes = r.doc_types ? ` <span class="badge badge-light border">${r.doc_types}</span>` : '';
+                    const revLabel = Number(r.next_revision) === 1 ? 'Original' : 'Rev.' + r.next_revision;
                     let target;
                     if (r.is_new) {
                         target = '<span class="badge badge-success">Session baru</span>';
@@ -513,10 +519,10 @@
                             : '<span class="badge badge-secondary ml-1">CLOSED &rarr; dibuka</span>';
                         target = `<strong>${r.session_code}</strong>${badge}`;
                     }
-                    html += `<li class="mb-1">
-                        <strong>${r.group_label}</strong>${docTypes}<br>
-                        <span class="text-muted">${r.sheets || ''}</span><br>
-                        &rarr; ${target} <span class="text-muted">(revisi ${Number(r.next_revision) === 1 ? 'Original' : 'Rev.' + r.next_revision}, ${r.total_items} baris / ${r.total_carton} carton)</span>
+                    html += `<li class="mb-2">
+                        <strong>${r.sheets || 'Sheet'}</strong>${docTypes}
+                        <span class="text-muted">· ${r.group_label}</span><br>
+                        &rarr; ${target} <span class="text-muted">(revisi ${revLabel}, ${r.total_items} baris / ${r.total_carton} carton)</span>
                     </li>`;
                 });
                 html += '</ul>';
