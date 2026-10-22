@@ -287,7 +287,7 @@
     </div>
 
     <!-- Page level plugins -->
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="{{ asset('vendor/sweetalert/sweetalert.all.js') }}"></script>
 
     <style>
         .import-dropzone {

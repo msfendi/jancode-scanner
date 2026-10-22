@@ -115,6 +115,9 @@ Route::group(['middleware' => 'auth'], function () {
         Route::post('/load', [JancodeScanController::class, 'load'])->name('load')->middleware(['auth', 'role:Admin']);
         Route::get('/rows', [JancodeScanController::class, 'rows'])->name('rows')->middleware(['auth', 'role:Admin']);
         Route::get('/stream', [JancodeScanController::class, 'stream'])->name('stream')->middleware(['auth', 'role:Admin']);
+        Route::get('/delta', [JancodeScanController::class, 'delta'])->name('delta')->middleware(['auth', 'role:Admin']);
+        Route::get('/qr', [JancodeScanController::class, 'qr'])->name('qr')->middleware(['auth', 'role:Admin']);
+        Route::get('/join', [JancodeScanController::class, 'join'])->name('join')->middleware(['auth', 'role:Admin']);
         Route::get('/search', [JancodeScanController::class, 'search'])->name('search')->middleware(['auth', 'role:Admin']);
         Route::get('/count', [JancodeScanController::class, 'count'])->name('count')->middleware(['auth', 'role:Admin']);
         Route::post('/scan', [JancodeScanController::class, 'scan'])->name('scan')->middleware(['auth', 'role:Admin']);

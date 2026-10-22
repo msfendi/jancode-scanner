@@ -185,7 +185,7 @@
     </div>
     <!-- End of Page Wrapper -->
 
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="{{ asset('vendor/sweetalert/sweetalert.all.js') }}"></script>
 
     <script type="text/javascript">
         $(document).ready(function () {

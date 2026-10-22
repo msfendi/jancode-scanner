@@ -1,9 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 @include('layout.header')
-<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-<link href="https://cdn.jsdelivr.net/npm/@ttskch/select2-bootstrap4-theme@x.x.x/dist/select2-bootstrap4.min.css"
-    rel="stylesheet" />
 
 <body id="page-top">
     @include('sweetalert::alert')
@@ -31,6 +28,10 @@
                             <a href="{{ route('scanner.batches') }}" class="btn btn-sm btn-outline-primary shadow-sm mr-2">
                                 <i class="fas fa-history fa-sm mr-1"></i> Riwayat Batch Scan
                             </a>
+                            <button type="button" class="btn btn-sm btn-success shadow-sm mr-2" data-toggle="modal" data-target="#qrJoinModal"
+                                title="Tampilkan QR Code untuk scan dari HP">
+                                <i class="fas fa-qrcode fa-sm mr-1"></i> Scan dari HP
+                            </button>
                             <a href="{{ route('pallet.index') }}" class="btn btn-sm btn-info shadow-sm">
                                 <i class="fas fa-boxes fa-sm mr-1"></i> Manage Pallet
                             </a>
@@ -311,12 +312,63 @@
                 </div>
             </div>
 
+            <!-- Modal QR Code: scan dari perangkat lain (HP) -->
+            <div class="modal fade" id="qrJoinModal" tabindex="-1" role="dialog" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered" role="document">
+                    <div class="modal-content">
+                        <div class="modal-header bg-success text-white py-2">
+                            <h6 class="modal-title font-weight-bold mb-0">
+                                <i class="fas fa-qrcode mr-2"></i> Scan dari HP
+                            </h6>
+                            <button type="button" class="close text-white" data-dismiss="modal" aria-label="Tutup">
+                                <span aria-hidden="true">&times;</span>
+                            </button>
+                        </div>
+                        <div class="modal-body text-center">
+                            <div id="qr-loading" class="py-4">
+                                <i class="fas fa-spinner fa-spin fa-2x text-success mb-2"></i>
+                                <div class="small text-muted">Menyiapkan QR Code...</div>
+                            </div>
+
+                            <div id="qr-content" class="d-none">
+                                <div id="qr-image" class="d-inline-block p-2 bg-white border rounded" style="max-width:250px;"></div>
+
+                                <div class="mt-3 small text-left" style="max-width:420px; margin:0 auto;">
+                                    <div class="mb-1">
+                                        <span class="text-muted">Session:</span>
+                                        <strong id="qr-session">-</strong>
+                                    </div>
+                                    <div class="mb-1">
+                                        <span class="text-muted">Packing List:</span>
+                                        <strong id="qr-batch">-</strong>
+                                    </div>
+                                </div>
+
+                                <div class="alert alert-light border small text-left mt-3 mb-2" style="max-width:420px; margin:0 auto;">
+                                    <i class="fas fa-info-circle mr-1 text-info"></i>
+                                    Pindai QR dengan kamera HP, lalu login. Setelah login user otomatis
+                                    diarahkan ke session &amp; packing list yang sedang berjalan di sini.
+                                    <div class="mt-2">
+                                        <input type="text" id="qr-url" class="form-control form-control-sm" readonly
+                                            onclick="this.select(); this.setSelectionRange(0, this.value.length);">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="qr-error" class="alert alert-warning small d-none"></div>
+                        </div>
+                        <div class="modal-footer py-2">
+                            <button type="button" class="btn btn-sm btn-secondary" data-dismiss="modal">Tutup</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             @include('layout.footer')
 
         </div>
 
-        <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-        <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+        <script src="{{ asset('vendor/sweetalert/sweetalert.all.js') }}"></script>
 
         <script type="text/javascript">
             $(document).ready(function () {
@@ -332,11 +384,6 @@
 
                 // ── Variables ──────────────────────────────────────────────
                 let loadedBatchId = null;
-                let scanStream = null;
-                let scanStreamHash = '';
-                let scanStreamRetry = null;
-                let scanStreamOpenTimer = null;
-                let pendingLiveState = null;
                 let isScanning = false;
                 let bufferTimer = null;
                 let scanQueue = [];
@@ -450,7 +497,7 @@
                             clearScanLogs();
                             loadScanLogHistory();
                             $input.val('').focus();
-                            startScanStream();
+                            startAutoRefresh();
                         },
                         error: function (xhr) {
                             const msg = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : 'Gagal memuat packing list';
@@ -486,9 +533,7 @@
                                 $('#log-date').val('');
                                 logHistoryRequest++;
                                 clearScanLogs();
-                                stopScanStream();
-                                scanStreamHash = '';
-                                pendingLiveState = null;
+                                stopAutoRefresh();
                             });
                         }
                     });
@@ -594,20 +639,35 @@
                     $('#rows-tbody').html(html);
                 }
 
-                // Update satu baris saja setelah scan (tanpa rebuild seluruh tabel),
-                // supaya scan terasa instan walau packing list berisi banyak baris.
-                function updateRowFromScan(res, jancodeId) {
-                    if (!jancodeId) return;
-                    const $tr = $('#rows-tbody tr[data-jancode-id="' + jancodeId + '"]');
+                // Update satu baris saja setelah scan / live update (tanpa rebuild
+                // seluruh tabel), supaya scan terasa instan walau packing list
+                // berisi banyak baris.
+                function patchRow(row, highlight) {
+                    if (!row || !row.id) return;
+
+                    const $tr = $('#rows-tbody tr[data-jancode-id="' + row.id + '"]');
                     if (!$tr.length) return;   // baris tidak tampil (mis. sedang difilter)
-                    const row = res.row || (res.rows || []).find(function (r) { return String(r.id) === String(jancodeId); });
-                    if (!row) return;
+
+                    const before = $.trim($tr.find('.cell-receive').text());
 
                     $tr.find('.cell-receive').text(row.receive);
                     $tr.find('.cell-unsub').text(row.unsubmitted);
                     $tr.find('.cell-balance').text(row.balance);
                     $tr.find('.cell-status').html(rowStatusBadge(row));
                     $tr.toggleClass('table-success', !!row.is_complete);
+
+                    if (highlight && before !== String(row.receive)) {
+                        $tr.addClass('table-info');
+                        setTimeout(function () { $tr.removeClass('table-info'); }, 2500);
+                    }
+                }
+
+                function updateRowFromScan(res, jancodeId) {
+                    if (!jancodeId) return;
+                    const row = res.row || (res.rows || []).find(function (r) { return String(r.id) === String(jancodeId); });
+                    if (!row) return;
+
+                    patchRow(row, true);
                 }
 
                 $('#row-filter').on('keyup', refreshRows);
@@ -620,21 +680,44 @@
                     });
                 }
 
-                // ── Live update (SSE) + fallback polling ──────────────────
-                // Perubahan scan dari device lain dikirim server lewat SSE
-                // (/scanner/stream), polling 15 detik tetap dipakai sebagai cadangan.
-                const AUTO_REFRESH_MS = 15000;
-                let autoRefreshTimer = null;
+                // ── Live update (delta polling) ───────────────────────────
+                // Perubahan scan dari device lain diambil lewat endpoint ringan
+                // /scanner/delta (hanya baris + counter, ~1 KB).
+                // Sengaja TIDAK memakai SSE panjang: pada `php artisan serve`
+                // (single worker) koneksi panjang menahan seluruh request lain
+                // sehingga scan dari device lain ikut lambat.
+                const DELTA_POLL_MS = 700;
+                const FULL_REFRESH_MS = 30000;
+                let deltaTimer = null;
+                let fullRefreshTimer = null;
+                let lastDeltaHash = '';
 
                 function startAutoRefresh() {
                     stopAutoRefresh();
-                    autoRefreshTimer = setInterval(pollRows, AUTO_REFRESH_MS);
-                    startScanStream();
+                    deltaTimer = setInterval(pollDelta, DELTA_POLL_MS);
+                    fullRefreshTimer = setInterval(pollRows, FULL_REFRESH_MS);
                 }
 
                 function stopAutoRefresh() {
-                    if (autoRefreshTimer) { clearInterval(autoRefreshTimer); autoRefreshTimer = null; }
-                    stopScanStream();
+                    if (deltaTimer) { clearInterval(deltaTimer); deltaTimer = null; }
+                    if (fullRefreshTimer) { clearInterval(fullRefreshTimer); fullRefreshTimer = null; }
+                }
+
+                function pollDelta() {
+                    if (!loadedBatchId) return;
+                    if (isScanning || scanQueue.length > 0) return;   // sedang scan
+                    if (document.hidden) return;                        // tab tidak aktif
+                    if (swalVisible()) return;                         // ada dialog
+
+                    $.getJSON("{{ route('scanner.delta') }}")
+                        .done(function (res) {
+                            if (!res || !res.success) return;
+                            lastDeltaHash = res.hash || lastDeltaHash;
+                            applyDelta(res);
+                        })
+                        .fail(function () {
+                            setScanLive('off');
+                        });
                 }
 
                 function pollRows() {
@@ -659,116 +742,40 @@
                         $text.text('LIVE: menghubungkan…');
                     } else if (state === 'polling') {
                         $badge.addClass('badge-warning text-dark');
-                        $text.text('LIVE: polling 15s');
+                        $text.text('LIVE: sinkron 0.7s');
                     } else {
                         $badge.addClass('badge-secondary');
                         $text.text('LIVE: off');
                     }
                 }
 
-                function stopScanStream() {
-                    if (scanStream) {
-                        scanStream.close();
-                        scanStream = null;
-                    }
-                    if (scanStreamRetry) {
-                        clearTimeout(scanStreamRetry);
-                        scanStreamRetry = null;
-                    }
-                    if (scanStreamOpenTimer) {
-                        clearTimeout(scanStreamOpenTimer);
-                        scanStreamOpenTimer = null;
-                    }
-                }
+                // Terapkan delta: hanya baris yang berubah yang ditambal,
+                // tabel tidak dibangun ulang.
+                function applyDelta(data) {
+                    if (!data || !data.rows) return;
 
-                function startScanStream() {
-                    stopScanStream();
-
-                    if (!loadedBatchId || !window.EventSource) {
-                        setScanLive('off');
-                        return;
-                    }
-
-                    setScanLive('connecting');
-
-                    const url = "{{ route('scanner.stream') }}" + '?t=' + encodeURIComponent(scanStreamHash || '');
-                    scanStream = new EventSource(url);
-
-                    // Bila koneksi tidak terbuka dalam 8 detik, pakai polling sebagai fallback.
-                    scanStreamOpenTimer = setTimeout(function () {
-                        if (scanStream && scanStream.readyState === 0) {
-                            setScanLive('polling');
-                        }
-                    }, 8000);
-
-                    scanStream.addEventListener('open', function () {
-                        if (scanStreamOpenTimer) {
-                            clearTimeout(scanStreamOpenTimer);
-                            scanStreamOpenTimer = null;
-                        }
-                        setScanLive('on');
-                    });
-
-                    scanStream.addEventListener('state', function (ev) {
-                        let data = null;
-                        try { data = JSON.parse(ev.data); } catch (e) { return; }
-
-                        scanStreamHash = data.hash || scanStreamHash;
-
-                        // Jangan ganggu operator yang sedang scan / memfilter / ada dialog.
-                        if (isScanning || scanQueue.length > 0 || swalVisible() || $('#row-filter').val() || document.hidden) {
-                            pendingLiveState = data;
-                            return;
-                        }
-
-                        applyLiveState(data);
-                    });
-
-                    scanStream.addEventListener('done', function () {
-                        stopScanStream();
-                        setScanLive('connecting');
-                        scanStreamRetry = setTimeout(startScanStream, 1500);
-                    });
-
-                    scanStream.onerror = function () {
-                        stopScanStream();
-                        setScanLive('off');
-                        scanStreamRetry = setTimeout(startScanStream, 3000);
-                    };
-                }
-
-                function applyLiveState(data) {
-                    if (!data || !data.packing_list) return;
-
-                    // Simpan nilai received sebelum render, untuk highlight baris yang berubah.
-                    const before = {};
-                    $('#rows-tbody tr[data-jancode-id]').each(function () {
-                        before[String($(this).attr('data-jancode-id'))] = $.trim($(this).find('.cell-receive').text());
-                    });
-
-                    renderState(data);
-
-                    Object.keys(before).forEach(function (id) {
-                        const $tr = $('#rows-tbody tr[data-jancode-id="' + id + '"]');
+                    (data.rows || []).forEach(function (row) {
+                        const $tr = $('#rows-tbody tr[data-jancode-id="' + row.id + '"]');
                         if (!$tr.length) return;
-                        const now = $.trim($tr.find('.cell-receive').text());
-                        if (now !== before[id]) {
-                            $tr.addClass('table-info');
-                            setTimeout(function () { $tr.removeClass('table-info'); }, 2500);
-                        }
+
+                        const recv  = $.trim($tr.find('.cell-receive').text());
+                        const unsub = $.trim($tr.find('.cell-unsub').text());
+
+                        if (recv === String(row.receive) && unsub === String(row.unsubmitted)) return;
+
+                        $tr.find('.cell-receive').text(row.receive);
+                        $tr.find('.cell-unsub').text(row.unsubmitted);
+                        $tr.find('.cell-balance').text(row.balance);
+                        $tr.find('.cell-status').html(rowStatusBadge(row));
+                        $tr.toggleClass('table-success', !!row.is_complete);
+                        $tr.addClass('table-info');
+                        setTimeout(function () { $tr.removeClass('table-info'); }, 2000);
                     });
 
+                    if (data.counters) updateCounters(data.counters);
+                    markRowsUpdated();
                     setScanLive('on');
                 }
-
-                // Terapkan state yang tertunda setelah operator selesai scan / menutup dialog.
-                setInterval(function () {
-                    if (!pendingLiveState) return;
-                    if (isScanning || scanQueue.length > 0 || swalVisible() || $('#row-filter').val() || document.hidden) return;
-                    const data = pendingLiveState;
-                    pendingLiveState = null;
-                    applyLiveState(data);
-                }, 1200);
 
                 $('#auto-refresh-toggle').on('change', function () {
                     if ($(this).is(':checked')) { startAutoRefresh(); } else { stopAutoRefresh(); }
@@ -777,12 +784,45 @@
                 // Saat tab kembali aktif, langsung sinkronkan sekali
                 document.addEventListener('visibilitychange', function () {
                     if (!document.hidden && $('#auto-refresh-toggle').is(':checked')) {
+                        pollDelta();
                         pollRows();
-                        startScanStream();
                     }
                 });
 
-                window.addEventListener('beforeunload', stopScanStream);
+                // ── QR Code: scan dari perangkat lain (HP) ───────────────
+                function showQrError(message) {
+                    $('#qr-loading').addClass('d-none');
+                    $('#qr-content').addClass('d-none');
+                    $('#qr-error').removeClass('d-none').text(message || 'Gagal membuat QR Code.');
+                }
+
+                $('#qrJoinModal').on('show.bs.modal', function () {
+                    $('#qr-loading').removeClass('d-none');
+                    $('#qr-content').addClass('d-none');
+                    $('#qr-error').addClass('d-none').text('');
+
+                    $.getJSON("{{ route('scanner.qr') }}")
+                        .done(function (res) {
+                            if (!res.success) {
+                                showQrError(res.message || 'Gagal membuat QR Code.');
+                                return;
+                            }
+
+                            $('#qr-image').html(res.svg || '');
+                            $('#qr-session').text(res.session_code + (res.session_label ? ' · ' + res.session_label : ''));
+                            $('#qr-batch').text(res.batch_label
+                                ? (res.batch_label + (res.batch_number ? ' · ' + res.batch_number : ''))
+                                : 'Belum ada packing list — pilih packing list dulu');
+                            $('#qr-url').val(res.url || '');
+                            $('#qr-loading').addClass('d-none');
+                            $('#qr-content').removeClass('d-none');
+                        })
+                        .fail(function (xhr) {
+                            showQrError((xhr.responseJSON && xhr.responseJSON.message) || 'Gagal membuat QR Code.');
+                        });
+                });
+
+                window.addEventListener('beforeunload', stopAutoRefresh);
 
                 startAutoRefresh();
 

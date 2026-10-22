@@ -7,6 +7,7 @@ use App\Models\ImportSession;
 use App\Models\Jancode;
 use App\Models\JancodeLogs;
 use App\Models\ScanBatch;
+use App\Services\ScannerJoinService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -167,8 +168,115 @@ class JancodeScanController extends Controller
     }
 
     /**
+     * QR Code untuk scan dari perangkat lain (HP).
+     *
+     * QR berisi link bertanda tangan yang memuat session aktif + packing list
+     * yang sedang dimuat. Setelah user login di HP, link yang sama langsung
+     * mengarahkan ke session scan yang sesuai.
+     */
+    public function qr(Request $request, ScannerJoinService $joiner)
+    {
+        $session = ImportSession::current();
+
+        if (!$session) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Belum ada session aktif. Pilih session terlebih dahulu.',
+            ], 404);
+        }
+
+        $batch = $this->resolveSessionBatch();
+
+        $token = $joiner->encode((int) $session->id, $batch?->id);
+        $url   = route('scanner.join', ['c' => $token]);
+
+        return response()->json([
+            'success'       => true,
+            'svg'           => $joiner->svg($url),
+            'url'           => $url,
+            'session_code'  => $session->code,
+            'session_label' => $session->group_label,
+            'batch_label'   => $batch?->group_label,
+            'batch_number'  => $batch?->batch_number,
+            'has_batch'     => (bool) $batch,
+        ]);
+    }
+
+    /**
+     * Join dari perangkat lain (HP) via link QR.
+     *
+     * Set session aktif + kunci packing list yang sama dengan perangkat
+     * desktop, lalu arahkan ke halaman scanner.
+     */
+    public function join(Request $request, ScannerJoinService $joiner)
+    {
+        $data = $joiner->decode($request->query('c'));
+
+        if (!$data) {
+            return redirect()->route('scanner.index')
+                ->with('error', 'QR Code tidak valid atau sudah kedaluwarsa. Silakan generate ulang di perangkat lain.');
+        }
+
+        $session = ImportSession::find($data['s']);
+
+        if (!$session) {
+            return redirect()->route('scanner.index')
+                ->with('error', 'Session pada QR Code tidak ditemukan.');
+        }
+
+        // Pindah session aktif ke session tujuan.
+        ImportSession::setCurrent((int) $session->id);
+
+        // Kunci packing list yang sama (bila masih revisi aktif).
+        if (!empty($data['b'])) {
+            $batch = ImportBatch::find($data['b']);
+
+            if ($batch
+                && (int) $batch->session_id === (int) $session->id
+                && $batch->is_active) {
+                session([self::SESSION_KEY => (int) $batch->id]);
+            }
+        }
+
+        return redirect()->route('scanner.index')
+            ->with('success', 'Bergabung ke session ' . $session->code . '.');
+    }
+
+    /**
+     * Delta live update: state ringkas (baris + counter) untuk sinkronisasi
+     * antar perangkat.
+     *
+     * DipakaiInstead SSE supaya request tidak menahan worker server (penting
+     * untuk `php artisan serve` yang hanya single-thread): payload kecil dan
+     * selesai cepat.
+     */
+    public function delta(Request $request)
+    {
+        $batch = $this->resolveSessionBatch();
+
+        if (!$batch) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Pilih packing list terlebih dahulu.',
+            ], 400);
+        }
+
+        $state = $this->lightState($batch);
+
+        return response()->json([
+            'success'  => true,
+            'hash'     => $state['hash'],
+            'counters' => $state['counters'],
+            'rows'     => array_values($state['rows']),
+        ]);
+    }
+
+    /**
      * SSE live monitor: kirim state baris setiap ada scan baru.
-     * Dipakai agar device lain (monitor) melihat progres scan secara realtime.
+     *
+     * Agarupdate terasa cepat, server hanya mengirim PERUBAHAN (delta):
+     * baris yang berubah + counter, bukan seluruh tabel. Browser cukup
+     * menambal baris yang terkait (tanpa rebuild tabel).
      */
     public function stream(Request $request): StreamedResponse
     {
@@ -196,21 +304,44 @@ class JancodeScanController extends Controller
             ignore_user_abort(true);
             if (ob_get_level() > 0) { @ob_end_clean(); }
 
-            $prev = $lastHash;
-            $start = time();
+            $prev     = $lastHash;
+            $prevRows = [];
+            $start    = time();
 
-            $emit = function () use ($batch, &$prev) {
-                $hash = $this->scanHash($batch);
+            $emit = function () use ($batch, &$prev, &$prevRows) {
+                $snapshot = $this->lightState($batch);
+                $hash     = $snapshot['hash'];
+
                 if ($hash === $prev) {
                     return false;
                 }
 
-                $payload = $this->batchState($batch) + ['success' => true, 'hash' => $hash];
+                // Baris yang berubah saja (delta).
+                $changed = [];
+                foreach ($snapshot['rows'] as $id => $row) {
+                    $before = $prevRows[$id] ?? null;
+
+                    if ($before === null
+                        || $before['receive'] !== $row['receive']
+                        || $before['unsubmitted'] !== $row['unsubmitted']) {
+                        $changed[] = $row;
+                    }
+                }
+
+                $prev     = $hash;
+                $prevRows = $snapshot['rows'];
+
+                $payload = [
+                    'success'      => true,
+                    'hash'         => $hash,
+                    'counters'     => $snapshot['counters'],
+                    'changed_rows' => $changed,
+                ];
+
                 echo "event: state\n";
                 echo 'data: ' . json_encode($payload, JSON_UNESCAPED_UNICODE) . "\n\n";
                 @ob_flush();
                 @flush();
-                $prev = $hash;
 
                 return true;
             };
@@ -221,7 +352,7 @@ class JancodeScanController extends Controller
                 if (connection_aborted()) {
                     break;
                 }
-                usleep(1500000); // 1.5 detik
+                usleep(400000); // 0.4 detik — scan dari device lain langsung tampil
                 $emit();
                 echo ': hb ' . time() . "\n\n";
                 @ob_flush();
@@ -240,21 +371,72 @@ class JancodeScanController extends Controller
     }
 
     /**
-     * Hash ringan untuk mendeteksi perubahan scan pada satu packing list.
+     * State ringkas untuk live update: counter + status per baris.
+     *
+     * Dipakai SSE agar payload yang dikirim ke browser kecil (hanya perubahan),
+     * sehingga update terasa cepat mesmo di HP.
+     *
+     * @return array{hash:string, rows:array<int, array>, counters:array}
      */
-    private function scanHash(ImportBatch $batch): string
+    private function lightState(ImportBatch $batch): array
     {
-        $ids = Jancode::where('import_batch_id', $batch->id)->pluck('id');
-        if ($ids->isEmpty()) {
-            return 'empty';
+        // Satu query: state per baris + jumlah scan sementara (belum submit).
+        $rows = Jancode::where('import_batch_id', $batch->id)
+            ->orderBy('id')
+            ->select(['id', 'packing_list_qty_carton', 'receive_qty_carton'])
+            ->selectRaw(
+                "(SELECT COUNT(*) FROM jancode_logs l
+                  WHERE l.jancode_id = jancode.id AND l.is_submitted = 'false') as unsubmitted_count"
+            )
+            ->get();
+
+        $state       = [];
+        $signature   = '';
+        $totalCarton = 0;
+        $scanned     = 0;
+        $unsubmitted = 0;
+        $done        = 0;
+
+        foreach ($rows as $row) {
+            $packing = (int) $row->packing_list_qty_carton;
+            $receive = (int) $row->receive_qty_carton;
+            $unsub   = (int) ($row->unsubmitted_count ?? 0);
+            $balance = max(0, $packing - $receive - $unsub);
+
+            $state[$row->id] = [
+                'id'          => (int) $row->id,
+                'receive'     => $receive,
+                'unsubmitted' => $unsub,
+                'balance'     => $balance,
+                'is_complete' => $balance === 0,
+            ];
+
+            $signature .= $row->id . ':' . $receive . ':' . $unsub . ';';
+
+            $totalCarton += $packing;
+            $scanned     += $receive;
+            $unsubmitted += $unsub;
+
+            if ($balance === 0) {
+                $done++;
+            }
         }
 
-        $logs = JancodeLogs::whereIn('jancode_id', $ids);
-        $maxUpdated = (clone $logs)->max('updated_at') ?: '0';
-        $count = (clone $logs)->count();
-        $unsubmitted = (clone $logs)->where('is_submitted', 'false')->count();
+        $counters = [
+            'scanned'     => $scanned,
+            'unsubmitted' => $unsubmitted,
+            'total'       => $totalCarton,
+            'balance'     => max(0, $totalCarton - $scanned - $unsubmitted),
+            'rows_total'  => $rows->count(),
+            'rows_done'   => $done,
+            'is_complete' => ($totalCarton > 0 && ($scanned + $unsubmitted) >= $totalCarton),
+        ];
 
-        return md5($maxUpdated . '|' . $count . '|' . $unsubmitted);
+        return [
+            'hash'     => md5($signature . '|' . json_encode($counters)),
+            'rows'     => $state,
+            'counters' => $counters,
+        ];
     }
 
     // POST scan — 1 scan = 1 carton
