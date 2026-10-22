@@ -15,6 +15,10 @@ return Application::configure(basePath: dirname(__DIR__))
         // terdeteksi dan asset() tidak menghasilkan URL http:// (mixed content).
         $middleware->trustProxies(at: '*');
 
+        // Hapus cache route/config yang basi (mis. setelah git pull) supaya
+        // route & permission baru langsung terbaca.
+        $middleware->web(append: [\App\Http\Middleware\PurgeStaleCaches::class]);
+
         // Middleware aliases (pengganti $middlewareAliases di Kernel.php)
         $middleware->alias([
             'auth'               => \App\Http\Middleware\Authenticate::class,

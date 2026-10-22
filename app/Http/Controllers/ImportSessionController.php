@@ -6,6 +6,7 @@ use App\Models\ImportSession;
 use App\Models\PackingList;
 use App\Services\SessionPurgeService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
 
 /**
  * Session Import = induk sebelum import packing list.
@@ -37,7 +38,11 @@ class ImportSessionController extends Controller
             'packing_lists' => PackingList::count(),
         ];
 
-        return view('jancode.sessions', compact('current', 'sessions', 'search', 'status', 'stats'));
+        // Tombol hapus permanen hanya ditampilkan bila route-nya benar-benar
+        // terdaftar (aman kalau route cache server belum di-refresh).
+        $canHardDelete = Route::has('session.destroy');
+
+        return view('jancode.sessions', compact('current', 'sessions', 'search', 'status', 'stats', 'canHardDelete'));
     }
 
     /**

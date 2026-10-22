@@ -346,15 +346,17 @@
                                                         </form>
                                                     @endif
 
-                                                    @can('session.hard-delete')
-                                                        <button type="button" class="btn btn-sm btn-outline-danger btn-delete-session"
-                                                            data-url="{{ route('session.destroy', $s) }}"
-                                                            data-preview="{{ route('session.purgePreview', $s) }}"
-                                                            data-code="{{ $s->code }}"
-                                                            title="Hapus permanen session ini beserta seluruh datanya">
-                                                            <i class="fas fa-trash"></i>
-                                                        </button>
-                                                    @endcan
+                                                    @if ($canHardDelete)
+                                                        @can('session.hard-delete')
+                                                            <button type="button" class="btn btn-sm btn-outline-danger btn-delete-session"
+                                                                data-url="{{ url('/session/' . $s->id . '/delete') }}"
+                                                                data-preview="{{ url('/session/' . $s->id . '/purge-preview') }}"
+                                                                data-code="{{ $s->code }}"
+                                                                title="Hapus permanen session ini beserta seluruh datanya">
+                                                                <i class="fas fa-trash"></i>
+                                                            </button>
+                                                        @endcan
+                                                    @endif
                                                 </td>
                                             </tr>
                                         @empty

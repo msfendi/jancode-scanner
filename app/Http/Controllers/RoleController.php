@@ -21,8 +21,11 @@ class RoleController extends Controller
             'roles'      => $roles,
             'groups'     => Rbac::groups(),
             'allPerms'   => Rbac::allPermissions(),
-            'protected'  => (array) config('rbac.protected_roles', []),
+            'protected'  => Rbac::protectedRoles(),
             'routeMap'   => $this->routeMap(),
+            // Kalau route cache server belum di-refresh, form simpan permission
+            // dinonaktifkan (tidak fatal).
+            'canSync'    => Route::has('role.permissions'),
         ]);
     }
 
@@ -112,7 +115,7 @@ class RoleController extends Controller
             return redirect()->route('role.index')->with('error', 'Role tidak ditemukan.');
         }
 
-        if (in_array($role->name, (array) config('rbac.protected_roles', []), true)) {
+        if (in_array($role->name, Rbac::protectedRoles(), true)) {
             return redirect()->route('role.index')
                 ->with('error', "Role {$role->name} dilindungi dan tidak bisa dihapus.");
         }

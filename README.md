@@ -58,7 +58,8 @@ Dua role bawaan (dibuat otomatis oleh migration `2026_10_22_000001_seed_rbac_rol
 | **Super Admin** (`superadmin`) | Semua fitur, termasuk **RBAC**, **User Management**, dan **hapus permanen session** |
 | **CTPAT** (`ctpat`) | Semua fitur operasional, **KECUALI** RBAC, User Management, dan hapus permanen session |
 
-- Definisi permission & role: `config/rbac.php` (sumber tunggal).
+- Definisi permission & role: `app/Support/Rbac.php` (sumber tunggal, **tidak** memakai
+  `config:` supaya tidak terpengaruh `config:cache` yang basi).
 - Helper: `app/Support/Rbac.php`.
 - Model akses route:
   - `module:xxx` → boleh membuka halaman modul (butuh permission `xxx.view` **atau** `xxx.manage`).
@@ -108,7 +109,9 @@ php artisan view:cache
 >
 > app sudah punya pengaman: middleware `role` (alias `role:Admin` versi lama)
 > memetakan role `Admin` → `superadmin`, dan kalau tabel role belum ter-seed
-> (migration belum dijalankan) tidak ada user yang terkunci. Tapi **tetap
+> (migration belum dijalankan) tidak ada user yang terkunci. Selain itu, middleware
+> `PurgeStaleCaches` otomatis menghapus cache route/config yang lebih lama dari
+> source-nya (route baru langsung terbaca setelah 1 request). Tapi **tetap
 > jalankan `php artisan optimize:clear` setelah pull**.
 
 > **Permission folder di server Linux (nginx/apache)**

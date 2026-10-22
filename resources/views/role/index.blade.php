@@ -133,7 +133,7 @@
                                     </button>
                                 </div>
 
-                                <form method="POST" action="{{ route('role.permissions', ['id' => $role->id]) }}">
+                                <form method="POST" action="{{ url('/role/' . $role->id . '/permissions') }}">
                                     @csrf
                                     <div class="row">
                                         @foreach ($groups as $group => $permissions)
@@ -160,9 +160,16 @@
                                         @endforeach
                                     </div>
 
-                                    <button type="submit" class="btn btn-sm btn-primary">
+                                    <button type="submit" class="btn btn-sm btn-primary" @disabled(! $canSync)>
                                         <i class="fas fa-save mr-1"></i> Simpan Permission
                                     </button>
+                                    @unless ($canSync)
+                                        <small class="text-danger d-block mt-1">
+                                            <i class="fas fa-exclamation-triangle mr-1"></i>
+                                            Route simpan permission belum terdaftar di server.
+                                            Jalankan <code>php artisan route:clear</code> lalu muat ulang halaman.
+                                        </small>
+                                    @endunless
                                 </form>
                             </div>
                         @endforeach

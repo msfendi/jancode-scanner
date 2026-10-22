@@ -8,15 +8,100 @@ use Spatie\Permission\Models\Role;
 
 /**
  * Helper RBAC: sumber tunggal untuk permission, role, dan sinkronisasi.
+ *
+ * Definisi disimpan di class ini (bukan di config/) supaya tidak terpengaruh
+ * `config:cache` yang basi di server.
  */
 class Rbac
 {
     /**
-     * @return array<string, array<string, string>> grup => permission => label
+     * Permission per modul (sesuai bagian di sidebar).
+     *
+     * @return array<string, array<string, string>>
      */
     public static function groups(): array
     {
-        return (array) config('rbac.groups', []);
+        return [
+            'Dashboard' => [
+                'dashboard.view' => 'Lihat Dashboard',
+            ],
+
+            'Sesi Import' => [
+                'session.view'        => 'Lihat & pilih session',
+                'session.manage'      => 'Mulai / tutup / buka session',
+                'session.hard-delete' => 'Hapus permanen session (hard delete)',
+            ],
+
+            'Packing List' => [
+                'packing-list.view'   => 'Lihat daftar packing list',
+                'packing-list.manage' => 'Import, manage, finish & hapus packing list',
+            ],
+
+            'Carton Inbound' => [
+                'scan.view'   => 'Lihat halaman scan jancode',
+                'scan.manage' => 'Scan, submit, rollback & riwayat batch scan',
+            ],
+
+            'Carton Outbound' => [
+                'carton-out.view'   => 'Lihat carton outbound',
+                'carton-out.manage' => 'Proses karton keluar',
+            ],
+
+            'Manage Pallet' => [
+                'pallet.view'   => 'Lihat layout & detail pallet',
+                'pallet.manage' => 'Tempatkan / pindahkan / kosongkan pallet',
+            ],
+
+            'Modul Hangtag' => [
+                'hangtag.view'   => 'Lihat data hangtag',
+                'hangtag.manage' => 'Kelola data & scan hangtag',
+            ],
+
+            'User Management' => [
+                'user.manage' => 'Kelola user (daftar, buat, edit, assign role)',
+            ],
+
+            'RBAC' => [
+                'rbac.manage' => 'Kelola role & permission',
+            ],
+        ];
+    }
+
+    /**
+     * Definisi role.
+     *
+     * @return array<string, array{label:string, description:string, exclude:array<int,string>}>
+     */
+    public static function roles(): array
+    {
+        return [
+            'superadmin' => [
+                'label'       => 'Super Admin',
+                'description' => 'Akses penuh seluruh fitur, termasuk RBAC, User Management, dan hapus permanen session.',
+                'exclude'     => [],
+            ],
+
+            'ctpat' => [
+                'label'       => 'CTPAT',
+                'description' => 'Akses seluruh fitur operasional, kecuali RBAC, User Management, dan hapus permanen session.',
+                'exclude'     => ['rbac.manage', 'user.manage', 'session.hard-delete'],
+            ],
+        ];
+    }
+
+    /**
+     * Role yang tidak boleh dihapus dari UI.
+     *
+     * @return array<int, string>
+     */
+    public static function protectedRoles(): array
+    {
+        return array_keys(self::roles());
+    }
+
+    public static function defaultRole(): string
+    {
+        return 'ctpat';
     }
 
     /**
@@ -46,26 +131,25 @@ class Rbac
      */
     public static function permissionsFor(string $role): array
     {
-        $definition = config('rbac.roles.' . $role);
+        $definition = self::roles()[$role] ?? null;
 
         if (! $definition) {
             return [];
         }
 
-        $all     = self::allPermissions();
         $exclude = (array) ($definition['exclude'] ?? []);
 
-        return array_values(array_diff($all, $exclude));
+        return array_values(array_diff(self::allPermissions(), $exclude));
     }
 
     public static function roleLabel(string $role): string
     {
-        return (string) (config('rbac.roles.' . $role . '.label') ?? $role);
+        return (string) (self::roles()[$role]['label'] ?? $role);
     }
 
     public static function roleDescription(string $role): string
     {
-        return (string) (config('rbac.roles.' . $role . '.description') ?? '');
+        return (string) (self::roles()[$role]['description'] ?? '');
     }
 
     public static function isSuperAdmin(?User $user): bool
@@ -80,7 +164,7 @@ class Rbac
     {
         $existing = $user->roles->pluck('name')->first();
 
-        if ($existing && array_key_exists($existing, (array) config('rbac.roles', []))) {
+        if ($existing && array_key_exists($existing, self::roles())) {
             return $existing;
         }
 
@@ -107,7 +191,7 @@ class Rbac
         }
 
         // 2. Role + permission-nya
-        foreach ((array) config('rbac.roles', []) as $name => $definition) {
+        foreach (self::roles() as $name => $definition) {
             $role = Role::findOrCreate($name, 'web');
             $role->syncPermissions(self::permissionsFor($name));
         }
@@ -122,7 +206,7 @@ class Rbac
         // 4. Buang role lama (Admin / User)
         if ($removeLegacyRoles) {
             Role::query()
-                ->whereNotIn('name', array_keys((array) config('rbac.roles', [])))
+                ->whereNotIn('name', array_keys(self::roles()))
                 ->delete();
         }
 
