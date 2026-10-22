@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Support\Rbac;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
 use RealRashid\SweetAlert\Facades\Alert;
 use Spatie\Permission\Models\Role;
 
@@ -21,7 +22,37 @@ class RoleController extends Controller
             'groups'     => Rbac::groups(),
             'allPerms'   => Rbac::allPermissions(),
             'protected'  => (array) config('rbac.protected_roles', []),
+            'routeMap'   => $this->routeMap(),
         ]);
+    }
+
+    /**
+     * Peta route -> permission yang dipakai (agar mudah dicek dari UI).
+     *
+     * @return array<string, array{uri:string, methods:array, permission:string}>
+     */
+    private function routeMap(): array
+    {
+        $map = [];
+
+        foreach (Route::getRoutes() as $route) {
+            $permission = collect($route->gatherMiddleware())
+                ->first(fn ($m) => is_string($m) && (str_starts_with($m, 'can:') || str_starts_with($m, 'module:')));
+
+            if (! $permission) {
+                continue;
+            }
+
+            $map[$route->uri()] = [
+                'uri'        => $route->uri(),
+                'methods'    => array_values(array_diff($route->methods(), ['HEAD'])),
+                'permission' => $permission,
+            ];
+        }
+
+        ksort($map);
+
+        return $map;
     }
 
     public function create()

@@ -169,6 +169,48 @@
                     </div>
                 </div>
 
+                <!-- Peta Route -> Permission -->
+                <div class="card shadow mb-4">
+                    <div class="card-header py-3">
+                        <h6 class="m-0 font-weight-bold text-primary">
+                            <i class="fas fa-route mr-1"></i> Peta Route & Permission ({{ count($routeMap) }} route)
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive" style="max-height: 420px; overflow-y: auto;">
+                            <table class="table table-sm table-bordered mb-0" style="font-size: 12px;">
+                                <thead class="thead-light" style="position: sticky; top: 0; z-index: 1;">
+                                    <tr>
+                                        <th style="width: 90px;">Method</th>
+                                        <th>URI Route</th>
+                                        <th style="width: 230px;">Permission</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach ($routeMap as $route)
+                                        <tr>
+                                            <td>
+                                                @foreach ($route['methods'] as $method)
+                                                    <span class="badge badge-secondary mr-1">{{ $method }}</span>
+                                                @endforeach
+                                            </td>
+                                            <td><code>{{ '/' . $route['uri'] }}</code></td>
+                                            <td>
+                                                <code class="text-primary">{{ $route['permission'] }}</code>
+                                            </td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                        <small class="text-muted d-block mt-2">
+                            <code>module:xxx</code> = boleh membuka halaman modul (butuh permission
+                            <code>xxx.view</code> atau <code>xxx.manage</code>);
+                            <code>can:xxx.manage</code> = hak mengubah data pada modul tersebut.
+                        </small>
+                    </div>
+                </div>
+
             </div>
             <!-- /.container-fluid -->
 

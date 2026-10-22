@@ -67,16 +67,16 @@ Route::group(['middleware' => 'auth'], function () {
     Route::post('/user/assignrole', [UserController::class, 'assignrole'])->name('user.assignrole')->middleware(['auth', 'can:user.manage']);
 
     // Session Import (induk sebelum import packing list)
-    Route::get('/session', [\App\Http\Controllers\ImportSessionController::class, 'index'])->name('session.index')->middleware(['auth', 'can:session.view']);
+    Route::get('/session', [\App\Http\Controllers\ImportSessionController::class, 'index'])->name('session.index')->middleware(['auth', 'module:session']);
     Route::post('/session/start', [\App\Http\Controllers\ImportSessionController::class, 'start'])->name('session.start')->middleware(['auth', 'can:session.manage']);
-    Route::post('/session/{session}/select', [\App\Http\Controllers\ImportSessionController::class, 'select'])->name('session.select')->middleware(['auth', 'can:session.view']);
+    Route::post('/session/{session}/select', [\App\Http\Controllers\ImportSessionController::class, 'select'])->name('session.select')->middleware(['auth', 'module:session']);
     Route::post('/session/{session}/close', [\App\Http\Controllers\ImportSessionController::class, 'close'])->name('session.close')->middleware(['auth', 'can:session.manage']);
     Route::post('/session/{session}/reopen', [\App\Http\Controllers\ImportSessionController::class, 'reopen'])->name('session.reopen')->middleware(['auth', 'can:session.manage']);
     Route::get('/session/{session}/purge-preview', [\App\Http\Controllers\ImportSessionController::class, 'purgePreview'])->name('session.purgePreview')->middleware(['auth', 'can:session.hard-delete']);
     Route::post('/session/{session}/delete', [\App\Http\Controllers\ImportSessionController::class, 'destroy'])->name('session.destroy')->middleware(['auth', 'can:session.hard-delete']);
 
     //Jancode
-    Route::get('/jancode', [JancodeController::class, 'index'])->name('jancode.index')->middleware(['auth', 'can:packing-list.manage']);
+    Route::get('/jancode', [JancodeController::class, 'index'])->name('jancode.index')->middleware(['auth', 'module:packing-list']);
     Route::post('/jancode', [JancodeController::class, 'store'])->name('jancode.store')->middleware(['auth', 'can:packing-list.manage']);
     Route::get('/jancode/{id}/edit', [JancodeController::class, 'edit'])->name('jancode.edit')->middleware(['auth', 'can:packing-list.manage']);
     Route::delete('/jancode/{id}', [JancodeController::class, 'destroy'])->name('jancode.destroy')->middleware(['auth', 'can:packing-list.manage']);
@@ -84,21 +84,21 @@ Route::group(['middleware' => 'auth'], function () {
     Route::post('/jancode/import-new', [JancodeController::class, 'importNewFormat'])->name('jancode.importNewFormat')->middleware(['auth', 'can:packing-list.manage']);
     Route::post('/jancode/ai-preview', [JancodeController::class, 'previewAiImport'])->name('jancode.aiPreview')->middleware(['auth', 'can:packing-list.manage']);
     Route::post('/jancode/ai-confirm', [JancodeController::class, 'confirmAiImport'])->name('jancode.aiConfirm')->middleware(['auth', 'can:packing-list.manage']);
-    Route::get('/jancode/{id}/scan-logs', [JancodeController::class, 'scanLogs'])->name('jancode.scanLogs')->middleware(['auth', 'can:packing-list.manage']);
-    Route::get('/jancode/{id}/export-scan-logs', [JancodeController::class, 'exportScanLogs'])->name('jancode.exportScanLogs')->middleware(['auth', 'can:packing-list.manage']);
-    Route::get('/jancode/export-template', [JancodeController::class, 'exportTemplate'])->name('jancode.exportTemplate')->middleware(['auth', 'can:packing-list.manage']);
-    Route::get('/jancode/import-batches', [JancodeController::class, 'importBatches'])->name('jancode.importBatches')->middleware(['auth', 'can:packing-list.manage']);
-    Route::get('/jancode/import-batches/{id}', [JancodeController::class, 'importBatchDetail'])->name('jancode.importBatchDetail')->middleware(['auth', 'can:packing-list.manage']);
-    Route::get('/jancode/packing-lists', [JancodeController::class, 'packingLists'])->name('jancode.packingLists')->middleware(['auth', 'can:packing-list.manage']);
-    Route::get('/jancode/packing-lists/{packingList}/jancodes', [JancodeController::class, 'packingListJancodes'])->name('jancode.packingListJancodes')->middleware(['auth', 'can:packing-list.manage']);
+    Route::get('/jancode/{id}/scan-logs', [JancodeController::class, 'scanLogs'])->name('jancode.scanLogs')->middleware(['auth', 'module:packing-list']);
+    Route::get('/jancode/{id}/export-scan-logs', [JancodeController::class, 'exportScanLogs'])->name('jancode.exportScanLogs')->middleware(['auth', 'module:packing-list']);
+    Route::get('/jancode/export-template', [JancodeController::class, 'exportTemplate'])->name('jancode.exportTemplate')->middleware(['auth', 'module:packing-list']);
+    Route::get('/jancode/import-batches', [JancodeController::class, 'importBatches'])->name('jancode.importBatches')->middleware(['auth', 'module:packing-list']);
+    Route::get('/jancode/import-batches/{id}', [JancodeController::class, 'importBatchDetail'])->name('jancode.importBatchDetail')->middleware(['auth', 'module:packing-list']);
+    Route::get('/jancode/packing-lists', [JancodeController::class, 'packingLists'])->name('jancode.packingLists')->middleware(['auth', 'module:packing-list']);
+    Route::get('/jancode/packing-lists/{packingList}/jancodes', [JancodeController::class, 'packingListJancodes'])->name('jancode.packingListJancodes')->middleware(['auth', 'module:packing-list']);
     Route::post('/jancode/packing-lists/{packingList}/finish', [JancodeController::class, 'finishPackingList'])->name('jancode.packingListFinish')->middleware(['auth', 'can:packing-list.manage']);
-    Route::get('/jancode/packing-lists/{packingList}/report/pdf', [JancodeController::class, 'packingListReportPdf'])->name('jancode.packingListReportPdf')->middleware(['auth', 'can:packing-list.manage']);
-    Route::get('/jancode/packing-lists/{packingList}/report/excel', [JancodeController::class, 'packingListReportExcel'])->name('jancode.packingListReportExcel')->middleware(['auth', 'can:packing-list.manage']);
+    Route::get('/jancode/packing-lists/{packingList}/report/pdf', [JancodeController::class, 'packingListReportPdf'])->name('jancode.packingListReportPdf')->middleware(['auth', 'module:packing-list']);
+    Route::get('/jancode/packing-lists/{packingList}/report/excel', [JancodeController::class, 'packingListReportExcel'])->name('jancode.packingListReportExcel')->middleware(['auth', 'module:packing-list']);
     Route::delete('/jancode/packing-lists/{packingList}', [JancodeController::class, 'destroyPackingList'])->name('jancode.packingListDestroy')->middleware(['auth', 'can:packing-list.manage']);
-    Route::get('/jancode/packing-list-filters', [JancodeController::class, 'packingListFilters'])->name('jancode.packingListFilters')->middleware(['auth', 'can:packing-list.manage']);
+    Route::get('/jancode/packing-list-filters', [JancodeController::class, 'packingListFilters'])->name('jancode.packingListFilters')->middleware(['auth', 'module:packing-list']);
 
     // Pallet Location & Placement
-    Route::prefix('pallet')->name('pallet.')->middleware(['auth', 'can:pallet.manage'])->group(function () {
+    Route::prefix('pallet')->name('pallet.')->middleware(['auth', 'module:pallet'])->group(function () {
         Route::get('/', [\App\Http\Controllers\PalletController::class, 'index'])->name('index');
         Route::get('/3d', [\App\Http\Controllers\PalletController::class, 'threeD'])->name('threeD');
         Route::get('/3d-data', [\App\Http\Controllers\PalletController::class, 'threeDData'])->name('threeDData');
@@ -113,27 +113,27 @@ Route::group(['middleware' => 'auth'], function () {
     });
 
     Route::prefix('scanner')->name('scanner.')->group(function () {
-        Route::get('/', [JancodeScanController::class, 'index'])->name('index')->middleware(['auth', 'can:scan.manage']);
-        Route::get('/packing-lists', [JancodeScanController::class, 'packingLists'])->name('packingLists')->middleware(['auth', 'can:scan.manage']);
-        Route::post('/load', [JancodeScanController::class, 'load'])->name('load')->middleware(['auth', 'can:scan.manage']);
-        Route::get('/rows', [JancodeScanController::class, 'rows'])->name('rows')->middleware(['auth', 'can:scan.manage']);
-        Route::get('/stream', [JancodeScanController::class, 'stream'])->name('stream')->middleware(['auth', 'can:scan.manage']);
-        Route::get('/delta', [JancodeScanController::class, 'delta'])->name('delta')->middleware(['auth', 'can:scan.manage']);
-        Route::get('/qr', [JancodeScanController::class, 'qr'])->name('qr')->middleware(['auth', 'can:scan.manage']);
-        Route::get('/join', [JancodeScanController::class, 'join'])->name('join')->middleware(['auth', 'can:scan.manage']);
-        Route::get('/search', [JancodeScanController::class, 'search'])->name('search')->middleware(['auth', 'can:scan.manage']);
-        Route::get('/count', [JancodeScanController::class, 'count'])->name('count')->middleware(['auth', 'can:scan.manage']);
-        Route::post('/scan', [JancodeScanController::class, 'scan'])->name('scan')->middleware(['auth', 'can:scan.manage']);
-        Route::delete('/void', [JancodeScanController::class, 'voidLast'])->name('void')->middleware(['auth', 'can:scan.manage']);
-        Route::post('/reset', [JancodeScanController::class, 'resetLock'])->name('reset')->middleware(['auth', 'can:scan.manage']);
-        Route::post('/submit', [JancodeScanController::class, 'submit'])->name('submit')->middleware(['auth', 'can:scan.manage']);
-        Route::delete('/rollback', [JancodeScanController::class, 'rollback'])->name('rollback')->middleware(['auth', 'can:scan.manage']);
-        Route::get('/batches', [JancodeScanController::class, 'batchHistory'])->name('batches')->middleware(['auth', 'can:scan.manage']);
-        Route::get('/logs', [JancodeScanController::class, 'scanLogHistory'])->name('logs')->middleware(['auth', 'can:scan.manage']);
+        Route::get('/', [JancodeScanController::class, 'index'])->name('index')->middleware(['auth', 'module:scan']);
+        Route::get('/packing-lists', [JancodeScanController::class, 'packingLists'])->name('packingLists')->middleware(['auth', 'module:scan']);
+        Route::post('/load', [JancodeScanController::class, 'load'])->name('load')->middleware(['auth', 'module:scan']);
+        Route::get('/rows', [JancodeScanController::class, 'rows'])->name('rows')->middleware(['auth', 'module:scan']);
+        Route::get('/stream', [JancodeScanController::class, 'stream'])->name('stream')->middleware(['auth', 'module:scan']);
+        Route::get('/delta', [JancodeScanController::class, 'delta'])->name('delta')->middleware(['auth', 'module:scan']);
+        Route::get('/qr', [JancodeScanController::class, 'qr'])->name('qr')->middleware(['auth', 'module:scan']);
+        Route::get('/join', [JancodeScanController::class, 'join'])->name('join')->middleware(['auth', 'module:scan']);
+        Route::get('/search', [JancodeScanController::class, 'search'])->name('search')->middleware(['auth', 'module:scan']);
+        Route::get('/count', [JancodeScanController::class, 'count'])->name('count')->middleware(['auth', 'module:scan']);
+        Route::post('/scan', [JancodeScanController::class, 'scan'])->name('scan')->middleware(['auth', 'module:scan']);
+        Route::delete('/void', [JancodeScanController::class, 'voidLast'])->name('void')->middleware(['auth', 'module:scan']);
+        Route::post('/reset', [JancodeScanController::class, 'resetLock'])->name('reset')->middleware(['auth', 'module:scan']);
+        Route::post('/submit', [JancodeScanController::class, 'submit'])->name('submit')->middleware(['auth', 'module:scan']);
+        Route::delete('/rollback', [JancodeScanController::class, 'rollback'])->name('rollback')->middleware(['auth', 'module:scan']);
+        Route::get('/batches', [JancodeScanController::class, 'batchHistory'])->name('batches')->middleware(['auth', 'module:scan']);
+        Route::get('/logs', [JancodeScanController::class, 'scanLogHistory'])->name('logs')->middleware(['auth', 'module:scan']);
     });
 
     // Karton Keluar (scan out) — packing mengambil karton yang sudah discan / di pallet
-    Route::prefix('carton-out')->name('cartonOut.')->middleware(['auth', 'can:carton-out.manage'])->group(function () {
+    Route::prefix('carton-out')->name('cartonOut.')->middleware(['auth', 'module:carton-out'])->group(function () {
         Route::get('/', [\App\Http\Controllers\CartonOutController::class, 'index'])->name('index');
         Route::get('/packing-lists', [\App\Http\Controllers\CartonOutController::class, 'packingLists'])->name('packingLists');
         Route::post('/load', [\App\Http\Controllers\CartonOutController::class, 'load'])->name('load');
@@ -146,21 +146,21 @@ Route::group(['middleware' => 'auth'], function () {
     // Hangtag
     Route::prefix('hangtag')->name('hangtag.')->group(function () {
         // Hangtag Scanner
-        Route::get('/scanner', [HangtagScanController::class, 'index'])->name('scanner.index')->middleware(['auth', 'can:hangtag.manage']);
-        Route::get('/scanner/count', [HangtagScanController::class, 'count'])->name('scanner.count')->middleware(['auth', 'can:hangtag.manage']);
-        Route::post('/scanner/scan', [HangtagScanController::class, 'scan'])->name('scanner.scan')->middleware(['auth', 'can:hangtag.manage']);
-        Route::delete('/scanner/void', [HangtagScanController::class, 'voidLast'])->name('scanner.void')->middleware(['auth', 'can:hangtag.manage']);
-        Route::post('/scanner/reset', [HangtagScanController::class, 'resetLock'])->name('scanner.reset')->middleware(['auth', 'can:hangtag.manage']);
-        Route::post('/scanner/submit', [HangtagScanController::class, 'submit'])->name('scanner.submit')->middleware(['auth', 'can:hangtag.manage']);
-        Route::delete('/scanner/rollback', [HangtagScanController::class, 'rollback'])->name('scanner.rollback')->middleware(['auth', 'can:hangtag.manage']);
+        Route::get('/scanner', [HangtagScanController::class, 'index'])->name('scanner.index')->middleware(['auth', 'module:scan']);
+        Route::get('/scanner/count', [HangtagScanController::class, 'count'])->name('scanner.count')->middleware(['auth', 'module:scan']);
+        Route::post('/scanner/scan', [HangtagScanController::class, 'scan'])->name('scanner.scan')->middleware(['auth', 'can:scan.manage']);
+        Route::delete('/scanner/void', [HangtagScanController::class, 'voidLast'])->name('scanner.void')->middleware(['auth', 'can:scan.manage']);
+        Route::post('/scanner/reset', [HangtagScanController::class, 'resetLock'])->name('scanner.reset')->middleware(['auth', 'can:scan.manage']);
+        Route::post('/scanner/submit', [HangtagScanController::class, 'submit'])->name('scanner.submit')->middleware(['auth', 'can:scan.manage']);
+        Route::delete('/scanner/rollback', [HangtagScanController::class, 'rollback'])->name('scanner.rollback')->middleware(['auth', 'can:scan.manage']);
 
-        Route::get('/', [HangtagController::class, 'index'])->name('index')->middleware(['auth', 'can:hangtag.manage']);
-        Route::post('/', [HangtagController::class, 'store'])->name('store')->middleware(['auth', 'can:hangtag.manage']);
-        Route::get('/{id}/edit', [HangtagController::class, 'edit'])->name('edit')->middleware(['auth', 'can:hangtag.manage']);
-        Route::delete('/{id}', [HangtagController::class, 'destroy'])->name('destroy')->middleware(['auth', 'can:hangtag.manage']);
-        Route::post('/import', [HangtagController::class, 'import'])->name('import')->middleware(['auth', 'can:hangtag.manage']);
-        Route::get('/{id}/scan-logs', [HangtagController::class, 'scanLogs'])->name('scanLogs')->middleware(['auth', 'can:hangtag.manage']);
-        Route::get('/{id}/export-scan-logs', [HangtagController::class, 'exportScanLogs'])->name('exportScanLogs')->middleware(['auth', 'can:hangtag.manage']);
-        Route::get('/export-template', [HangtagController::class, 'exportTemplate'])->name('exportTemplate')->middleware(['auth', 'can:hangtag.manage']);
+        Route::get('/', [HangtagController::class, 'index'])->name('index')->middleware(['auth', 'module:hangtag']);
+        Route::post('/', [HangtagController::class, 'store'])->name('store')->middleware(['auth', 'module:hangtag']);
+        Route::get('/{id}/edit', [HangtagController::class, 'edit'])->name('edit')->middleware(['auth', 'module:hangtag']);
+        Route::delete('/{id}', [HangtagController::class, 'destroy'])->name('destroy')->middleware(['auth', 'module:hangtag']);
+        Route::post('/import', [HangtagController::class, 'import'])->name('import')->middleware(['auth', 'module:hangtag']);
+        Route::get('/{id}/scan-logs', [HangtagController::class, 'scanLogs'])->name('scanLogs')->middleware(['auth', 'module:hangtag']);
+        Route::get('/{id}/export-scan-logs', [HangtagController::class, 'exportScanLogs'])->name('exportScanLogs')->middleware(['auth', 'module:hangtag']);
+        Route::get('/export-template', [HangtagController::class, 'exportTemplate'])->name('exportTemplate')->middleware(['auth', 'module:hangtag']);
     });
 });

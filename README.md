@@ -60,12 +60,16 @@ Dua role bawaan (dibuat otomatis oleh migration `2026_10_22_000001_seed_rbac_rol
 
 - Definisi permission & role: `config/rbac.php` (sumber tunggal).
 - Helper: `app/Support/Rbac.php`.
+- Model akses route:
+  - `module:xxx` → boleh membuka halaman modul (butuh permission `xxx.view` **atau** `xxx.manage`).
+  - `can:xxx.manage` → hak mengubah data pada modul tersebut (scan, tambah, hapus, finish, dll).
+  - `can:rbac.manage` / `can:user.manage` / `can:session.hard-delete` → khusus fitur tersebut.
 - Sinkronisasi ulang (mis. setelah menambah permission baru):
   ```bash
   php artisan db:seed --class=RolePermissionSeeder
   ```
-- Halaman **Role & Permission** (`/role/index`) berisi matrix permission per role;
-  centang permission lalu simpan. Role `superadmin` & `ctpat` dilindungi dari penghapusan.
+- Halaman **Role & Permission** (`/role/index`) berisi matrix permission per role + **peta route → permission**
+  (untuk mudah memverifikasi semua route sudah ter-cover). Role `superadmin` & `ctpat` dilindungi dari penghapusan.
 - Halaman **Daftar User** menampilkan role tiap user; ikon kunci untuk mengganti role.
 - **Hapus permanen session** (Super Admin): tombol tong sampah di daftar Session →
   menghapus session beserta packing list, revisi import, jancode, log scan, batch
@@ -101,6 +105,11 @@ php artisan view:cache
 > Cache itu tidak otomatis invalidated oleh `git pull`, sehingga route yang baru
 > ditambahkan tidak dikenal sampai cache di-clear. `php artisan route:clear`
 > saja juga cukup untuk kasus ini.
+>
+> app sudah punya pengaman: middleware `role` (alias `role:Admin` versi lama)
+> memetakan role `Admin` → `superadmin`, dan kalau tabel role belum ter-seed
+> (migration belum dijalankan) tidak ada user yang terkunci. Tapi **tetap
+> jalankan `php artisan optimize:clear` setelah pull**.
 
 > **Permission folder di server Linux (nginx/apache)**
 > `storage/` dan `bootstrap/cache/` **wajib bisa ditulis** oleh user web server.

@@ -27,7 +27,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'signed'             => \App\Http\Middleware\ValidateSignature::class,
             'throttle'           => \Illuminate\Routing\Middleware\ThrottleRequests::class,
             'verified'           => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
-            'role'               => \Spatie\Permission\Middleware\RoleMiddleware::class,
+            'role'               => \App\Http\Middleware\RoleMiddleware::class,
+            'module'             => \App\Http\Middleware\ModuleAccess::class,
             'permission'         => \Spatie\Permission\Middleware\PermissionMiddleware::class,
             'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
         ]);

@@ -20,7 +20,7 @@
         </a>
     </li>
 
-    @can('session.view')
+    @canany(['session.view', 'session.manage'])
     <!-- Divider -->
     <hr class="sidebar-divider">
 
@@ -37,7 +37,7 @@
     </li>
     @endcan
 
-    @can('packing-list.view')
+    @canany(['packing-list.view', 'packing-list.manage'])
     <!-- Divider -->
     <hr class="sidebar-divider">
 
@@ -65,7 +65,7 @@
     </li>
     @endcan
 
-    @can('scan.view')
+    @canany(['scan.view', 'scan.manage'])
     <!-- Divider -->
     <hr class="sidebar-divider">
 
@@ -93,7 +93,7 @@
     </li>
     @endcan
 
-    @can('carton-out.view')
+    @canany(['carton-out.view', 'carton-out.manage'])
     <li class="nav-item {{ request()->is('carton-out*') ? 'active' : '' }}">
         <a class="nav-link" href="{{ route('cartonOut.index') }}">
             <i class="fas fa-fw fa-box-open"></i>
@@ -102,7 +102,7 @@
     </li>
     @endcan
 
-    @can('pallet.view')
+    @canany(['pallet.view', 'pallet.manage'])
     <!-- Divider -->
     <hr class="sidebar-divider">
 
@@ -125,7 +125,7 @@
     </li>
     @endcan
 
-    @can('hangtag.view')
+    @canany(['hangtag.view', 'hangtag.manage'])
     <!-- Divider -->
     <hr class="sidebar-divider">
 
