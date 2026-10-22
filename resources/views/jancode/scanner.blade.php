@@ -709,7 +709,7 @@
                     if (document.hidden) return;                        // tab tidak aktif
                     if (swalVisible()) return;                         // ada dialog
 
-                    $.getJSON("{{ route('scanner.delta') }}")
+                    $.getJSON("{{ url('/scanner/delta') }}")
                         .done(function (res) {
                             if (!res || !res.success) return;
                             lastDeltaHash = res.hash || lastDeltaHash;
@@ -801,7 +801,7 @@
                     $('#qr-content').addClass('d-none');
                     $('#qr-error').addClass('d-none').text('');
 
-                    $.getJSON("{{ route('scanner.qr') }}")
+                    $.getJSON("{{ url('/scanner/qr') }}")
                         .done(function (res) {
                             if (!res.success) {
                                 showQrError(res.message || 'Gagal membuat QR Code.');

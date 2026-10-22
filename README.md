@@ -49,6 +49,33 @@ We would like to extend our thanks to the following sponsors for funding Laravel
 - **[byte5](https://byte5.de)**
 - **[OP.GG](https://op.gg)**
 
+## Deploy (update ke server)
+
+Semua fitur terbaru ada di branch **`submit-pack`**. Setelah `git pull`, **wajib**
+bersihkan cache Laravel — kalau tidak, route baru (`/scanner/delta`, `/scanner/qr`,
+`/scanner/join`) akan error **"Route [scanner.delta] not defined"**:
+
+```bash
+git pull origin submit-pack
+composer install --no-dev --optimize-autoloader
+php artisan optimize:clear      # route:cache + view:cache + config:cache + cache:clear
+php artisan migrate --force
+php artisan view:cache
+```
+
+> **Kenapa perlu `optimize:clear`?**
+> `php artisan route:cache` menyimpan daftar route ke `bootstrap/cache/routes-v7.php`.
+> Cache itu tidak otomatis invalidated oleh `git pull`, sehingga route yang baru
+> ditambahkan tidak dikenal sampai cache di-clear. `php artisan route:clear`
+> saja juga cukup untuk kasus ini.
+
+> **Catatan server lokal (Windows)**
+> Demo dengan `php artisan serve` berjalan **single worker** di Windows, sehingga
+> koneksi SSE yang panjang menahan request lain. Live update Scanner sudah
+> diubah ke *delta polling* (request pendek) supaya scan dari device lain tidak
+> tertunda. Kalau tetap memakai `artisan serve`, jalankan lewat Apache/Nginx
+> agar request bisa diproses paralel.
+
 ## Contributing
 
 Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).

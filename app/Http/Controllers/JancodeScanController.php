@@ -188,7 +188,7 @@ class JancodeScanController extends Controller
         $batch = $this->resolveSessionBatch();
 
         $token = $joiner->encode((int) $session->id, $batch?->id);
-        $url   = route('scanner.join', ['c' => $token]);
+        $url   = url('/scanner/join', ['c' => $token]);
 
         return response()->json([
             'success'       => true,
