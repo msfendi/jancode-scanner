@@ -58,10 +58,21 @@ bersihkan cache Laravel — kalau tidak, route baru (`/scanner/delta`, `/scanner
 ```bash
 git pull origin submit-pack
 composer install --no-dev --optimize-autoloader
-php artisan optimize:clear      # route:cache + view:cache + config:cache + cache:clear
+php artisan package:discover --ansi   # regenerasi manifest package (WAJIB)
+php artisan optimize:clear            # route:cache + view:cache + config:cache + cache:clear
 php artisan migrate --force
 php artisan view:cache
 ```
+
+> **Kenapa `package:discover` wajib?**
+> `bootstrap/cache/packages.php` adalah manifest package yang otomatis dibuat
+> Composer. Manifest itu **tidak ikut ter-commit** (masih di `.gitignore`), jadi
+> di server bisa berisi paket `barryvdh/laravel-debugbar` (dev) sementara
+> paketnya sudah dihapus oleh `composer install --no-dev`. Akibatnya aplikasi
+> gagal boot dengan:
+> `Class "Fruitcake\LaravelDebugbar\ServiceProvider" not found`.
+> `php artisan package:discover --ansi` menulis ulang manifest tanpa paket dev.
+> Alternatif: `rm -f bootstrap/cache/packages.php bootstrap/cache/services.php`.
 
 > **Kenapa perlu `optimize:clear`?**
 > `php artisan route:cache` menyimpan daftar route ke `bootstrap/cache/routes-v7.php`.
