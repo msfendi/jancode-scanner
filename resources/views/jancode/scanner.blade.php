@@ -325,39 +325,53 @@
                             </button>
                         </div>
                         <div class="modal-body text-center">
-                            <div id="qr-loading" class="py-4">
-                                <i class="fas fa-spinner fa-spin fa-2x text-success mb-2"></i>
-                                <div class="small text-muted">Menyiapkan QR Code...</div>
-                            </div>
-
-                            <div id="qr-content" class="d-none">
-                                <div id="qr-image" class="d-inline-block p-2 bg-white border rounded" style="max-width:250px;"></div>
-
-                                <div class="mt-3 small text-left" style="max-width:420px; margin:0 auto;">
-                                    <div class="mb-1">
-                                        <span class="text-muted">Session:</span>
-                                        <strong id="qr-session">-</strong>
+                            @if ($qr)
+                                <div id="qr-content">
+                                    <div id="qr-image" class="d-inline-block p-2 bg-white border rounded" style="max-width:250px;">
+                                        {!! $qr['svg'] !!}
                                     </div>
-                                    <div class="mb-1">
-                                        <span class="text-muted">Packing List:</span>
-                                        <strong id="qr-batch">-</strong>
+
+                                    <div class="mt-3 small text-left" style="max-width:420px; margin:0 auto;">
+                                        <div class="mb-1">
+                                            <span class="text-muted">Session:</span>
+                                            <strong>{{ $qr['session_code'] }}</strong>
+                                            @if ($qr['session_label'])
+                                                <span class="text-muted">· {{ $qr['session_label'] }}</span>
+                                            @endif
+                                        </div>
+                                        <div class="mb-1">
+                                            <span class="text-muted">Packing List:</span>
+                                            <strong>{{ $qr['batch_label'] ?: 'Belum ada packing list' }}</strong>
+                                            @if ($qr['batch_number'])
+                                                <span class="text-muted">· {{ $qr['batch_number'] }}</span>
+                                            @endif
+                                        </div>
+                                    </div>
+
+                                    <div class="alert alert-light border small text-left mt-3 mb-2" style="max-width:420px; margin:0 auto;">
+                                        <i class="fas fa-info-circle mr-1 text-info"></i>
+                                        Pindai QR dengan kamera HP, lalu login. Setelah login user otomatis
+                                        diarahkan ke session &amp; packing list yang sedang berjalan di sini.
+                                        <div class="mt-2">
+                                            <input type="text" id="qr-url" class="form-control form-control-sm" readonly
+                                                value="{{ $qr['url'] }}"
+                                                onclick="this.select(); this.setSelectionRange(0, this.value.length);">
+                                        </div>
                                     </div>
                                 </div>
-
-                                <div class="alert alert-light border small text-left mt-3 mb-2" style="max-width:420px; margin:0 auto;">
-                                    <i class="fas fa-info-circle mr-1 text-info"></i>
-                                    Pindai QR dengan kamera HP, lalu login. Setelah login user otomatis
-                                    diarahkan ke session &amp; packing list yang sedang berjalan di sini.
-                                    <div class="mt-2">
-                                        <input type="text" id="qr-url" class="form-control form-control-sm" readonly
-                                            onclick="this.select(); this.setSelectionRange(0, this.value.length);">
-                                    </div>
+                            @else
+                                <div id="qr-error" class="alert alert-warning small mb-0">
+                                    <i class="fas fa-exclamation-triangle mr-1"></i>
+                                    QR join belum bisa dibuat. Pilih <strong>session</strong> dan
+                                    <strong>packing list</strong> terlebih dahulu, lalu muat ulang halaman ini.
                                 </div>
-                            </div>
-
-                            <div id="qr-error" class="alert alert-warning small d-none"></div>
+                            @endif
                         </div>
                         <div class="modal-footer py-2">
+                            <button type="button" class="btn btn-sm btn-outline-success mr-auto" id="btnRefreshQr"
+                                title="Buat ulang QR Code (muat ulang halaman)">
+                                <i class="fas fa-sync-alt mr-1"></i> Perbarui
+                            </button>
                             <button type="button" class="btn btn-sm btn-secondary" data-dismiss="modal">Tutup</button>
                         </div>
                     </div>
@@ -681,11 +695,12 @@
                 }
 
                 // ── Live update (delta polling) ───────────────────────────
-                // Perubahan scan dari device lain diambil lewat endpoint ringan
-                // /scanner/delta (hanya baris + counter, ~1 KB).
-                // Sengaja TIDAK memakai SSE panjang: pada `php artisan serve`
-                // (single worker) koneksi panjang menahan seluruh request lain
-                // sehingga scan dari device lain ikut lambat.
+                // Perubahan scan dari device lain diambil lewat route yang
+                // sudah lama (/scanner/rows?delta=1): hanya baris + counter
+                // (±1 KB). Sengaja TIDAK memakai SSE panjang: pada
+                // `php artisan serve` (single worker) koneksi panjang menahan
+                // seluruh request lain sehingga scan dari device lain ikut
+                // lambat.
                 const DELTA_POLL_MS = 700;
                 const FULL_REFRESH_MS = 30000;
                 let deltaTimer = null;
@@ -709,7 +724,7 @@
                     if (document.hidden) return;                        // tab tidak aktif
                     if (swalVisible()) return;                         // ada dialog
 
-                    $.getJSON("{{ url('/scanner/delta') }}")
+                    $.getJSON("{{ url('/scanner/rows') }}?delta=1")
                         .done(function (res) {
                             if (!res || !res.success) return;
                             lastDeltaHash = res.hash || lastDeltaHash;
@@ -790,36 +805,9 @@
                 });
 
                 // ── QR Code: scan dari perangkat lain (HP) ───────────────
-                function showQrError(message) {
-                    $('#qr-loading').addClass('d-none');
-                    $('#qr-content').addClass('d-none');
-                    $('#qr-error').removeClass('d-none').text(message || 'Gagal membuat QR Code.');
-                }
-
-                $('#qrJoinModal').on('show.bs.modal', function () {
-                    $('#qr-loading').removeClass('d-none');
-                    $('#qr-content').addClass('d-none');
-                    $('#qr-error').addClass('d-none').text('');
-
-                    $.getJSON("{{ url('/scanner/qr') }}")
-                        .done(function (res) {
-                            if (!res.success) {
-                                showQrError(res.message || 'Gagal membuat QR Code.');
-                                return;
-                            }
-
-                            $('#qr-image').html(res.svg || '');
-                            $('#qr-session').text(res.session_code + (res.session_label ? ' · ' + res.session_label : ''));
-                            $('#qr-batch').text(res.batch_label
-                                ? (res.batch_label + (res.batch_number ? ' · ' + res.batch_number : ''))
-                                : 'Belum ada packing list — pilih packing list dulu');
-                            $('#qr-url').val(res.url || '');
-                            $('#qr-loading').addClass('d-none');
-                            $('#qr-content').removeClass('d-none');
-                        })
-                        .fail(function (xhr) {
-                            showQrError((xhr.responseJSON && xhr.responseJSON.message) || 'Gagal membuat QR Code.');
-                        });
+                // QR sudah dirender server (tidak butuh request tambahan).
+                $('#btnRefreshQr').on('click', function () {
+                    location.reload();
                 });
 
                 window.addEventListener('beforeunload', stopAutoRefresh);

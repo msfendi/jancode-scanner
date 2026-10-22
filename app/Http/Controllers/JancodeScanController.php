@@ -27,8 +27,17 @@ class JancodeScanController extends Controller
     private const SESSION_KEY = 'scan_import_batch_id';
 
     // Halaman utama scanner
-    public function index(Request $request)
+    public function index(Request $request, ScannerJoinService $joiner)
     {
+        // ── Join dari perangkat lain (HP) lewat QR ──────────────────
+        // memakai route yang sudah ada (/scanner?join=...) supaya tidak
+        // bergantung pada route baru / route cache yang belum di-refresh.
+        if ($request->filled('join')) {
+            $this->applyJoinToken($request->query('join'), $joiner);
+
+            return redirect(url('/scanner'));
+        }
+
         $currentSession = ImportSession::current();
 
         // Mode monitor: device lain membuka session yang sama tanpa memilih packing list.
@@ -41,13 +50,73 @@ class JancodeScanController extends Controller
                 ->value('id');
         }
 
+        $lockedBatchId = session(self::SESSION_KEY);
+
+        // QR Code join untuk perangkat lain (HP). Dirender di server supaya
+        // halaman tidak bergantung pada route tambahan (aman dari route cache).
+        $qr = null;
+
+        if ($currentSession) {
+            $batchId = $lockedBatchId ?: $monitorBatchId;
+            $batch   = $batchId ? ImportBatch::find($batchId) : null;
+
+            if ($batch && (int) $batch->session_id === (int) $currentSession->id) {
+                $token = $joiner->encode((int) $currentSession->id, (int) $batch->id);
+                $url   = url('/scanner?join=' . $token);
+
+                $qr = [
+                    'svg'           => $joiner->svg($url),
+                    'url'           => $url,
+                    'session_code'  => $currentSession->code,
+                    'session_label' => $currentSession->group_label,
+                    'batch_label'   => $batch->group_label,
+                    'batch_number'  => $batch->batch_number,
+                ];
+            }
+        }
+
         return view('jancode.scanner', [
             'currentSession' => $currentSession,
             'monitorBatchId' => $monitorBatchId,
             // Saat halaman dibuka ulang, muat kembali packing list yang masih
             // terkunci di session ini agar riwayat log scan langsung tampil.
-            'lockedBatchId'  => session(self::SESSION_KEY),
+            'lockedBatchId'  => $lockedBatchId,
+            'qr'             => $qr,
         ]);
+    }
+
+    /**
+     * Terapkan token join: set session aktif + kunci packing list tujuan.
+     */
+    private function applyJoinToken(?string $token, ScannerJoinService $joiner): bool
+    {
+        $data = $joiner->decode($token);
+
+        if (! $data) {
+            return false;
+        }
+
+        $session = ImportSession::find($data['s']);
+
+        if (! $session) {
+            return false;
+        }
+
+        // Pindah session aktif ke session tujuan.
+        ImportSession::setCurrent((int) $session->id);
+
+        // Kunci packing list yang sama (bila masih revisi aktif).
+        if (! empty($data['b'])) {
+            $batch = ImportBatch::find($data['b']);
+
+            if ($batch
+                && (int) $batch->session_id === (int) $session->id
+                && $batch->is_active) {
+                session([self::SESSION_KEY => (int) $batch->id]);
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -156,12 +225,26 @@ class JancodeScanController extends Controller
 
     /**
      * Refresh data baris packing list.
+     *
+     * Dengan `?delta=1` response hanya berisi baris + counter (ringan),
+     * dipakai untuk sinkronisasi live antar perangkat.
      */
     public function rows(Request $request)
     {
         $batch = $this->resolveSessionBatch();
         if (!$batch) {
             return response()->json(['success' => false, 'message' => 'Pilih packing list terlebih dahulu'], 400);
+        }
+
+        if ($request->boolean('delta')) {
+            $state = $this->lightState($batch);
+
+            return response()->json([
+                'success'  => true,
+                'hash'     => $state['hash'],
+                'counters' => $state['counters'],
+                'rows'     => array_values($state['rows']),
+            ]);
         }
 
         return response()->json($this->batchState($batch) + ['success' => true]);
@@ -210,36 +293,15 @@ class JancodeScanController extends Controller
      */
     public function join(Request $request, ScannerJoinService $joiner)
     {
-        $data = $joiner->decode($request->query('c'));
+        $ok = $this->applyJoinToken($request->query('c') ?: $request->query('join'), $joiner);
 
-        if (!$data) {
-            return redirect()->route('scanner.index')
+        if (!$ok) {
+            return redirect(url('/scanner'))
                 ->with('error', 'QR Code tidak valid atau sudah kedaluwarsa. Silakan generate ulang di perangkat lain.');
         }
 
-        $session = ImportSession::find($data['s']);
-
-        if (!$session) {
-            return redirect()->route('scanner.index')
-                ->with('error', 'Session pada QR Code tidak ditemukan.');
-        }
-
-        // Pindah session aktif ke session tujuan.
-        ImportSession::setCurrent((int) $session->id);
-
-        // Kunci packing list yang sama (bila masih revisi aktif).
-        if (!empty($data['b'])) {
-            $batch = ImportBatch::find($data['b']);
-
-            if ($batch
-                && (int) $batch->session_id === (int) $session->id
-                && $batch->is_active) {
-                session([self::SESSION_KEY => (int) $batch->id]);
-            }
-        }
-
-        return redirect()->route('scanner.index')
-            ->with('success', 'Bergabung ke session ' . $session->code . '.');
+        return redirect(url('/scanner'))
+            ->with('success', 'Bergabung ke session scan. Silakan lanjut scan.');
     }
 
     /**
