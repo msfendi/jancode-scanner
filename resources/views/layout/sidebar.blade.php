@@ -20,7 +20,7 @@
         </a>
     </li>
 
-    @role('Admin')
+    @can('session.view')
     <!-- Divider -->
     <hr class="sidebar-divider">
 
@@ -35,7 +35,9 @@
             <span>Sesi &amp; Mulai Import</span>
         </a>
     </li>
+    @endcan
 
+    @can('packing-list.view')
     <!-- Divider -->
     <hr class="sidebar-divider">
 
@@ -61,7 +63,9 @@
             </div>
         </div>
     </li>
+    @endcan
 
+    @can('scan.view')
     <!-- Divider -->
     <hr class="sidebar-divider">
 
@@ -87,14 +91,18 @@
             </div>
         </div>
     </li>
+    @endcan
 
+    @can('carton-out.view')
     <li class="nav-item {{ request()->is('carton-out*') ? 'active' : '' }}">
         <a class="nav-link" href="{{ route('cartonOut.index') }}">
             <i class="fas fa-fw fa-box-open"></i>
             <span>Carton Outbound</span>
         </a>
     </li>
+    @endcan
 
+    @can('pallet.view')
     <!-- Divider -->
     <hr class="sidebar-divider">
 
@@ -115,7 +123,9 @@
             <span>Manage Pallet Location</span>
         </a>
     </li>
+    @endcan
 
+    @can('hangtag.view')
     <!-- Divider -->
     <hr class="sidebar-divider">
 
@@ -141,7 +151,9 @@
             </div>
         </div>
     </li>
+    @endcan
 
+    @can('user.manage')
     <!-- Divider -->
     <hr class="sidebar-divider">
 
@@ -154,20 +166,22 @@
         <a class="nav-link {{ request()->is('user*') || request()->is('role*') ? '' : 'collapsed' }}" href="#" data-toggle="collapse" data-target="#collapseUser"
             aria-expanded="{{ request()->is('user*') || request()->is('role*') ? 'true' : 'false' }}" aria-controls="collapseUser">
             <i class="fas fa-fw fa-users-cog"></i>
-            <span>User & Hak Akses</span>
+            <span>User &amp; Hak Akses</span>
         </a>
         <div id="collapseUser" class="collapse {{ request()->is('user*') || request()->is('role*') ? 'show' : '' }}" aria-labelledby="headingTwo" data-parent="#accordionSidebar">
             <div class="bg-white py-2 collapse-inner rounded">
                 <a class="collapse-item {{ request()->routeIs('user.index') ? 'active' : '' }}" href="{{ route('user.index') }}">
                     <i class="fas fa-users mr-1"></i> Daftar User
                 </a>
+                @can('rbac.manage')
                 <a class="collapse-item {{ request()->routeIs('role.index') ? 'active' : '' }}" href="{{ route('role.index') }}">
-                    <i class="fas fa-user-shield mr-1"></i> Daftar Role
+                    <i class="fas fa-user-shield mr-1"></i> Role &amp; Permission
                 </a>
+                @endcan
             </div>
         </div>
     </li>
-    @endrole
+    @endcan
 
     <!-- Divider -->
     <hr class="sidebar-divider d-none d-md-block">

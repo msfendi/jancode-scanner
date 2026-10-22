@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 @include('layout.header')
+
 <body id="page-top">
 <!-- Page Wrapper -->
 @include('sweetalert::alert')
@@ -17,75 +18,156 @@
 
                 <!-- Page Heading -->
                 <div class="d-sm-flex align-items-center justify-content-between mb-4">
-                    <h1 class="h3 mb-0 text-gray-800">Role List</h1>
                     <div>
-                    <a href="{{ route('role.create') }}" class="d-none d-sm-inline-block btn btn-sm btn-primary shadow-sm"><i
-                            class="fas fa-plus fa-sm text-white-50"></i> Create Role</a>
+                        <h1 class="h3 mb-0 text-gray-800">Role &amp; Permission</h1>
+                        <p class="mb-0 text-muted small">
+                            Kelola hak akses per modul. Role <strong>Super Admin</strong> memiliki akses penuh,
+                            role <strong>CTPAT</strong> kecuali RBAC, User Management, dan hapus permanen session.
+                        </p>
+                    </div>
+                    <div>
+                        <a href="{{ route('role.create') }}" class="d-none d-sm-inline-block btn btn-sm btn-primary shadow-sm">
+                            <i class="fas fa-plus fa-sm text-white-50"></i> Tambah Role
+                        </a>
                     </div>
                 </div>
-                
-                <!-- DataTales Example -->
+
+                @if ($message = Session::get('success'))
+                <div class="alert alert-success alert-block">
+                    <button type="button" class="close" data-dismiss="alert">×</button>
+                    <strong>{{ $message }}</strong>
+                </div>
+                @endif
+
+                @if ($message = Session::get('error'))
+                <div class="alert alert-danger alert-block">
+                    <button type="button" class="close" data-dismiss="alert">×</button>
+                    <strong>{{ $message }}</strong>
+                </div>
+                @endif
+
+                <!-- Daftar Role -->
                 <div class="card shadow mb-4">
                     <div class="card-header py-3">
-                        <h6 class="m-0 font-weight-bold text-primary">Role Data</h6>
+                        <h6 class="m-0 font-weight-bold text-primary">
+                            <i class="fas fa-user-shield mr-1"></i> Daftar Role
+                        </h6>
                     </div>
                     <div class="card-body">
-                        @if ($message = Session::get('success'))
-                        <div class="alert alert-success alert-block">
-                            <button type="button" class="close" data-dismiss="alert">×</button>	
-                            <strong>{{ $message }}</strong>
-                        </div>
-                        @endif
-
-                        @if ($message = Session::get('error'))
-                        <div class="alert alert-danger alert-block">
-                            <button type="button" class="close" data-dismiss="alert">×</button>	
-                            <strong>{{ $message }}</strong>
-                        </div>
-                        @endif
-
-                        @if ($message = Session::get('warning'))
-                        <div class="alert alert-warning alert-block">
-                            <button type="button" class="close" data-dismiss="alert">×</button>	
-                            <strong>{{ $message }}</strong>
-                        </div>
-                        @endif
-
-                        @if ($message = Session::get('info'))
-                        <div class="alert alert-info alert-block">
-                            <button type="button" class="close" data-dismiss="alert">×</button>	
-                            <strong>{{ $message }}</strong>
-                        </div>
-                        @endif
                         <div class="table-responsive">
-                            <table class="table table-bordered table-sm" id="dataTable" width="100%" cellspacing="0">
-                                <thead>
+                            <table class="table table-bordered table-sm align-middle" id="dataTable" width="100%" cellspacing="0">
+                                <thead class="thead-light">
                                     <tr>
-                                        <th>ID</th>
+                                        <th style="width:60px;">ID</th>
                                         <th>Role</th>
-                                        <th>Guard Name</th>
-                                        <th>Action</th>
+                                        <th style="width:150px;">Permission</th>
+                                        <th style="width:220px;">Keterangan</th>
+                                        <th style="width:120px;">Aksi</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @foreach($roles as $role)
-                                    <tr>
-                                        <td>{{ $loop->iteration }}</td>
-                                        <td>{{ $role->name }}</td>
-                                        <td>{{ $role->guard_name }}</td>
-                                        <td class="text-center">
-                                            <a class="btn btn-danger btn-circle btn-sm btn-delete-record" data-delete-link="delete/{{ $role->id }}" data-delete-name="{{ $role->role_name }}" data-toggle="modal" data-target="#deleteModal">
-                                                <i class="fas fa-trash"></i>
-                                            </a>
-                                        </td>
-                                    </tr>
+                                    @foreach ($roles as $role)
+                                        @php
+                                            $isProtected = in_array($role->name, $protected, true);
+                                        @endphp
+                                        <tr>
+                                            <td>{{ $role->id }}</td>
+                                            <td>
+                                                <strong>{{ \App\Support\Rbac::roleLabel($role->name) }}</strong>
+                                                <code class="small ml-1">{{ $role->name }}</code>
+                                                @if ($isProtected)
+                                                    <span class="badge badge-info ml-1">protected</span>
+                                                @endif
+                                            </td>
+                                            <td class="text-center">
+                                                <span class="badge badge-primary">{{ $role->permissions->count() }}</span>
+                                            </td>
+                                            <td class="small text-muted">{{ \App\Support\Rbac::roleDescription($role->name) }}</td>
+                                            <td class="text-center text-nowrap">
+                                                <button type="button" class="btn btn-info btn-circle btn-sm btn-edit-permission"
+                                                    data-id="{{ $role->id }}"
+                                                    data-name="{{ $role->name }}"
+                                                    data-perms="{{ json_encode($role->permissions->pluck('name')->values()) }}">
+                                                    <i class="fas fa-key"></i>
+                                                </button>
+                                                @if (! $isProtected)
+                                                    <a class="btn btn-danger btn-circle btn-sm btn-delete-record"
+                                                        data-delete-link="{{ route('role.delete', ['id' => $role->id]) }}"
+                                                        data-delete-name="{{ $role->name }}"
+                                                        data-toggle="modal" data-target="#deleteModal">
+                                                        <i class="fas fa-trash"></i>
+                                                    </a>
+                                                @endif
+                                            </td>
+                                        </tr>
                                     @endforeach
                                 </tbody>
                             </table>
                         </div>
                     </div>
                 </div>
-                <!-- Content Row -->
+
+                <!-- Matrix Permission -->
+                <div class="card shadow mb-4">
+                    <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                        <h6 class="m-0 font-weight-bold text-primary">
+                            <i class="fas fa-table mr-1"></i> Matrix Permission per Role
+                        </h6>
+                        <span class="small text-muted">Centang permission yang diizinkan untuk tiap role.</span>
+                    </div>
+                    <div class="card-body">
+                        @foreach ($roles as $role)
+                            @php
+                                $rolePerms = $role->permissions->pluck('name')->all();
+                            @endphp
+                            <div class="mb-4 pb-3 border-bottom">
+                                <div class="d-flex align-items-center justify-content-between mb-2">
+                                    <h6 class="m-0 font-weight-bold">
+                                        <i class="fas fa-user-tag mr-1 text-primary"></i>
+                                        {{ \App\Support\Rbac::roleLabel($role->name) }}
+                                        <code class="small ml-1">{{ $role->name }}</code>
+                                    </h6>
+                                    <button type="button" class="btn btn-sm btn-outline-primary btn-toggle-all"
+                                        data-target="perm-{{ $role->id }}">
+                                        <i class="fas fa-check-double mr-1"></i> Pilih semua
+                                    </button>
+                                </div>
+
+                                <form method="POST" action="{{ route('role.permissions', ['id' => $role->id]) }}">
+                                    @csrf
+                                    <div class="row">
+                                        @foreach ($groups as $group => $permissions)
+                                            <div class="col-md-6 col-xl-4 mb-3">
+                                                <div class="border rounded p-2 h-100">
+                                                    <div class="font-weight-bold small text-uppercase text-gray-600 mb-2">
+                                                        {{ $group }}
+                                                    </div>
+                                                    @foreach ($permissions as $permName => $permLabel)
+                                                        <div class="custom-control custom-checkbox mb-1">
+                                                            <input class="custom-control-input perm-check" type="checkbox"
+                                                                id="perm-{{ $role->id }}-{{ $permName }}"
+                                                                name="permissions[]" value="{{ $permName }}"
+                                                                data-target="perm-{{ $role->id }}"
+                                                                @checked(in_array($permName, $rolePerms, true))>
+                                                            <label class="custom-control-label small" for="perm-{{ $role->id }}-{{ $permName }}">
+                                                                {{ $permLabel }}
+                                                                <code class="small text-muted d-block">{{ $permName }}</code>
+                                                            </label>
+                                                        </div>
+                                                    @endforeach
+                                                </div>
+                                            </div>
+                                        @endforeach
+                                    </div>
+
+                                    <button type="submit" class="btn btn-sm btn-primary">
+                                        <i class="fas fa-save mr-1"></i> Simpan Permission
+                                    </button>
+                                </form>
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
 
             </div>
             <!-- /.container-fluid -->
@@ -95,10 +177,10 @@
 
         <!-- Modal -->
         <div class="modal fade" id="deleteModal" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
-            <div class="modal-dialog modal-md" role="document" >
+            <div class="modal-dialog modal-md" role="document">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 id="delete-title" class="modal-title" id="exampleModalLabel">Delete Record</h5>
+                        <h5 id="delete-title" class="modal-title">Delete Record</h5>
                         <button class="close" type="button" data-dismiss="modal" aria-label="Close">
                             <span aria-hidden="true">x</span>
                         </button>
@@ -119,11 +201,39 @@
 <script src="{{asset('vendor/datatables/dataTables.bootstrap4.min.js')}}"></script>
 
 <!-- Page level custom scripts -->
-<script src="{{asset('js/demo/datatables-demo.js')}}"></script>
 <script>
     $('.btn-delete-record').on('click', function () {
-            $('#btn-confirm').attr('href', $(this).data('delete-link'));
-            $("#modal-text-record").text('Apakah anda yakin ingin menghapus role ' + $(this).data('delete-name') + '?');
+        $('#btn-confirm').attr('href', $(this).data('delete-link'));
+        $("#modal-text-record").text('Apakah anda yakin ingin menghapus role ' + $(this).data('delete-name') + '?');
+    });
+
+    // Pilih / hapus semua permission dalam satu role.
+    $(document).on('click', '.btn-toggle-all', function () {
+        const target = $(this).data('target');
+        const $checks = $('input[data-target="' + target + '"]');
+        const allChecked = $checks.length === $checks.filter(':checked').length;
+        $checks.prop('checked', !allChecked);
+    });
+
+    // Notifikasi permission role saat diklik ikon kunci.
+    $(document).on('click', '.btn-edit-permission', function () {
+        const name = $(this).data('name');
+        const perms = $(this).data('perms') || [];
+        const list = Array.isArray(perms) ? perms : JSON.parse(perms);
+
+        const html = '<div class="text-left small">' +
+            '<p class="mb-1"><strong>' + name + '</strong> punya ' + list.length + ' permission:</p>' +
+            '<div class="p-2 border rounded" style="max-height:220px; overflow:auto;">' +
+            (list.length ? list.map(p => '<code class="d-block mb-1">' + p + '</code>').join('') : '<span class="text-muted">Belum ada permission.</span>') +
+            '</div></div>';
+
+        Swal.fire({
+            icon: 'info',
+            title: 'Permission role ' + name,
+            html: html,
+            confirmButtonText: 'Tutup',
+            customClass: { htmlContainer: 'text-left' }
+        });
     });
 </script>
 </html>

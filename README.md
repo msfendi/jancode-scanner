@@ -49,6 +49,28 @@ We would like to extend our thanks to the following sponsors for funding Laravel
 - **[byte5](https://byte5.de)**
 - **[OP.GG](https://op.gg)**
 
+## RBAC (Role & Permission)
+
+Dua role bawaan (dibuat otomatis oleh migration `2026_10_22_000001_seed_rbac_roles`):
+
+| Role | Akses |
+|---|---|
+| **Super Admin** (`superadmin`) | Semua fitur, termasuk **RBAC**, **User Management**, dan **hapus permanen session** |
+| **CTPAT** (`ctpat`) | Semua fitur operasional, **KECUALI** RBAC, User Management, dan hapus permanen session |
+
+- Definisi permission & role: `config/rbac.php` (sumber tunggal).
+- Helper: `app/Support/Rbac.php`.
+- Sinkronisasi ulang (mis. setelah menambah permission baru):
+  ```bash
+  php artisan db:seed --class=RolePermissionSeeder
+  ```
+- Halaman **Role & Permission** (`/role/index`) berisi matrix permission per role;
+  centang permission lalu simpan. Role `superadmin` & `ctpat` dilindungi dari penghapusan.
+- Halaman **Daftar User** menampilkan role tiap user; ikon kunci untuk mengganti role.
+- **Hapus permanen session** (Super Admin): tombol tong sampah di daftar Session →
+  menghapus session beserta packing list, revisi import, jancode, log scan, batch
+  scan, penempatan pallet, dan karton keluar (tidak bisa dibatalkan).
+
 ## Deploy (update ke server)
 
 Semua fitur terbaru ada di branch **`submit-pack`**. Setelah `git pull`, **wajib**

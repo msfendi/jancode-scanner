@@ -65,6 +65,7 @@
                                         <th>Name</th>
                                         <th>Email</th>
                                         <th>Dept</th>
+                                        <th>Role</th>
                                         <th>Created At</th>
                                         <th>Updated At</th>
                                         <th>Action</th>
@@ -77,6 +78,15 @@
                                         <td>{{ $user->name }}</td>
                                         <td>{{ $user->email }}</td>
                                         <td>{{ $user->dept }}</td>
+                                        <td>
+                                            @forelse ($user->roles as $role)
+                                                <span class="badge badge-{{ $role->name === 'superadmin' ? 'primary' : 'info' }}">
+                                                    {{ \App\Support\Rbac::roleLabel($role->name) }}
+                                                </span>
+                                            @empty
+                                                <span class="badge badge-secondary">Tanpa Role</span>
+                                            @endforelse
+                                        </td>
                                         <td>{{ $user->created_at }}</td>
                                         <td>{{ $user->updated_at }}</td>
                                         <td class="text-center">

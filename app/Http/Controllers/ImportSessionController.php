@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\ImportSession;
 use App\Models\PackingList;
+use App\Services\SessionPurgeService;
 use Illuminate\Http\Request;
 
 /**
@@ -164,5 +165,51 @@ class ImportSessionController extends Controller
         }
 
         return redirect()->route('jancode.packingLists')->with('success', $message);
+    }
+
+    /**
+     * Ringkasan data yang akan terhapus saat session dihapus permanen.
+     */
+    public function purgePreview(Request $request, ImportSession $session, SessionPurgeService $purge)
+    {
+        $counts = $purge->preview($session);
+
+        return response()->json([
+            'success' => true,
+            'code'    => $session->code,
+            'counts'  => $counts,
+        ]);
+    }
+
+    /**
+     * Hapus permanen (hard delete) session beserta seluruh datanya:
+     * revisi import, packing list, jancode, log scan, batch scan, pallet, dan
+     * karton keluar.
+     *
+     * Hanya Super Admin (permission `session.hard-delete`).
+     */
+    public function destroy(Request $request, ImportSession $session, SessionPurgeService $purge)
+    {
+        $code = $session->code;
+
+        $counts = $purge->purge($session);
+
+        // Session aktif & lock scan tidak boleh menunjuk session yang dihapus.
+        if ((int) session(ImportSession::SESSION_KEY) === (int) $session->id) {
+            ImportSession::setCurrent(null);
+        }
+        session()->forget('scan_import_batch_id');
+
+        $message = "Session {$code} beserta seluruh datanya dihapus permanen ("
+            . ($counts['packing_lists'] ?? 0) . " packing list, "
+            . ($counts['batches'] ?? 0) . " revisi, "
+            . ($counts['jancodes'] ?? 0) . " jancode, "
+            . ($counts['jancode_logs'] ?? 0) . " log scan).";
+
+        if ($request->expectsJson()) {
+            return response()->json(['success' => true, 'message' => $message, 'counts' => $counts]);
+        }
+
+        return redirect()->route('session.index')->with('success', $message);
     }
 }

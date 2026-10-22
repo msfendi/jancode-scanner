@@ -75,6 +75,21 @@
                                 <input class="form-control" type="password" id="password" name="password">
                             </div>
                             <br>
+                            <div>
+                                <label>Role / Hak Akses :</label>
+                                <select class="form-control" id="role_id" name="role_id" required>
+                                    @foreach ($roles as $role)
+                                        <option value="{{ $role->id }}"
+                                            @selected($role->name === $defaultRole)>
+                                            {{ \App\Support\Rbac::roleLabel($role->name) }} ({{ $role->name }})
+                                        </option>
+                                    @endforeach
+                                </select>
+                                <small class="text-muted">
+                                    CTPAT punya akses semua fitur operasional kecuali RBAC &amp; User Management.
+                                </small>
+                            </div>
+                            <br>
                             <div class="row">
                                 <div class="col-12">
                                     <button type="submit" class="btn btn-primary btn-block">Create</button>

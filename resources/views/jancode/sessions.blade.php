@@ -345,6 +345,16 @@
                                                             </button>
                                                         </form>
                                                     @endif
+
+                                                    @can('session.hard-delete')
+                                                        <button type="button" class="btn btn-sm btn-outline-danger btn-delete-session"
+                                                            data-url="{{ route('session.destroy', $s) }}"
+                                                            data-preview="{{ route('session.purgePreview', $s) }}"
+                                                            data-code="{{ $s->code }}"
+                                                            title="Hapus permanen session ini beserta seluruh datanya">
+                                                            <i class="fas fa-trash"></i>
+                                                        </button>
+                                                    @endcan
                                                 </td>
                                             </tr>
                                         @empty
@@ -564,6 +574,70 @@
                         previous: '‹'
                     }
                 }
+            });
+
+            // ── Hapus permanen session (Super Admin) ─────────────────────
+            $('#tableSessions').on('click', '.btn-delete-session', function () {
+                const $btn = $(this);
+                const url = $btn.data('url');
+                const previewUrl = $btn.data('preview');
+                const code = $btn.data('code');
+
+                function destroy() {
+                    const token = $('meta[name="csrf-token"]').attr('content');
+                    $btn.prop('disabled', true);
+
+                    $.ajax({
+                        url: url,
+                        type: 'POST',
+                        headers: { 'X-CSRF-TOKEN': token, 'Accept': 'application/json' }
+                    }).done(function (res) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Session Dihapus',
+                            text: res.message || 'Session beserta seluruh datanya dihapus permanen.',
+                            timer: 3000,
+                            showConfirmButton: false
+                        }).then(function () {
+                            location.reload();
+                        });
+                    }).fail(function (xhr) {
+                        $btn.prop('disabled', false);
+                        const msg = (xhr.responseJSON && xhr.responseJSON.message) || 'Gagal menghapus session.';
+                        Swal.fire({ icon: 'error', title: 'Gagal', text: msg });
+                    });
+                }
+
+                // Ambil ringkasan data yang akan terhapus.
+                $.getJSON(previewUrl).done(function (res) {
+                    const c = res.counts || {};
+
+                    const html = '<div class="text-left small">' +
+                        '<p class="mb-1"><strong>' + res.code + '</strong></p>' +
+                        '<p class="mb-1 text-danger">Seluruh data berikut akan dihapus permanen dan tidak bisa dikembalikan:</p>' +
+                        '<ul class="mb-0 pl-3">' +
+                        '<li>' + (c.packing_lists || 0) + ' packing list</li>' +
+                        '<li>' + (c.batches || 0) + ' revisi import</li>' +
+                        '<li>' + (c.jancodes || 0) + ' jancode</li>' +
+                        '<li>' + (c.jancode_logs || 0) + ' log scan</li>' +
+                        '<li>' + (c.scan_batches || 0) + ' batch scan</li>' +
+                        '</ul></div>';
+
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Hapus permanen session?',
+                        html: html,
+                        showCancelButton: true,
+                        confirmButtonText: 'Ya, hapus permanen',
+                        cancelButtonText: 'Batal',
+                        confirmButtonColor: '#e74a3b',
+                        focusCancel: true
+                    }).then(function (result) {
+                        if (result.isConfirmed) destroy();
+                    });
+                }).fail(function () {
+                    if (confirm('Hapus permanen session ' + code + ' beserta seluruh datanya?')) destroy();
+                });
             });
         });
     </script>

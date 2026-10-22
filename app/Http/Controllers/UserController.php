@@ -2,20 +2,19 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\ModelHasRoles;
-use App\Models\Role;
 use App\Models\User;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use RealRashid\SweetAlert\Facades\Alert;
+use Spatie\Permission\Models\Role;
 
 class UserController extends Controller
 {
     public function index()
     {
-        $users   = User::all();
+        $users = User::with('roles')->orderBy('id')->get();
+
         return view('user.index', compact('users'));
     }
 
@@ -35,29 +34,28 @@ class UserController extends Controller
 
     public function assign($id)
     {
-        $modelhasroles = User::select('users.name', 'users.email', 'users.id', 'model_has_roles.*')
-            ->leftJoin('model_has_roles', 'model_has_roles.model_id', '=', 'users.id')
-            ->where('users.id', '=', $id)
-            ->get();
-        $roles = Role::all();
-        return view('auth.assign', compact('modelhasroles', 'roles'));
+        $user = User::with('roles')->findOrFail($id);
+
+        return view('auth.assign', [
+            'user'  => $user,
+            'roles' => Role::orderBy('id')->get(),
+        ]);
     }
 
     public function assignrole(Request $request)
     {
-        $modelhasroles = ModelHasRoles::where('model_id', '=', $request->id)
-            ->where('model_type', '=', 'App\Models\User')
-            ->delete();
-        ModelHasRoles::updateOrCreate(
-            [
-                'role_id' => $request->role_id,
-                'model_type' => 'App\Models\User',
-                'model_id' => $request->id
-            ]
-        );
+        $request->validate([
+            'id'      => ['required', 'integer', 'exists:users,id'],
+            'role_id' => ['required', 'integer', 'exists:roles,id'],
+        ]);
 
-        Alert::success('Assign Successfully!', 'User successfully assigned!');
-        return redirect()->intended('user/index');
+        $user = User::findOrFail($request->id);
+        $role = Role::findOrFail($request->role_id);
+
+        $user->syncRoles([$role->name]);
+
+        Alert::success('Assign Successfully!', 'User ' . $user->name . ' sekarang punya role ' . $role->name . '.');
+        return redirect()->route('user.index');
     }
 
     public function update(Request $request)
