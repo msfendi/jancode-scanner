@@ -80,6 +80,43 @@ php artisan view:cache
 > ditambahkan tidak dikenal sampai cache di-clear. `php artisan route:clear`
 > saja juga cukup untuk kasus ini.
 
+> **Permission folder di server Linux (nginx/apache)**
+> `storage/` dan `bootstrap/cache/` **wajib bisa ditulis** oleh user web server.
+> Kalau proses `composer install` / `artisan` dijalankan dengan user lain
+> (misal root atau user deploy), file hasil build jadi milik user itu dan
+> aplikasi gagal boot dengan:
+>
+> - `The stream or file ".../storage/logs/laravel.log" could not be opened in append mode: Permission denied`
+> - `The ".../bootstrap/cache" directory must be present and writable`
+> - `Script @php artisan package:discover --ansi handling the post-autoload-dump event returned with error code 1`
+>
+> Perbaikannya (sesuaikan `www-data` dengan user web server Anda: `nginx`,
+> `apache`, `www-data`, …):
+>
+> ```bash
+> cd /var/www/jancode-scanner
+>
+> # 1. Pastikan foldernya ada
+> mkdir -p storage/framework/cache/data storage/framework/sessions storage/framework/views \
+>          storage/logs bootstrap/cache
+>
+> # 2. Beri hak tulis ke user web server
+> sudo chown -R www-data:www-data storage bootstrap/cache
+> sudo chmod -R 775 storage bootstrap/cache
+> sudo find storage bootstrap/cache -type d -exec chmod 775 {} \;
+> sudo find storage bootstrap/cache -type f -exec chmod 664 {} \;
+>
+> # 3. Ulangi deploy (jalankan SETELAH chown agar file tidak jadi milik user lain)
+> composer install --no-dev --optimize-autoloader
+> php artisan package:discover --ansi
+> php artisan optimize:clear
+> php artisan migrate --force
+> php artisan view:cache
+> ```
+>
+> Tips: kalau tidak bisa `sudo`, jalankan `composer install` & `artisan` memakai
+> user yang sama dengan user web server (`sudo -u www-data composer install ...`).
+
 > **Catatan server lokal (Windows)**
 > Demo dengan `php artisan serve` berjalan **single worker** di Windows, sehingga
 > koneksi SSE yang panjang menahan request lain. Live update Scanner sudah
