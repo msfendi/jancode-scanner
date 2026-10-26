@@ -825,39 +825,50 @@ class JancodeImportService
                     fn ($jan): bool => is_string($jan) && strlen($jan) === JancodeCode::LENGTH
                 )));
 
-                if (count($distinctJans) >= 2) {
-                    $sizeNames = [];
-                    $totalPcsPerCarton = 0;
+                // Gabungan size & total pcs per karton untuk seluruh baris grup.
+                $sizeNames = [];
+                $totalPcsPerCarton = 0;
 
-                    foreach ($groupRows as $gr) {
-                        $totalPcsPerCarton += (int) array_sum($gr['sizes_filled']);
+                foreach ($groupRows as $gr) {
+                    $totalPcsPerCarton += (int) array_sum($gr['sizes_filled']);
 
-                        foreach (array_keys($gr['sizes_filled']) as $sizeName) {
-                            if (!in_array($sizeName, $sizeNames, true)) {
-                                $sizeNames[] = $sizeName;
-                            }
+                    foreach (array_keys($gr['sizes_filled']) as $sizeName) {
+                        if (!in_array($sizeName, $sizeNames, true)) {
+                            $sizeNames[] = $sizeName;
                         }
                     }
+                }
 
-                    $froms = array_values(array_filter(
-                        array_map(fn ($gr) => $gr['carton_no_from'] ?? null, $groupRows),
-                        fn ($v) => $v !== null
-                    ));
-                    $tos = array_values(array_filter(
-                        array_map(fn ($gr) => $gr['carton_no_to'] ?? null, $groupRows),
-                        fn ($v) => $v !== null
-                    ));
+                $froms = array_values(array_filter(
+                    array_map(fn ($gr) => $gr['carton_no_from'] ?? null, $groupRows),
+                    fn ($v) => $v !== null
+                ));
+                $tos = array_values(array_filter(
+                    array_map(fn ($gr) => $gr['carton_no_to'] ?? null, $groupRows),
+                    fn ($v) => $v !== null
+                ));
 
-                    $firstRow = $groupRows[0] ?? $r;
+                $firstRow = $groupRows[0] ?? $r;
+                $itemBase = [
+                    'carton_no_from' => $froms === [] ? null : min($froms),
+                    'carton_no_to'   => $tos === [] ? null : max($tos),
+                    'nw_per_carton'  => $firstRow['nw_per_carton'] ?? null,
+                    'ttl_nw'         => $firstRow['ttl_nw'] ?? null,
+                    'gw_per_carton'  => $firstRow['gw_per_carton'] ?? null,
+                    'ttl_gw'         => $firstRow['ttl_gw'] ?? null,
+                    'measurement_cm' => $firstRow['measurement_cm'] ?? null,
+                    'cbm'            => $firstRow['cbm'] ?? null,
+                ];
 
+                if (count($distinctJans) >= 2) {
                     $items[] = [
                         'source_row'              => $groupKey,
                         'country'                 => $header['country'],
                         'buyer'                   => $header['buyer'],
                         'ocf'                     => $header['ocf'],
                         'style'                   => $header['style'],
-                        'carton_no_from'          => $froms === [] ? null : min($froms),
-                        'carton_no_to'            => $tos === [] ? null : max($tos),
+                        'carton_no_from'          => $itemBase['carton_no_from'],
+                        'carton_no_to'            => $itemBase['carton_no_to'],
                         'color'                   => implode(' / ', $colors),
                         'size'                    => count($sizeNames) === 1
                             ? $sizeNames[0]
@@ -868,14 +879,31 @@ class JancodeImportService
                         'receive_qty_carton'      => 0,
                         'balance'                 => $cartonQty,
                         'total_qty_pcs'           => $cartonQty * $totalPcsPerCarton,
-                        'nw_per_carton'           => $firstRow['nw_per_carton'] ?? null,
-                        'ttl_nw'                  => $firstRow['ttl_nw'] ?? null,
-                        'gw_per_carton'           => $firstRow['gw_per_carton'] ?? null,
-                        'ttl_gw'                  => $firstRow['ttl_gw'] ?? null,
-                        'measurement_cm'          => $firstRow['measurement_cm'] ?? null,
-                        'cbm'                     => $firstRow['cbm'] ?? null,
+                        'nw_per_carton'           => $itemBase['nw_per_carton'],
+                        'ttl_nw'                  => $itemBase['ttl_nw'],
+                        'gw_per_carton'           => $itemBase['gw_per_carton'],
+                        'ttl_gw'                  => $itemBase['ttl_gw'],
+                        'measurement_cm'          => $itemBase['measurement_cm'],
+                        'cbm'                     => $itemBase['cbm'],
                         'mixed_jancode'           => true,
                     ];
+
+                    continue;
+                }
+
+                // ASSORT: satu jancode, beberapa warna dalam karton yang sama.
+                // Diimport sebagai SATU baris; warna digabung dengan ";".
+                if (count($distinctJans) === 1 && ($isAssortByKet || count($colors) > 1)) {
+                    $items[] = $this->assortItem(
+                        $header,
+                        $distinctJans[0],
+                        $colors,
+                        $sizeNames,
+                        (int) $cartonQty,
+                        $totalPcsPerCarton,
+                        $groupKey,
+                        $itemBase
+                    );
 
                     continue;
                 }
@@ -901,12 +929,31 @@ class JancodeImportService
                 continue;
             }
 
-            // Jika kolom KETERANGAN ada dan berisi ASSORT
+            // ASSORT 1 baris: satu jancode, multi size/color dalam satu karton.
+            // Tetap diimport sebagai 1 baris (qty/pcs digabung).
             if ($isAssortByKet) {
+                $assortCarton = (int) ($r['total_carton'] ?? 0);
+                $assortPcs = (int) array_sum($r['sizes_filled']);
+
+                if (strlen($cleanJan) === 13 && $assortCarton > 0 && $assortPcs > 0) {
+                    $items[] = $this->assortItem(
+                        $header,
+                        $cleanJan,
+                        [$r['color_inherited']],
+                        array_keys($r['sizes_filled']),
+                        $assortCarton,
+                        $assortPcs,
+                        $rowNum,
+                        $r
+                    );
+
+                    continue;
+                }
+
                 $skipped[] = [
                     'source_row'    => (string)$rowNum,
                     'reason'        => 'ASSORT',
-                    'reason_label'  => 'Baris ASSORT PACK, tidak diimport',
+                    'reason_label'  => 'Baris ASSORT PACK tidak valid (JAN/carton kosong)',
                     'jan_code'      => $cleanJan ?: $jan,
                     'color'         => $r['color_inherited'],
                     'size'          => implode(', ', array_map(fn($k, $v) => "$k ($v pcs)", array_keys($r['sizes_filled']), $r['sizes_filled'])),
@@ -992,8 +1039,27 @@ class JancodeImportService
                 continue;
             }
 
-            // JIKA TERISI LEBIH DARI 1 SIZE DALAM 1 KARTON -> OTOMATIS ASSORT!
+            // JIKA TERISI LEBIH DARI 1 SIZE DALAM 1 KARTON -> ASSORT 1 BARIS.
+            // Diimport sebagai satu baris dengan size digabung "/".
             if ($sizeCount > 1) {
+                $assortCarton = (int) ($r['total_carton'] ?? 0);
+                $assortPcs = (int) array_sum($r['sizes_filled']);
+
+                if ($assortCarton > 0 && $assortPcs > 0) {
+                    $items[] = $this->assortItem(
+                        $header,
+                        $cleanJan,
+                        [$r['color_inherited']],
+                        array_keys($r['sizes_filled']),
+                        $assortCarton,
+                        $assortPcs,
+                        $rowNum,
+                        $r
+                    );
+
+                    continue;
+                }
+
                 $skipped[] = [
                     'source_row'    => (string)$rowNum,
                     'reason'        => 'ASSORT',
@@ -1082,6 +1148,61 @@ class JancodeImportService
             'header'  => $header,
             'items'   => $items,
             'skipped' => $skipped,
+        ];
+    }
+
+    /**
+     * Bentuk satu item ASSORT: satu jancode, beberapa warna/size dalam satu
+     * karton. Warna digabung dengan ";", size digabung dengan "/".
+     */
+    private function assortItem(
+        array $header,
+        string $janCode,
+        array $colors,
+        array $sizeNames,
+        int $cartonQty,
+        int $pcsPerCarton,
+        $sourceRow,
+        array $base
+    ): array {
+        $colors = array_values(array_unique(array_filter(array_map(
+            fn ($c) => preg_replace('/\s+/', ' ', trim((string) $c)),
+            $colors
+        ), fn ($c) => $c !== '')));
+
+        $sizeNames = array_values(array_unique(array_filter(array_map(
+            fn ($s) => trim((string) $s),
+            $sizeNames
+        ), fn ($s) => $s !== '')));
+
+        $cartonQty = max(0, $cartonQty);
+        $pcsPerCarton = max(0, $pcsPerCarton);
+
+        return [
+            'source_row'              => $sourceRow,
+            'country'                 => $header['country'],
+            'buyer'                   => $header['buyer'],
+            'ocf'                     => $header['ocf'],
+            'style'                   => $header['style'],
+            'carton_no_from'          => $base['carton_no_from'] ?? null,
+            'carton_no_to'            => $base['carton_no_to'] ?? null,
+            'color'                   => implode('; ', $colors),
+            'size'                    => count($sizeNames) === 1
+                ? $sizeNames[0]
+                : (count($sizeNames) > 1 ? implode('/', $sizeNames) : 'ASSORT'),
+            'qty_per_carton'          => $pcsPerCarton,
+            'jan_code'                => $janCode,
+            'packing_list_qty_carton' => $cartonQty,
+            'receive_qty_carton'      => 0,
+            'balance'                 => $cartonQty,
+            'total_qty_pcs'           => $cartonQty * $pcsPerCarton,
+            'nw_per_carton'           => $base['nw_per_carton'] ?? null,
+            'ttl_nw'                  => $base['ttl_nw'] ?? null,
+            'gw_per_carton'           => $base['gw_per_carton'] ?? null,
+            'ttl_gw'                  => $base['ttl_gw'] ?? null,
+            'measurement_cm'          => $base['measurement_cm'] ?? null,
+            'cbm'                     => $base['cbm'] ?? null,
+            'assort'                  => true,
         ];
     }
 
@@ -1206,6 +1327,9 @@ PROMPT;
                         'ttl_gw'                  => $matched['ttl_gw'] ?? null,
                         'measurement_cm'          => $matched['measurement_cm'] ?? null,
                         'cbm'                     => $matched['cbm'] ?? null,
+                        'assort'                  => ! empty($matched['assort']),
+                        'mixed_jancode'           => ! empty($matched['mixed_jancode']),
+                        'broken_carton'           => ! empty($matched['broken_carton']),
                     ];
                 }
             }
@@ -1216,12 +1340,23 @@ PROMPT;
             return $deterministicResult;
         }
 
-        // Case mix jancode punya source_row berupa rentang (mis. "12-13"),
-        // sehingga tidak bisa dipetakan dari hasil AI. Pertahankan dari
-        // hasil deterministik agar tidak hilang.
+        // Kasus khusus yang tidak boleh hilang walau AI tidak mengembalikannya:
+        // - mix jancode / assort bisa punya source_row berupa rentang ("12-13");
+        // - baris assort 1 baris (multi-size) sering dianggap "skip" oleh AI.
+        $usedRows = [];
+        foreach ($items as $it) {
+            $usedRows[(string) ($it['source_row'] ?? '')] = true;
+        }
+
         foreach ($deterministicResult['items'] as $detItem) {
-            if (! is_numeric($detItem['source_row'] ?? null)) {
+            $rowKey = (string) ($detItem['source_row'] ?? '');
+            $mustKeep = ! is_numeric($rowKey)
+                || ! empty($detItem['assort'])
+                || ! empty($detItem['mixed_jancode']);
+
+            if ($mustKeep && ! isset($usedRows[$rowKey])) {
                 $items[] = $detItem;
+                $usedRows[$rowKey] = true;
             }
         }
 

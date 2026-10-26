@@ -87,7 +87,7 @@
         color: #4e73df;
     }
 
-    /* Tiap baris vertikal 1..14 / 1..16 */
+    /* Tiap baris vertikal 1..14 (a/b) dan 1..19 (c/d) */
     .pallet-vert-row {
         display: flex;
         align-items: center;
@@ -281,7 +281,7 @@
                     <div class="d-sm-flex align-items-center justify-content-between mb-4">
                         <div>
                             <h1 class="h4 mb-1 text-gray-800 font-weight-bold">Manage Pallet Location &amp; Placement</h1>
-                            <p class="text-muted small mb-0">Total 480 Alamat Pallet (Row B–I) &bull; Kapasitas Maks 42 Karton/Pallet &bull; Aturan Kompatibilitas 1 Country & 1 Style/OCF per Row</p>
+                            <p class="text-muted small mb-0">Total {{ number_format($totalPositions, 0, ',', '.') }} Alamat Pallet (Row B–I) &bull; Kapasitas Maks 42 Karton/Pallet &bull; Aturan Kompatibilitas 1 Country & 1 Style/OCF per Row</p>
                         </div>
                         <div>
                             <a href="{{ route('scanner.index') }}" class="btn btn-sm btn-success shadow-sm">
@@ -599,7 +599,7 @@
                                                     <!-- DIVIDER ANTARA DEPAN & BELAKANG -->
                                                     <hr class="my-3" style="border-top: 2px dashed #b7b9cc;">
 
-                                                    <!-- BAGIAN 2: Subrow c & d (1 s/d 16) -->
+                                                    <!-- BAGIAN 2: Subrow c & d (1 s/d 19) -->
                                                     <div class="text-center font-weight-bold small text-secondary mb-1">
                                                         AREA BELAKANG (c & d)
                                                     </div>
@@ -609,7 +609,7 @@
                                                         <div class="subrow-header-col text-secondary">d</div>
                                                     </div>
 
-                                                    @for($p = 1; $p <= 16; $p++)
+                                                    @for($p = 1; $p <= 19; $p++)
                                                         @php
                                                             $addrC = $groupedRows[$rowLetter]['c'][$p] ?? null;
                                                             $isOccC = $addrC && $addrC->assignment && $addrC->assignment->total_carton > 0;

@@ -564,7 +564,7 @@
 
                     const halves = [
                         { label: 'DEPAN · a | b', cols: ['a', 'b'], count: 14 },
-                        { label: 'BELAKANG · c | d', cols: ['c', 'd'], count: 16 },
+                        { label: 'BELAKANG · c | d', cols: ['c', 'd'], count: 19 },
                     ];
 
                     halves.forEach(function (half) {

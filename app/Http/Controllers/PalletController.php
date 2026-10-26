@@ -20,7 +20,7 @@ class PalletController extends Controller
      */
     public function index(Request $request)
     {
-        // Pastikan 480 alamat pallet sudah di-seed
+        // Pastikan 528 alamat pallet sudah di-seed
         $this->ensureAddressesSeeded();
 
         $selectedRow = $request->input('row', 'all'); // 'all' atau 'B', 'C', dll
@@ -172,7 +172,7 @@ class PalletController extends Controller
 
     /**
      * Visualisasi 3D layout pallet (Three.js).
-     * Menampilkan gudang 480 posisi dalam bentuk 3D + animasi handlift in/out karton.
+     * Menampilkan gudang 528 posisi dalam bentuk 3D + animasi handlift in/out karton.
      */
     public function threeD()
     {
@@ -1054,65 +1054,42 @@ class PalletController extends Controller
     }
 
     /**
-     * Helper: Seed 480 posisi jika belum ada
+     * Helper: Seed 528 posisi jika belum ada
      */
     private function ensureAddressesSeeded()
     {
-        if (PalletAddress::count() === 0) {
-            $rows = ['B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'];
-            $now = now();
-            $addresses = [];
+        $rows = ['B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'];
+        // a & b: 14 posisi; c & d: 19 posisi (bertambah dari 16).
+        $columns = ['a' => 14, 'b' => 14, 'c' => 19, 'd' => 19];
 
-            foreach ($rows as $row) {
-                for ($p = 1; $p <= 14; $p++) {
+        $existing = PalletAddress::pluck('code')->flip();
+        $now = now();
+        $addresses = [];
+
+        foreach ($rows as $row) {
+            foreach ($columns as $col => $maxPosition) {
+                for ($p = 1; $p <= $maxPosition; $p++) {
+                    $code = sprintf('%s-%s-%02d', $row, $col, $p);
+
+                    if ($existing->has($code)) {
+                        continue;
+                    }
+
                     $addresses[] = [
                         'row_label'   => $row,
-                        'col_label'   => 'a',
+                        'col_label'   => $col,
                         'position_no' => $p,
-                        'code'        => sprintf('%s-a-%02d', $row, $p),
-                        'max_carton'  => 42,
-                        'created_at'  => $now,
-                        'updated_at'  => $now,
-                    ];
-                }
-                for ($p = 1; $p <= 14; $p++) {
-                    $addresses[] = [
-                        'row_label'   => $row,
-                        'col_label'   => 'b',
-                        'position_no' => $p,
-                        'code'        => sprintf('%s-b-%02d', $row, $p),
-                        'max_carton'  => 42,
-                        'created_at'  => $now,
-                        'updated_at'  => $now,
-                    ];
-                }
-                for ($p = 1; $p <= 16; $p++) {
-                    $addresses[] = [
-                        'row_label'   => $row,
-                        'col_label'   => 'c',
-                        'position_no' => $p,
-                        'code'        => sprintf('%s-c-%02d', $row, $p),
-                        'max_carton'  => 42,
-                        'created_at'  => $now,
-                        'updated_at'  => $now,
-                    ];
-                }
-                for ($p = 1; $p <= 16; $p++) {
-                    $addresses[] = [
-                        'row_label'   => $row,
-                        'col_label'   => 'd',
-                        'position_no' => $p,
-                        'code'        => sprintf('%s-d-%02d', $row, $p),
+                        'code'        => $code,
                         'max_carton'  => 42,
                         'created_at'  => $now,
                         'updated_at'  => $now,
                     ];
                 }
             }
+        }
 
-            foreach (array_chunk($addresses, 100) as $chunk) {
-                PalletAddress::insert($chunk);
-            }
+        foreach (array_chunk($addresses, 100) as $chunk) {
+            PalletAddress::insert($chunk);
         }
     }
 }

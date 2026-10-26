@@ -1,7 +1,7 @@
 /* =============================================================================
  * pallet-3d.js — Visualisasi 3D layout pallet (Three.js)
  * -----------------------------------------------------------------------------
- * - Membangun gudang 480 posisi (Row B–I, kolom a–d) dari data /pallet/3d-data
+ * - Membangun gudang 528 posisi (Row B–I, kolom a–d) dari data /pallet/3d-data
  * - Handlift (hand pallet truck) yang berjalan di lorong & mengangkut karton
  * - Animasi karton masuk (in) / keluar (out) dari tiap pallet
  * - Auto-sync: perubahan data nyata (scan / penempatan / karton keluar) dianimasikan

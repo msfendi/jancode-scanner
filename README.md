@@ -85,6 +85,29 @@ Setiap kali **Submit** batch scan, operator wajib mengisi **kode surat jalan**
 `scan_batches.surat_jalan` dan tampil di halaman **Riwayat Batch Scan**
 (`/scanner/batches`) beserta filter session/tanggal.
 
+### 4. Assort (1 jancode, beberapa warna / size)
+Assort di Excel bisa berupa **1 baris** (beberapa size dalam satu karton) atau
+**2 baris / lebih** (beberapa warna dalam karton yang sama, sel JAN & nomor
+karton di-merge). Keduanya diimport sebagai **SATU baris data**:
+
+- **color** = warna digabung dengan `;` → `000: WHITE; 002: LIGHT GRAY`
+- **size** = size digabung dengan `/` → `S/M/L/XL`
+- **qty per karton** = total pcs semua warna/size dalam 1 karton (mis. 60)
+- **qty karton** = qty karton pada sel yang di-merge (tidak dijumlahkan)
+- **total pcs** = qty karton × qty per karton
+
+Karena tetap satu jancode, scan & penempatan pallet berjalan seperti biasa.
+Baris TOTAL / GRAND TOTAL tetap dilewati, dan JAN yang tidak valid (bukan 13
+digit) tetap ditandai gagal.
+
+### 5. Layout pallet (BR-07)
+Row **B–I**, kolom **a & b = 14 posisi**, kolom **c & d = 19 posisi**
+(bertambah dari 16). Total **528 alamat pallet** (8 row × 66 posisi), kapasitas
+42 karton per pallet. Penambahan posisi `c-17..c-19` dan `d-17..d-19` dilakukan
+oleh migration `2026_10_26_000002_add_extra_cd_pallet_positions` (idempotent).
+Halaman `/pallet`, visualisasi 3D, dan display publik otomatis membaca jumlah
+posisi dari database.
+
 ## RBAC (Role & Permission)
 
 Dua role bawaan (dibuat otomatis oleh migration `2026_10_22_000001_seed_rbac_roles`):
