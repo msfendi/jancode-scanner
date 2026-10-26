@@ -7,6 +7,7 @@ use App\Models\ImportFailedRow;
 use App\Models\ImportSession;
 use App\Models\Jancode;
 use App\Models\PackingList;
+use App\Support\JancodeCode;
 
 /**
  * Menyimpan hasil parsing satu sheet packing list menjadi satu REVISI
@@ -154,8 +155,11 @@ class PackingListImportService
         $merged = [];
 
         foreach ($items as $item) {
-            $jan = preg_replace('/[^0-9]/', '', (string)($item['jan_code'] ?? ''));
-            if (strlen($jan) !== 13) {
+            // Menerima jancode tunggal, kode gabungan "jan1-jan2" (case mix),
+            // maupun kode broken berakhiran "B".
+            $jan = JancodeCode::normalize((string) ($item['jan_code'] ?? ''));
+
+            if (! JancodeCode::isValid($jan)) {
                 continue;
             }
 

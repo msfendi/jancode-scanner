@@ -579,6 +579,22 @@
             });
 
             // ── Hapus permanen session (Super Admin) ─────────────────────
+            // SweetAlert bisa saja belum termuat (asset/cache) — fallback ke
+            // confirm()/alert() bawaan browser supaya hapus tetap berjalan.
+            function fireSwal(options) {
+                if (typeof Swal !== 'undefined') {
+                    return Swal.fire(options);
+                }
+
+                if (options && options.showCancelButton) {
+                    const ok = window.confirm(options.title || 'Lanjutkan?');
+                    return Promise.resolve({ isConfirmed: ok });
+                }
+
+                window.alert((options && (options.title || options.text)) || '');
+                return Promise.resolve({ isConfirmed: true });
+            }
+
             $('#tableSessions').on('click', '.btn-delete-session', function () {
                 const $btn = $(this);
                 const url = $btn.data('url');
@@ -594,7 +610,7 @@
                         type: 'POST',
                         headers: { 'X-CSRF-TOKEN': token, 'Accept': 'application/json' }
                     }).done(function (res) {
-                        Swal.fire({
+                        fireSwal({
                             icon: 'success',
                             title: 'Session Dihapus',
                             text: res.message || 'Session beserta seluruh datanya dihapus permanen.',
@@ -606,7 +622,7 @@
                     }).fail(function (xhr) {
                         $btn.prop('disabled', false);
                         const msg = (xhr.responseJSON && xhr.responseJSON.message) || 'Gagal menghapus session.';
-                        Swal.fire({ icon: 'error', title: 'Gagal', text: msg });
+                        fireSwal({ icon: 'error', title: 'Gagal', text: msg });
                     });
                 }
 
@@ -625,7 +641,7 @@
                         '<li>' + (c.scan_batches || 0) + ' batch scan</li>' +
                         '</ul></div>';
 
-                    Swal.fire({
+                    fireSwal({
                         icon: 'warning',
                         title: 'Hapus permanen session?',
                         html: html,

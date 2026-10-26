@@ -8,6 +8,7 @@ use App\Models\Jancode;
 use App\Models\PalletAddress;
 use App\Models\PalletAssignment;
 use App\Models\PalletAssignmentDetail;
+use App\Support\JancodeCode;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -310,6 +311,16 @@ class PalletController extends Controller
 
         $digits = preg_replace('/[^0-9]/', '', $raw);
         $term = $digits !== '' ? $digits : $raw;
+
+        // Input kode gabungan "jan1-jan2" → pakai bagian pertama untuk LIKE
+        // supaya karton mix jancode tetap ketemu.
+        $parts = JancodeCode::parts($raw);
+        if (count($parts) > 1) {
+            $first = preg_replace('/[^0-9]/', '', $parts[0]);
+            if ($first !== '') {
+                $term = $first;
+            }
+        }
 
         $rows = PalletAssignmentDetail::query()
             ->join('pallet_assignment', 'pallet_assignment.id', '=', 'pallet_assignment_detail.assignment_id')

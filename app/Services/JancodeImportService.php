@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Support\JancodeCode;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use Illuminate\Support\Facades\Http;
@@ -689,6 +690,41 @@ class JancodeImportService
 
         $hasKeteranganCol = !empty($layout['keterangan_col']);
 
+        // Pra-pemindaian untuk mendeteksi karton BROKEN:
+        // jancode yang muncul lebih dari sekali (bukan bagian carton merge dan
+        // bukan assort) lalu salah satu barisnya punya qty pcs di bawah ambang.
+        $brokenThreshold = (int) config('packing.broken_pcs_threshold', 60);
+        $standaloneJanStats = []; // [jan => ['rows' => n, 'max_pcs' => n]]
+
+        foreach ($rows as $statRow) {
+            if (!empty($statRow['carton_group']) || !empty($statRow['carton_merged'])) {
+                continue;
+            }
+
+            if (count($statRow['sizes_filled'] ?? []) !== 1) {
+                continue;
+            }
+
+            if (str_contains(strtoupper((string) ($statRow['keterangan'] ?? '')), 'ASSORT')) {
+                continue;
+            }
+
+            $statJan = preg_replace('/[^0-9]/', '', (string) ($statRow['jan_code'] ?? ''));
+
+            if (strlen($statJan) !== JancodeCode::LENGTH) {
+                continue;
+            }
+
+            $statPcs = (int) array_sum($statRow['sizes_filled'] ?? []);
+
+            if (!isset($standaloneJanStats[$statJan])) {
+                $standaloneJanStats[$statJan] = ['rows' => 0, 'max_pcs' => 0];
+            }
+
+            $standaloneJanStats[$statJan]['rows']++;
+            $standaloneJanStats[$statJan]['max_pcs'] = max($standaloneJanStats[$statJan]['max_pcs'], $statPcs);
+        }
+
         foreach ($rows as $r) {
             $rowNum = $r['row'];
             $keterangan = $r['keterangan'];
@@ -764,8 +800,8 @@ class JancodeImportService
                         $sizes[] = implode('/', $sizeParts);
                     }
 
-                    if ($cartonQty === null && $gr['total_carton'] !== null) {
-                        $cartonQty = (int)$gr['total_carton'];
+                    if ($gr['total_carton'] !== null) {
+                        $cartonQty = max((int) $cartonQty, (int) $gr['total_carton']);
                     }
 
                     $subRowsDetails[] = [
@@ -779,6 +815,71 @@ class JancodeImportService
 
                 $jans = array_unique($jans);
                 $cartonQty = $cartonQty ?: 1;
+
+                // CASE MIX JANCODE: 2 (atau lebih) jancode berbeda berada dalam
+                // satu karton yang sama. Tetap diimport sebagai SATU baris dengan
+                // jancode ditulis "jancode1-jancode2", supaya operator tetap bisa
+                // scan salah satu jancode-nya.
+                $distinctJans = array_values(array_unique(array_filter(
+                    $jans,
+                    fn ($jan): bool => is_string($jan) && strlen($jan) === JancodeCode::LENGTH
+                )));
+
+                if (count($distinctJans) >= 2) {
+                    $sizeNames = [];
+                    $totalPcsPerCarton = 0;
+
+                    foreach ($groupRows as $gr) {
+                        $totalPcsPerCarton += (int) array_sum($gr['sizes_filled']);
+
+                        foreach (array_keys($gr['sizes_filled']) as $sizeName) {
+                            if (!in_array($sizeName, $sizeNames, true)) {
+                                $sizeNames[] = $sizeName;
+                            }
+                        }
+                    }
+
+                    $froms = array_values(array_filter(
+                        array_map(fn ($gr) => $gr['carton_no_from'] ?? null, $groupRows),
+                        fn ($v) => $v !== null
+                    ));
+                    $tos = array_values(array_filter(
+                        array_map(fn ($gr) => $gr['carton_no_to'] ?? null, $groupRows),
+                        fn ($v) => $v !== null
+                    ));
+
+                    $firstRow = $groupRows[0] ?? $r;
+
+                    $items[] = [
+                        'source_row'              => $groupKey,
+                        'country'                 => $header['country'],
+                        'buyer'                   => $header['buyer'],
+                        'ocf'                     => $header['ocf'],
+                        'style'                   => $header['style'],
+                        'carton_no_from'          => $froms === [] ? null : min($froms),
+                        'carton_no_to'            => $tos === [] ? null : max($tos),
+                        'color'                   => implode(' / ', $colors),
+                        'size'                    => count($sizeNames) === 1
+                            ? $sizeNames[0]
+                            : (count($sizeNames) > 1 ? implode('/', $sizeNames) : 'MIX'),
+                        'qty_per_carton'          => $totalPcsPerCarton,
+                        'jan_code'                => implode('-', $distinctJans),
+                        'packing_list_qty_carton' => $cartonQty,
+                        'receive_qty_carton'      => 0,
+                        'balance'                 => $cartonQty,
+                        'total_qty_pcs'           => $cartonQty * $totalPcsPerCarton,
+                        'nw_per_carton'           => $firstRow['nw_per_carton'] ?? null,
+                        'ttl_nw'                  => $firstRow['ttl_nw'] ?? null,
+                        'gw_per_carton'           => $firstRow['gw_per_carton'] ?? null,
+                        'ttl_gw'                  => $firstRow['ttl_gw'] ?? null,
+                        'measurement_cm'          => $firstRow['measurement_cm'] ?? null,
+                        'cbm'                     => $firstRow['cbm'] ?? null,
+                        'mixed_jancode'           => true,
+                    ];
+
+                    continue;
+                }
+
                 $reasonCode = $isAssortByKet ? 'ASSORT' : 'MERGED_CARTON';
                 $reasonLabel = $isAssortByKet
                     ? 'ASSORT PACK: Multiple size/color dalam satu karton gabungan'
@@ -934,6 +1035,22 @@ class JancodeImportService
             $color = preg_replace('/\s+/', ' ', trim($r['color_inherited']));
             $pcsPerCarton = (int)($r['sizes_filled'][$sizeName] ?? 0);
 
+            // Karton BROKEN: jancode yang sama muncul lebih dari sekali dan baris
+            // ini qty pcs-nya di bawah ambang (mis. 30 pcs dari 60 pcs penuh).
+            // Diberi akhiran "B" agar beda dari jancode normal dan tetap bisa discan.
+            $itemJanCode = $cleanJan;
+            $janStat = $standaloneJanStats[$cleanJan] ?? null;
+
+            if (
+                $janStat
+                && $janStat['rows'] > 1
+                && $pcsPerCarton > 0
+                && $pcsPerCarton < $brokenThreshold
+                && $pcsPerCarton < $janStat['max_pcs']
+            ) {
+                $itemJanCode = JancodeCode::markBroken($cleanJan);
+            }
+
             // Valid Item (PASTI SOLID)
             $items[] = [
                 'source_row'              => $rowNum,
@@ -946,7 +1063,7 @@ class JancodeImportService
                 'color'                   => $color,
                 'size'                    => $sizeName,
                 'qty_per_carton'          => $pcsPerCarton,
-                'jan_code'                => $cleanJan,
+                'jan_code'                => $itemJanCode,
                 'packing_list_qty_carton' => $carton,
                 'receive_qty_carton'      => 0,
                 'balance'                 => $carton,
@@ -957,6 +1074,7 @@ class JancodeImportService
                 'ttl_gw'                  => $r['ttl_gw'] ?? null,
                 'measurement_cm'          => $r['measurement_cm'] ?? null,
                 'cbm'                     => $r['cbm'] ?? null,
+                'broken_carton'           => $itemJanCode !== $cleanJan,
             ];
         }
 
@@ -1096,6 +1214,15 @@ PROMPT;
         // Jika AI melewatkan baris valid, fallback gunakan data deterministik
         if (count($items) === 0) {
             return $deterministicResult;
+        }
+
+        // Case mix jancode punya source_row berupa rentang (mis. "12-13"),
+        // sehingga tidak bisa dipetakan dari hasil AI. Pertahankan dari
+        // hasil deterministik agar tidak hilang.
+        foreach ($deterministicResult['items'] as $detItem) {
+            if (! is_numeric($detItem['source_row'] ?? null)) {
+                $items[] = $detItem;
+            }
         }
 
         return [

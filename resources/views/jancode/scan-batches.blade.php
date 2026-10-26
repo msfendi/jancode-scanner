@@ -16,7 +16,7 @@
                                 <i class="fas fa-history text-primary mr-1"></i> Riwayat Batch Scan Jancode
                             </h1>
                             <p class="mb-0 text-muted small">
-                                Daftar sesi <strong>submit</strong> hasil scanning karton per packing list — seluruh session.
+                                Daftar sesi <strong>submit</strong> hasil scanning karton per kedatangan (partial scan) — lengkap dengan kode surat jalan.
                             </p>
                         </div>
                         <div>
@@ -149,6 +149,7 @@
                                             <th>Waktu Submit</th>
                                             <th>Session</th>
                                             <th>Batch No</th>
+                                            <th>Surat Jalan</th>
                                             <th>Packing List</th>
                                             <th>JAN Code</th>
                                             <th>Color</th>
@@ -261,6 +262,7 @@
                     { data: 'created_at', render: d => `<small class="text-muted">${d}</small>` },
                     { data: 'session_code', render: d => `<span class="badge badge-light border">${d || '-'}</span>` },
                     { data: 'batch_no', render: d => `<span class="badge badge-dark font-mono px-2 py-1">${d}</span>` },
+                    { data: 'surat_jalan', render: d => d && d !== '-' ? `<span class="badge badge-info px-2 py-1">${d}</span>` : '<span class="text-muted">—</span>' },
                     { data: 'packing_list', render: d => `<span class="small font-weight-bold text-primary">${d || '-'}</span>` },
                     { data: 'jancode', render: d => d && d !== '-' ? `<code>${d}</code>` : '<span class="text-muted">—</span>' },
                     { data: 'color', render: d => `<strong>${d}</strong>` },

@@ -10,6 +10,7 @@ use App\Models\Jancode;
 use App\Models\JancodeLogs;
 use App\Models\PalletAddress;
 use App\Models\PalletAssignmentDetail;
+use App\Support\JancodeCode;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -152,12 +153,19 @@ class CartonOutController extends Controller
             ], 400);
         }
 
-        $barcode = preg_replace('/[^0-9]/', '', (string) $request->input('jancode'));
+        // Dukung case mix jancode ("jan1-jan2") dan karton broken ("...B").
+        $barcode = JancodeCode::normalize((string) $request->input('jancode'));
         if ($barcode === '') {
             return response()->json(['success' => false, 'message' => 'Barcode tidak boleh kosong'], 400);
         }
 
-        $row = $this->rowsPayload($batch)->firstWhere('jancode', $barcode);
+        $rows = $this->rowsPayload($batch);
+
+        $row = $rows->first(
+            fn (array $r): bool => JancodeCode::normalize((string) ($r['jancode'] ?? '')) === $barcode
+        ) ?? $rows->first(
+            fn (array $r): bool => JancodeCode::matches((string) ($r['jancode'] ?? ''), $barcode)
+        );
         if (!$row) {
             return response()->json([
                 'success' => false,

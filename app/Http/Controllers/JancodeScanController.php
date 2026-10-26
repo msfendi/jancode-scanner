@@ -8,6 +8,7 @@ use App\Models\Jancode;
 use App\Models\JancodeLogs;
 use App\Models\ScanBatch;
 use App\Services\ScannerJoinService;
+use App\Support\JancodeCode;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -504,7 +505,9 @@ class JancodeScanController extends Controller
     // POST scan — 1 scan = 1 carton
     public function scan(Request $request)
     {
-        $barcode = preg_replace('/[^0-9]/', '', (string)$request->input('jancode'));
+        // Normalisasi: huruf besar, "-" dipertahankan (case mix jancode),
+        // akhiran "B" dipertahankan (karton broken).
+        $barcode = JancodeCode::normalize((string) $request->input('jancode'));
 
         if ($barcode === '') {
             return response()->json(['success' => false, 'message' => 'Barcode tidak boleh kosong'], 400);
@@ -556,11 +559,7 @@ class JancodeScanController extends Controller
         try {
             DB::beginTransaction();
 
-            $master = Jancode::where('import_batch_id', $batchId)
-                ->where('jancode', $barcode)
-                ->where('void', 'false')
-                ->lockForUpdate()
-                ->first();
+            $master = $this->findMasterForBarcode($batchId, $barcode);
 
             if (!$master) {
                 DB::rollBack();
@@ -667,6 +666,16 @@ class JancodeScanController extends Controller
             return response()->json($guard, 422);
         }
 
+        // Partial scan sesuai kedatangan: setiap submit dicatat dengan kode
+        // surat jalan / catatan agar bisa dilacak per kedatangan.
+        $validated = $request->validate([
+            'surat_jalan' => 'nullable|string|max:100',
+            'notes'       => 'nullable|string|max:500',
+        ]);
+
+        $suratJalan = trim((string) ($validated['surat_jalan'] ?? ''));
+        $userNotes  = trim((string) ($validated['notes'] ?? ''));
+
         try {
             DB::beginTransaction();
 
@@ -703,7 +712,12 @@ class JancodeScanController extends Controller
                 'receive_qty'     => 0,
                 'balance'         => 0,
                 'total_qty'       => $totalCarton,
-                'notes'           => "Batch scan {$unsubmittedCount} karton pada {$batch->group_label} oleh " . (auth()->user()?->name ?? 'Operator'),
+                'surat_jalan'     => $suratJalan !== '' ? $suratJalan : null,
+                'notes'           => trim(
+                    "Batch scan {$unsubmittedCount} karton pada {$batch->group_label} oleh "
+                    . (auth()->user()?->name ?? 'Operator')
+                    . ($userNotes !== '' ? " | Catatan: {$userNotes}" : '')
+                ),
             ]);
 
             // Tandai log tersubmit
@@ -750,6 +764,8 @@ class JancodeScanController extends Controller
             'batch_no'          => $batchNo,
             'batch_id'          => $scanBatch->id,
             'batch_scanned_qty' => $unsubmittedCount,
+            'surat_jalan'       => $suratJalan !== '' ? $suratJalan : null,
+            'notes'             => $userNotes !== '' ? $userNotes : null,
         ]);
     }
 
@@ -864,6 +880,7 @@ class JancodeScanController extends Controller
                     'balance'     => $b->balance,
                     'total_qty'   => $b->total_qty,
                     'user_name'   => $b->user ? $b->user->name : 'Operator',
+                    'surat_jalan' => $b->surat_jalan ?: '-',
                     'notes'       => $b->notes ?: '-',
                 ];
             });
@@ -993,6 +1010,73 @@ class JancodeScanController extends Controller
         }
 
         return $batch;
+    }
+
+    /**
+     * Cari master jancode untuk barcode hasil scan.
+     *
+     * Mendukung:
+     *  - jancode tunggal
+     *  - case mix jancode: scan salah satu bagian dari "jan1-jan2"
+     *  - karton broken: kode berakhiran "B"
+     *
+     * Exact match diprioritaskan supaya kode normal tidak tertukar dengan
+     * varian broken.
+     */
+    private function findMasterForBarcode(int $batchId, string $barcode): ?Jancode
+    {
+        $master = $this->queryMasterForBarcode($batchId, $barcode);
+
+        if ($master) {
+            return $master;
+        }
+
+        // Fallback kompatibilitas: sebagian scanner mengirim prefix/suffix
+        // non-jancode (mis. "]C1"). Coba lagi dengan digit saja, kecuali bila
+        // kode memang varian broken (akhiran B).
+        $digits = preg_replace('/[^0-9]/', '', $barcode);
+
+        if (
+            $digits !== ''
+            && $digits !== $barcode
+            && strlen($digits) === JancodeCode::LENGTH
+            && ! JancodeCode::isBroken($barcode)
+        ) {
+            return $this->queryMasterForBarcode($batchId, $digits);
+        }
+
+        return null;
+    }
+
+    /**
+     * Query kandidat master berdasarkan barcode (exact / bagian kode gabungan).
+     */
+    private function queryMasterForBarcode(int $batchId, string $barcode): ?Jancode
+    {
+        $parts = JancodeCode::parts($barcode);
+
+        $candidates = Jancode::query()
+            ->where('import_batch_id', $batchId)
+            ->where('void', 'false')
+            ->where(function ($query) use ($barcode, $parts) {
+                $query->where('jancode', $barcode);
+
+                foreach ($parts as $part) {
+                    $digits = preg_replace('/[^0-9]/', '', $part);
+
+                    if ($digits !== '') {
+                        $query->orWhere('jancode', 'like', '%' . $digits . '%');
+                    }
+                }
+            })
+            ->lockForUpdate()
+            ->get();
+
+        return $candidates->first(
+            fn (Jancode $row): bool => JancodeCode::normalize($row->jancode) === $barcode
+        ) ?? $candidates->first(
+            fn (Jancode $row): bool => JancodeCode::matches($row->jancode, $barcode)
+        );
     }
 
     private function unsubmittedCount(int $batchId): int

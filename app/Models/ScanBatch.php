@@ -20,6 +20,7 @@ class ScanBatch extends Model
         'balance',
         'total_qty',
         'notes',
+        'surat_jalan',
     ];
 
     public function jancode()

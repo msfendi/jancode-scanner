@@ -49,6 +49,42 @@ We would like to extend our thanks to the following sponsors for funding Laravel
 - **[byte5](https://byte5.de)**
 - **[OP.GG](https://op.gg)**
 
+## Aturan khusus import & scan JANCODE
+
+### 1. Case mix jancode (2 jancode dalam 1 karton)
+Jika di Excel dua jancode berada pada satu karton yang sama (sel nomor karton
+di-merge), keduanya **tetap diimport sebagai satu baris** dengan kode:
+
+```
+4550725146768-4550725146769
+```
+
+Operator tetap bisa scan **salah satu** jancode (atau kode lengkapnya) dan
+sistem akan mencocokkannya ke baris tersebut.
+
+### 2. Karton broken (qty pcs tidak penuh)
+Jika satu jancode muncul lebih dari sekali dalam satu sheet dan salah satu
+barisnya berisi **pcs per karton di bawah ambang** (default 60), baris itu
+dianggap karton broken dan kodenya diberi akhiran **`B`**:
+
+```
+4550725100001B
+```
+
+Ambang dapat diubah lewat `.env`:
+
+```env
+BROKEN_PCS_THRESHOLD=60
+```
+
+Kode broken tetap bisa discan (exact match) dan dipisahkan dari jancode normal.
+
+### 3. Surat jalan per submit (partial scan)
+Setiap kali **Submit** batch scan, operator wajib mengisi **kode surat jalan**
+(opsional: catatan). Setiap submit = satu kedatangan, tersimpan di
+`scan_batches.surat_jalan` dan tampil di halaman **Riwayat Batch Scan**
+(`/scanner/batches`) beserta filter session/tanggal.
+
 ## RBAC (Role & Permission)
 
 Dua role bawaan (dibuat otomatis oleh migration `2026_10_22_000001_seed_rbac_roles`):

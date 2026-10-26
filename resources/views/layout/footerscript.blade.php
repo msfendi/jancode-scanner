@@ -13,6 +13,9 @@
 <script src="{{asset('vendor/jquery/jquery.min.js')}}"></script>
 <script src="{{asset('vendor/bootstrap/js/bootstrap.bundle.min.js')}}"></script>
 
+<!-- SweetAlert2 (selalu tersedia agar tombol hapus/konfirmasi tidak error) -->
+<script src="{{asset('vendor/sweetalert/sweetalert.all.js')}}"></script>
+
 <!-- Core plugin JavaScript-->
 <script src="{{asset('vendor/jquery-easing/jquery.easing.min.js')}}"></script>
 

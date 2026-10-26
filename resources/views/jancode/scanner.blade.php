@@ -138,6 +138,7 @@
                                     <small class="form-text text-muted">
                                         <i class="fas fa-info-circle"></i>
                                         Barcode harus cocok dengan salah satu jancode pada packing list. 1 scan = 1 carton.
+                                        Mendukung case mix jancode (<code>jan1-jan2</code>) dan karton broken (<code>...B</code>).
                                     </small>
                                 </div>
                                 <div class="col-lg-4 mb-2 text-right">
@@ -1170,23 +1171,52 @@
                     }
 
                     Swal.fire({
-                        title: 'Submit batch scan?',
-                        text: unsubmitted + ' carton akan disubmit.',
+                        title: 'Submit batch scan',
+                        html: '<div class="text-left">' +
+                            '<p class="small text-muted mb-2"><strong>' + unsubmitted + ' carton</strong> akan disubmit pada kedatangan ini.</p>' +
+                            '<label class="small font-weight-bold d-block mb-1">Kode Surat Jalan <span class="text-danger">*</span></label>' +
+                            '<input id="swal-surat-jalan" class="swal2-input" style="margin:0 0 .85rem 0;width:100%;" ' +
+                                'placeholder="Contoh: SJ-2026-0001" autocomplete="off">' +
+                            '<label class="small font-weight-bold d-block mb-1">Catatan <span class="text-muted">(opsional)</span></label>' +
+                            '<textarea id="swal-scan-notes" class="swal2-textarea" style="margin:0;width:100%;" ' +
+                                'placeholder="Catatan kedatangan / kondisi karton..."></textarea>' +
+                            '</div>',
                         icon: 'question', showCancelButton: true,
                         confirmButtonColor: '#28a745', cancelButtonColor: '#3085d6',
-                        confirmButtonText: 'Ya, Submit!', cancelButtonText: 'Batal'
+                        confirmButtonText: 'Ya, Submit!', cancelButtonText: 'Batal',
+                        focusConfirm: false,
+                        didOpen: function () {
+                            const el = document.getElementById('swal-surat-jalan');
+                            if (el) el.focus();
+                        },
+                        preConfirm: function () {
+                            const sj = (document.getElementById('swal-surat-jalan')?.value || '').trim();
+                            if (!sj) {
+                                Swal.showValidationMessage('Kode surat jalan wajib diisi untuk tracking kedatangan.');
+                                return false;
+                            }
+                            return {
+                                surat_jalan: sj,
+                                notes: (document.getElementById('swal-scan-notes')?.value || '').trim()
+                            };
+                        }
                     }).then(function (result) {
                         if (!result.isConfirmed) { $input.focus(); return; }
+                        const payload = result.value || {};
+
                         $.ajax({
                             url: "{{ route('scanner.submit') }}",
                             type: 'POST',
                             contentType: 'application/json',
-                            data: JSON.stringify({}),
+                            data: JSON.stringify(payload),
                             success: function (res) {
                                 renderState(res);
-                                addScanLogRow('-', 'submitted', unsubmitted + ' carton berhasil disubmit');
-                                const batchInfo = res.batch_no ? `<br><span class="badge badge-dark px-2 py-1">${res.batch_no}</span><br><small class="text-primary font-weight-bold">Akumulasi: ${res.counters.scanned} / ${res.counters.total} (Sisa: ${res.counters.balance})</small>` : '';
-                                Swal.fire({ icon: 'success', title: 'Batch Scan Disubmit!', html: `<strong>${unsubmitted} carton</strong> tersimpan.${batchInfo}` });
+                                const sjLabel = payload.surat_jalan ? ' · ' + payload.surat_jalan : '';
+                                addScanLogRow('-', 'submitted', unsubmitted + ' carton berhasil disubmit' + sjLabel);
+                                const batchInfo = res.batch_no ? `<br><span class="badge badge-dark px-2 py-1">${res.batch_no}</span>` : '';
+                                const sjInfo = payload.surat_jalan ? `<br><small class="text-muted">Surat Jalan: <strong>${payload.surat_jalan}</strong></small>` : '';
+                                const counterInfo = res.counters ? `<br><small class="text-primary font-weight-bold">Akumulasi: ${res.counters.scanned} / ${res.counters.total} (Sisa: ${res.counters.balance})</small>` : '';
+                                Swal.fire({ icon: 'success', title: 'Batch Scan Disubmit!', html: `<strong>${unsubmitted} carton</strong> tersimpan.${batchInfo}${sjInfo}${counterInfo}` });
                             },
                             error: function (xhr) {
                                 const data = xhr.responseJSON || {};
