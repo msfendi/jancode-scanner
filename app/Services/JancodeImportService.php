@@ -697,6 +697,10 @@ class JancodeImportService
         $standaloneJanStats = []; // [jan => ['rows' => n, 'max_pcs' => n]]
 
         foreach ($rows as $statRow) {
+            if ($this->isSummaryRow($statRow)) {
+                continue;
+            }
+
             if (!empty($statRow['carton_group']) || !empty($statRow['carton_merged'])) {
                 continue;
             }
@@ -738,27 +742,9 @@ class JancodeImportService
                 continue;
             }
 
-            // R6: Bukan baris ringkasan
-            if (
-                str_contains($colA, 'TOTAL') ||
-                str_contains($colA, 'QTY') ||
-                str_contains($colA, 'GRAND TOTAL') ||
-                str_contains($keterangan, 'TOTAL') ||
-                str_contains(strtoupper($r['color_inherited']), 'TOTAL')
-            ) {
-                $skipped[] = [
-                    'source_row'    => (string)$rowNum,
-                    'reason'        => 'SUMMARY_ROW',
-                    'reason_label'  => 'Baris ringkasan/total (TOTAL, QTY, GRAND TOTAL)',
-                    'jan_code'      => $cleanJan ?: $jan,
-                    'color'         => $r['color_inherited'],
-                    'size'          => '-',
-                    'keterangan'    => $keterangan ?: 'TOTAL',
-                    'total_carton'  => $r['total_carton'],
-                    'carton_merged' => (bool)$r['carton_merged'],
-                    'raw_data'      => $r,
-                    'notes'         => 'Diabaikan karena baris total',
-                ];
+            // R6: Baris ringkasan/total (TOTAL / GRAND TOTAL / QTY) diabaikan
+            // sepenuhnya: tidak diimport dan TIDAK dihitung sebagai baris gagal.
+            if ($this->isSummaryRow($r)) {
                 continue;
             }
 
@@ -1149,6 +1135,52 @@ class JancodeImportService
             'items'   => $items,
             'skipped' => $skipped,
         ];
+    }
+
+    /**
+     * Baris ringkasan/total (TOTAL / GRAND TOTAL / QTY) di Excel diabaikan
+     * sepenuhnya: tidak diimport dan tidak dihitung sebagai baris gagal.
+     *
+     * Pada banyak file, sel "TOTAL" ada di kolom warna dan di-merge melebar
+     * (mis. D14:N14), sehingga nilainya ikut terbaca di kolom JAN. Karena itu
+     * pengecekan dilakukan ke beberapa kolom sekaligus.
+     */
+    private function isSummaryRow(array $row): bool
+    {
+        $fields = [
+            (string) ($row['col_a'] ?? ''),
+            (string) ($row['col_d'] ?? ''),
+            (string) ($row['color_inherited'] ?? ''),
+            (string) ($row['keterangan'] ?? ''),
+            (string) ($row['jan_code'] ?? ''),
+        ];
+
+        foreach ($fields as $field) {
+            $value = strtoupper(trim($field));
+
+            if ($value === '') {
+                continue;
+            }
+
+            if (str_contains($value, 'TOTAL') || str_contains($value, 'GRAND')) {
+                return true;
+            }
+        }
+
+        if (str_contains(strtoupper(trim((string) ($row['col_a'] ?? ''))), 'QTY')) {
+            return true;
+        }
+
+        // Baris total yang TIDAK diberi label "TOTAL" (hanya berisi agregat
+        // size + qty karton, tanpa warna & tanpa JAN). Baris data selalu punya
+        // JAN (termasuk hasil merge) atau warna, jadi pola ini aman.
+        $isGrouped   = ! empty($row['carton_group']);
+        $hasColorCell = trim((string) ($row['col_d'] ?? '')) !== '';
+        $hasJan       = trim((string) ($row['jan_code'] ?? '')) !== '';
+        $hasSizes     = ! empty($row['sizes_filled']);
+        $hasCarton    = ($row['total_carton'] ?? null) !== null;
+
+        return ! $isGrouped && ! $hasColorCell && ! $hasJan && $hasSizes && $hasCarton;
     }
 
     /**

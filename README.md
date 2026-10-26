@@ -97,8 +97,10 @@ karton di-merge). Keduanya diimport sebagai **SATU baris data**:
 - **total pcs** = qty karton × qty per karton
 
 Karena tetap satu jancode, scan & penempatan pallet berjalan seperti biasa.
-Baris TOTAL / GRAND TOTAL tetap dilewati, dan JAN yang tidak valid (bukan 13
-digit) tetap ditandai gagal.
+Baris **TOTAL / GRAND TOTAL / QTY** — termasuk baris total yang tidak diberi
+label (hanya berisi agregat size & qty karton) — **diabaikan sepenuhnya**:
+tidak diimport dan tidak dihitung sebagai baris gagal. Hanya JAN yang tidak
+valid (bukan 13 digit) yang ditandai gagal.
 
 ### 5. Layout pallet (BR-07)
 Row **B–I**, kolom **a & b = 14 posisi**, kolom **c & d = 19 posisi**
