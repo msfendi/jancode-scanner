@@ -107,22 +107,32 @@
         user-select: none;
     }
 
-    /* Kotak Pallet */
+    /* Kotak Pallet — hanya alamat (mis. B-a-01), teks putih satu baris */
     .pallet-box {
         flex: 1;
-        height: 44px;
-        padding: 2px 4px;
-        font-size: 11px;
-        border-radius: 5px;
+        height: 38px;
+        padding: 0 4px;
+        font-size: 13px;
+        font-weight: 800;
+        letter-spacing: 0.01em;
+        font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        border-radius: 6px;
         display: flex;
-        flex-direction: column;
-        justify-content: center;
         align-items: center;
+        justify-content: center;
         text-align: center;
+        white-space: nowrap;
+        overflow: hidden;
+        color: #fff;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.28);
         cursor: pointer;
         transition: transform 0.12s ease, box-shadow 0.12s ease;
         border: 1px solid rgba(0,0,0,0.12);
-        line-height: 1.2;
+        line-height: 1;
+    }
+    .pallet-code {
+        font: inherit;
+        line-height: 1;
     }
     .pallet-box:hover {
         transform: translateY(-2px) scale(1.02);
@@ -139,8 +149,8 @@
     }
     /* Status isi pallet: kosong (hijau), terisi belum penuh (kuning), penuh 42 (merah) */
     .pallet-partial {
-        background-color: #f6c23e;
-        color: #3d2f00;
+        background-color: #e0a800;
+        color: #fff;
     }
     .pallet-full {
         background-color: #e74a3b;
@@ -306,8 +316,9 @@
                             <i class="fas fa-lightbulb fa-lg text-warning mr-3"></i>
                             <div>
                                 Langkah <strong>5</strong>: setelah karton di-<em>scan</em>, tempatkan pada lokasi pallet.
-                                Warna <span class="text-danger font-weight-bold">merah</span> = pallet terisi,
-                                <span class="text-success font-weight-bold">hijau</span> = kosong.
+                                Warna <span class="text-success font-weight-bold">hijau</span> = kosong,
+                                <span class="text-warning font-weight-bold">kuning</span> = terisi sebagian,
+                                <span class="text-danger font-weight-bold">merah</span> = penuh.
                                 Satu pallet maksimal <strong>42 karton</strong> dengan kompatibilitas <strong>1 Country &amp; 1 Style/OCF</strong> per row.
                             </div>
                         </div>
@@ -582,15 +593,13 @@
                                                             @if($addrA)
                                                                 <div class="pallet-box {{ $stateA }}{{ $multiA }}" data-pallet-id="{{ $addrA->id }}" data-code="{{ $addrA->code }}" onclick="openPalletModal({{ $addrA->id }})"
                                                                      title="{{ $addrA->code }}: {{ $isOccA ? $cartonsA . '/42 Karton (' . $addrA->assignment->style . ' - ' . $addrA->assignment->country . ')' : 'Kosong (Maks 42)' }}{{ $addrA->country_mode === 'multi' ? ' [Multi Negara]' : ' [1 Negara]' }}">
-                                                                    <span class="font-weight-bold">{{ $addrA->code }}</span>
-                                                                    <span class="small font-weight-bold">{{ $isOccA ? $cartonsA . ' ctn' : '0' }}</span>
+                                                                    <span class="pallet-code">{{ $addrA->code }}</span>
                                                                 </div>
                                                             @endif
                                                             @if($addrB)
                                                                 <div class="pallet-box {{ $stateB }}{{ $multiB }}" data-pallet-id="{{ $addrB->id }}" data-code="{{ $addrB->code }}" onclick="openPalletModal({{ $addrB->id }})"
                                                                      title="{{ $addrB->code }}: {{ $isOccB ? $cartonsB . '/42 Karton (' . $addrB->assignment->style . ' - ' . $addrB->assignment->country . ')' : 'Kosong (Maks 42)' }}{{ $addrB->country_mode === 'multi' ? ' [Multi Negara]' : ' [1 Negara]' }}">
-                                                                    <span class="font-weight-bold">{{ $addrB->code }}</span>
-                                                                    <span class="small font-weight-bold">{{ $isOccB ? $cartonsB . ' ctn' : '0' }}</span>
+                                                                    <span class="pallet-code">{{ $addrB->code }}</span>
                                                                 </div>
                                                             @endif
                                                         </div>
@@ -628,15 +637,13 @@
                                                             @if($addrC)
                                                                 <div class="pallet-box {{ $stateC }}{{ $multiC }}" data-pallet-id="{{ $addrC->id }}" data-code="{{ $addrC->code }}" onclick="openPalletModal({{ $addrC->id }})"
                                                                      title="{{ $addrC->code }}: {{ $isOccC ? $cartonsC . '/42 Karton (' . $addrC->assignment->style . ' - ' . $addrC->assignment->country . ')' : 'Kosong (Maks 42)' }}{{ $addrC->country_mode === 'multi' ? ' [Multi Negara]' : ' [1 Negara]' }}">
-                                                                    <span class="font-weight-bold">{{ $addrC->code }}</span>
-                                                                    <span class="small font-weight-bold">{{ $isOccC ? $cartonsC . ' ctn' : '0' }}</span>
+                                                                    <span class="pallet-code">{{ $addrC->code }}</span>
                                                                 </div>
                                                             @endif
                                                             @if($addrD)
                                                                 <div class="pallet-box {{ $stateD }}{{ $multiD }}" data-pallet-id="{{ $addrD->id }}" data-code="{{ $addrD->code }}" onclick="openPalletModal({{ $addrD->id }})"
                                                                      title="{{ $addrD->code }}: {{ $isOccD ? $cartonsD . '/42 Karton (' . $addrD->assignment->style . ' - ' . $addrD->assignment->country . ')' : 'Kosong (Maks 42)' }}{{ $addrD->country_mode === 'multi' ? ' [Multi Negara]' : ' [1 Negara]' }}">
-                                                                    <span class="font-weight-bold">{{ $addrD->code }}</span>
-                                                                    <span class="small font-weight-bold">{{ $isOccD ? $cartonsD . ' ctn' : '0' }}</span>
+                                                                    <span class="pallet-code">{{ $addrD->code }}</span>
                                                                 </div>
                                                             @endif
                                                         </div>
@@ -1821,9 +1828,7 @@
                     if(!hadClass) changedCount++;
                     applyPalletStatus(box, cartons, maxCtn);
                     box.classList.toggle('pallet-multi', info.country_mode === 'multi');
-                    // update inner count text (second span)
-                    const spans = box.querySelectorAll('span');
-                    if(spans[1]) spans[1].textContent = cartons > 0 ? (cartons + ' ctn') : '0';
+                    // Kotak 2D hanya menampilkan alamat pallet; qty karton ada di title & modal.
                     // title
                     box.title = info.code + ': ' + (cartons > 0
                         ? (cartons + '/' + maxCtn + ' Karton (' + (info.style || '-') + ' - ' + (info.country || '-') + ')')

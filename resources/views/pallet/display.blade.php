@@ -220,9 +220,13 @@
             border-radius: 2px;
             overflow: hidden;
             font-weight: 800;
-            font-size: clamp(6px, 0.62vw, 10px);
+            font-size: clamp(6px, 0.6vw, 10px);
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+            letter-spacing: 0;
+            white-space: nowrap;
             line-height: 1;
-            color: #05210f;
+            color: #fff;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
             background: var(--green);
             transition: background-color 0.2s ease, box-shadow 0.2s ease;
             user-select: none;
@@ -234,8 +238,8 @@
             box-shadow: 0 0 0 1px #fff;
         }
 
-        .box.vacant { background: var(--green); color: #05210f; }
-        .box.partial { background: var(--yellow); color: #2b1a00; }
+        .box.vacant { background: var(--green); color: #fff; }
+        .box.partial { background: var(--yellow); color: #fff; }
         .box.full { background: var(--red); color: #fff; }
 
         .box.multi {
@@ -634,7 +638,8 @@
                     box.classList.remove('vacant', 'partial', 'full');
                     box.classList.add(next);
                     box.classList.toggle('multi', p.country_mode === 'multi');
-                    box.textContent = c > 0 ? c : '';
+                    // Tampilkan alamat pallet (mis. B-a-01), bukan qty karton.
+                    box.textContent = p.code || '';
                     box.setAttribute('data-pallet-id', p.id);
                     box.title = p.code + ' — ' + (c > 0
                         ? (c + '/' + m + ' karton · ' + (p.style || '-') + ' · ' + (p.country || '-'))
