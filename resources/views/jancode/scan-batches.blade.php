@@ -42,13 +42,16 @@
                                 <div class="col-md-4 mb-2">
                                     <label for="filterSession" class="small font-weight-bold mb-1">Session</label>
                                     <select id="filterSession" class="form-control form-control-sm">
-                                        <option value="">Semua Session</option>
+                                        <option value="all" @selected(!$currentSessionId)>Semua Session</option>
                                         @foreach($sessions as $s)
-                                            <option value="{{ $s->id }}">
+                                            <option value="{{ $s->id }}" @selected((string) $currentSessionId === (string) $s->id)>
                                                 {{ $s->code }}{{ (string) $currentSessionId === (string) $s->id ? ' (aktif)' : '' }}
                                             </option>
                                         @endforeach
                                     </select>
+                                    <div class="small text-muted mt-1">
+                                        Default menampilkan session aktif. Pilih "Semua Session" untuk melihat riwayat lama.
+                                    </div>
                                 </div>
                                 <div class="col-md-3 mb-2">
                                     <label for="filterDateFrom" class="small font-weight-bold mb-1">Tanggal Scan (Dari)</label>
@@ -230,6 +233,8 @@
 
     <script>
         $(document).ready(function () {
+            const currentSessionId = @json($currentSessionId);
+
             function updateBatchSummary(api) {
                 const rows = api.rows({ search: 'applied' }).data().toArray();
                 const sum = (key) => rows.reduce((total, row) => total + (Number(row[key]) || 0), 0);
@@ -252,7 +257,7 @@
                     dataType: "json",
                     dataSrc: "data",
                     data: function (d) {
-                        d.session_id = $('#filterSession').val() || '';
+                        d.session_id = $('#filterSession').val() || 'all';
                         d.date_from = $('#filterDateFrom').val() || '';
                         d.date_to = $('#filterDateTo').val() || '';
                     }
@@ -304,7 +309,7 @@
             });
 
             $('#btnResetFilter').click(function () {
-                $('#filterSession').val('');
+                $('#filterSession').val(currentSessionId ? String(currentSessionId) : 'all');
                 $('#filterDateFrom').val('');
                 $('#filterDateTo').val('');
                 table.ajax.reload();

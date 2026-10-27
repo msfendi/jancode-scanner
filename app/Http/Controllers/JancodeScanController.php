@@ -834,7 +834,7 @@ class JancodeScanController extends Controller
     {
         if ($request->ajax()) {
             $request->validate([
-                'session_id' => 'nullable|integer',
+                'session_id' => 'nullable|string|max:20',
                 'date_from'  => 'nullable|date',
                 'date_to'    => 'nullable|date',
             ]);
@@ -843,10 +843,20 @@ class JancodeScanController extends Controller
 
             $query = ScanBatch::with(['jancode', 'user', 'importBatch', 'session'])->latest();
 
-            // Filter session bersifat opsional. Bila dikosongkan ("Semua Session"),
-            // seluruh riwayat termasuk session sebelumnya tetap tampil.
-            if ($request->filled('session_id')) {
-                $query->where('session_id', $request->input('session_id'));
+            // Default: hanya batch dari session aktif. Kirim session_id=all
+            // untuk menampilkan riwayat dari seluruh session.
+            $sessionFilter = $request->input('session_id');
+            if ($sessionFilter === null || $sessionFilter === '') {
+                $sessionFilter = ImportSession::currentId();
+                $sessionFilter = $sessionFilter !== null ? (string) $sessionFilter : 'all';
+            }
+
+            if ($sessionFilter !== 'all') {
+                if (!ctype_digit((string) $sessionFilter)) {
+                    return response()->json(['data' => []]);
+                }
+
+                $query->where('session_id', (int) $sessionFilter);
             }
 
             if ($request->filled('date_from')) {
