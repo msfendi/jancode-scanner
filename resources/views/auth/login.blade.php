@@ -262,7 +262,7 @@
 
         .form-wrap {
             width: 100%;
-            max-width: 420px;
+            max-width: 480px;
             animation: rise 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
         }
         @keyframes rise {
@@ -275,8 +275,8 @@
         .form-card {
             background: #fff;
             border: 1px solid #e8eef7;
-            border-radius: 24px;
-            padding: 38px 36px;
+            border-radius: 26px;
+            padding: 44px 40px;
             box-shadow:
                 0 30px 70px -30px rgba(15, 23, 42, 0.38),
                 0 8px 24px -12px rgba(15, 23, 42, 0.12);
@@ -295,20 +295,20 @@
             border: 1px solid #dbe8ff;
             border-radius: 999px;
             padding: 6px 11px;
-            margin-bottom: 18px;
+            margin-bottom: 20px;
         }
 
         .form-card h2 {
-            font-size: 26px;
+            font-size: 28px;
             letter-spacing: -0.03em;
             margin: 0 0 8px;
             font-weight: 800;
         }
         .form-card .sub {
-            font-size: 13px;
+            font-size: 13.5px;
             color: var(--slate);
             line-height: 1.6;
-            margin: 0 0 26px;
+            margin: 0 0 28px;
         }
 
         .flash {
@@ -328,16 +328,16 @@
         .flash.warning { background: #fffbeb; border-color: #fde68a; color: #b45309; }
         .flash.info    { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
 
-        .field-group { margin-bottom: 18px; }
+        .field-group { margin-bottom: 20px; }
 
         .field-label {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            font-size: 12px;
+            font-size: 12.5px;
             font-weight: 700;
             color: #334155;
-            margin: 0 0 7px;
+            margin: 0 0 8px;
         }
 
         .field {
@@ -345,11 +345,11 @@
             display: flex;
             align-items: center;
             gap: 10px;
-            height: 52px;
-            padding: 0 14px;
+            height: 56px;
+            padding: 0 16px;
             background: #f8fafc;
             border: 1.5px solid var(--line);
-            border-radius: 14px;
+            border-radius: 15px;
             transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
         }
         .field:focus-within {
@@ -373,7 +373,7 @@
             outline: 0;
             background: transparent;
             font: inherit;
-            font-size: 14px;
+            font-size: 14.5px;
             color: #0f172a;
         }
         .field input::placeholder { color: #a3aec2; }
@@ -418,14 +418,14 @@
             justify-content: center;
             gap: 10px;
             width: 100%;
-            height: 52px;
+            height: 56px;
             margin-top: 8px;
             border: 0;
-            border-radius: 14px;
+            border-radius: 15px;
             background: linear-gradient(100deg, var(--blue), var(--indigo));
             color: #fff;
             font: inherit;
-            font-size: 14px;
+            font-size: 14.5px;
             font-weight: 700;
             letter-spacing: 0.01em;
             cursor: pointer;
@@ -445,7 +445,7 @@
             display: flex;
             align-items: center;
             gap: 12px;
-            margin: 22px 0;
+            margin: 24px 0;
             color: #94a3b8;
             font-size: 10px;
             font-weight: 700;
@@ -464,13 +464,13 @@
             align-items: center;
             justify-content: center;
             gap: 8px;
-            height: 48px;
+            height: 52px;
             border: 1.5px solid var(--line);
-            border-radius: 14px;
+            border-radius: 15px;
             background: #fff;
             color: #334155;
             font: inherit;
-            font-size: 13px;
+            font-size: 13.5px;
             font-weight: 700;
             text-decoration: none;
             transition: 0.18s;
