@@ -92,6 +92,7 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/jancode/packing-lists', [JancodeController::class, 'packingLists'])->name('jancode.packingLists')->middleware(['auth', 'module:packing-list']);
     Route::get('/jancode/packing-lists/{packingList}/jancodes', [JancodeController::class, 'packingListJancodes'])->name('jancode.packingListJancodes')->middleware(['auth', 'module:packing-list']);
     Route::post('/jancode/packing-lists/{packingList}/finish', [JancodeController::class, 'finishPackingList'])->name('jancode.packingListFinish')->middleware(['auth', 'can:packing-list.manage']);
+    Route::post('/jancode/packing-lists/{packingList}/clear-pallets', [\App\Http\Controllers\PalletController::class, 'clearForPackingList'])->name('jancode.packingListClearPallets')->middleware(['auth', 'module:pallet', 'can:pallet.manage']);
     Route::get('/jancode/packing-lists/{packingList}/report/pdf', [JancodeController::class, 'packingListReportPdf'])->name('jancode.packingListReportPdf')->middleware(['auth', 'module:packing-list']);
     Route::get('/jancode/packing-lists/{packingList}/report/excel', [JancodeController::class, 'packingListReportExcel'])->name('jancode.packingListReportExcel')->middleware(['auth', 'module:packing-list']);
     Route::delete('/jancode/packing-lists/{packingList}', [JancodeController::class, 'destroyPackingList'])->name('jancode.packingListDestroy')->middleware(['auth', 'can:packing-list.manage']);
@@ -105,6 +106,7 @@ Route::group(['middleware' => 'auth'], function () {
         Route::get('/stream', [\App\Http\Controllers\PalletController::class, 'stream'])->name('stream');
         Route::get('/find-jancode', [\App\Http\Controllers\PalletController::class, 'findJancode'])->name('findJancode');
         Route::post('/{id}/country-mode', [\App\Http\Controllers\PalletController::class, 'updateCountryMode'])->name('countryMode');
+        Route::post('/color-rules', [\App\Http\Controllers\PalletController::class, 'updateColorRules'])->name('colorRules')->middleware('can:pallet.manage');
         Route::get('/detail/{id}', [\App\Http\Controllers\PalletController::class, 'getDetail'])->name('detail');
         Route::post('/store', [\App\Http\Controllers\PalletController::class, 'storeAssignment'])->name('store');
         Route::post('/move', [\App\Http\Controllers\PalletController::class, 'moveCarton'])->name('move');

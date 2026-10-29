@@ -257,6 +257,7 @@
             const JANCODE_URL = "{{ route('jancode.packingListJancodes', ['packingList' => '__id__']) }}";
             const DESTROY_URL = "{{ route('jancode.packingListDestroy', ['packingList' => '__id__']) }}";
             const FINISH_URL = "{{ route('jancode.packingListFinish', ['packingList' => '__id__']) }}";
+            const CLEAR_PALLETS_URL = "{{ route('jancode.packingListClearPallets', ['packingList' => '__id__']) }}";
             const REPORT_PDF_URL = "{{ route('jancode.packingListReportPdf', ['packingList' => '__id__']) }}";
             const REPORT_EXCEL_URL = "{{ route('jancode.packingListReportExcel', ['packingList' => '__id__']) }}";
             const CSRF_TOKEN = $('meta[name="csrf-token"]').attr('content');
@@ -659,6 +660,83 @@
                     '</ul>' +
                     '<p class="mb-0 mt-2 text-muted">Setelah di-Finish, report PDF &amp; Excel bisa diunduh.</p></div>';
 
+                function clearPallets(plId, pallets) {
+                    return $.ajax({
+                        url: CLEAR_PALLETS_URL.replace('__id__', plId),
+                        type: 'POST',
+                        headers: {
+                            'X-CSRF-TOKEN': CSRF_TOKEN,
+                            'Accept': 'application/json'
+                        },
+                    });
+                }
+
+                function askToClearPallets(plId, pallets) {
+                    if (!pallets || !pallets.length) {
+                        table.ajax.reload(null, false);
+                        return;
+                    }
+
+                    const list = pallets.map(function (p) {
+                        return '<li><strong>' + esc(p.code) + '</strong> <span class="text-muted">(' +
+                            esc(String(p.cartons)) + ' karton)</span></li>';
+                    }).join('');
+
+                    const html = '<div class="text-left small">' +
+                        '<p class="mb-2">Packing list sudah <strong>Finished</strong>. Apakah Anda ingin mengosongkan pallet yang dituju?</p>' +
+                        '<ul class="mb-2 pl-3">' + list + '</ul>' +
+                        '<p class="mb-0 text-muted">Jika Ya, karton akan ditarik dari pallet dan pallet yang kosong bisa dipakai lagi.</p>' +
+                        '</div>';
+
+                    if (typeof Swal === 'undefined') {
+                        if (!confirm('Kosongkan pallet yang dituju?')) {
+                            table.ajax.reload(null, false);
+                            return;
+                        }
+
+                        clearPallets(plId, pallets).done(function (res) {
+                            alert(res.message || 'Pallet berhasil dikosongkan.');
+                            table.ajax.reload(null, false);
+                        }).fail(function (xhr) {
+                            alert((xhr.responseJSON && xhr.responseJSON.message) || 'Gagal mengosongkan pallet.');
+                            table.ajax.reload(null, false);
+                        });
+                        return;
+                    }
+
+                    Swal.fire({
+                        icon: 'question',
+                        title: 'Kosongkan pallet?',
+                        html: html,
+                        showCancelButton: true,
+                        confirmButtonText: 'Ya, kosongkan',
+                        cancelButtonText: 'Biarkan',
+                        confirmButtonColor: '#e74a3b',
+                        focusCancel: true,
+                    }).then(function (result) {
+                        if (!result.isConfirmed) {
+                            table.ajax.reload(null, false);
+                            return;
+                        }
+
+                        clearPallets(plId, pallets).done(function (res) {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Pallet dikosongkan',
+                                text: res.message || 'Karton berhasil ditarik dari pallet.',
+                                timer: 2600,
+                                showConfirmButton: false,
+                            });
+                            table.ajax.reload(null, false);
+                        }).fail(function (xhr) {
+                            const msg = (xhr.responseJSON && xhr.responseJSON.message) ||
+                                'Gagal mengosongkan pallet.';
+                            Swal.fire({ icon: 'error', title: 'Gagal', text: msg });
+                            table.ajax.reload(null, false);
+                        });
+                    });
+                }
+
                 function run() {
                     $.ajax({
                         url: FINISH_URL.replace('__id__', plId),
@@ -668,6 +746,13 @@
                             'Accept': 'application/json'
                         },
                     }).done(function (res) {
+                        const pallets = res.pallets_to_clear || [];
+
+                        if (pallets.length) {
+                            askToClearPallets(plId, pallets);
+                            return;
+                        }
+
                         if (typeof Swal !== 'undefined') {
                             Swal.fire({
                                 icon: 'success',

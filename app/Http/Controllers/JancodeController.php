@@ -978,9 +978,10 @@ class JancodeController extends Controller
         // Idempotent: sudah finished pada revisi yang sama.
         if ($packingList->isFinishedForBatch($batch->id) && is_array($packingList->finished_snapshot)) {
             return response()->json([
-                'success'     => true,
-                'message'     => 'Packing list ini sudah Finished.',
-                'finished_at' => $packingList->finished_at?->format('d/m/Y H:i'),
+                'success'          => true,
+                'message'          => 'Packing list ini sudah Finished.',
+                'finished_at'      => $packingList->finished_at?->format('d/m/Y H:i'),
+                'pallets_to_clear' => $this->palletsForBatch($packingList, $batch),
             ]);
         }
 
@@ -1030,11 +1031,39 @@ class JancodeController extends Controller
         }
 
         return response()->json([
-            'success'     => true,
-            'message'     => 'Packing list berhasil di-Finish. Report PDF & Excel sudah tersedia.',
-            'finished_at' => $packingList->finished_at?->format('d/m/Y H:i'),
-            'finished_by' => $packingList->finishedBy?->name ?: $request->user()?->name,
+            'success'          => true,
+            'message'          => 'Packing list berhasil di-Finish. Report PDF & Excel sudah tersedia.',
+            'finished_at'      => $packingList->finished_at?->format('d/m/Y H:i'),
+            'finished_by'      => $packingList->finishedBy?->name ?: $request->user()?->name,
+            'pallets_to_clear' => $this->palletsForBatch($packingList, $batch),
         ]);
+    }
+
+    /**
+     * Daftar pallet yang masih berisi karton milik batch yang baru di-Finish.
+     *
+     * @return array<int, array{id:int,code:string,cartons:int}>
+     */
+    private function palletsForBatch(PackingList $packingList, ImportBatch $batch): array
+    {
+        return PalletAssignmentDetail::with(['assignment.address'])
+            ->where('packing_list_id', $packingList->id)
+            ->whereHas('jancode', fn ($q) => $q->where('import_batch_id', $batch->id))
+            ->get()
+            ->filter(fn ($detail) => $detail->assignment && $detail->assignment->address)
+            ->groupBy(fn ($detail) => $detail->assignment_id)
+            ->map(function ($details) {
+                $assignment = $details->first()->assignment;
+
+                return [
+                    'id'      => (int) $assignment->pallet_address_id,
+                    'code'    => $assignment->address->code,
+                    'cartons' => (int) $details->sum('qty_carton'),
+                ];
+            })
+            ->sortBy('code')
+            ->values()
+            ->all();
     }
 
     public function packingListReportPdf(PackingList $packingList)

@@ -5,9 +5,12 @@ namespace App\Http\Controllers;
 use App\Models\ImportBatch;
 use App\Models\ImportSession;
 use App\Models\Jancode;
+use App\Models\PackingList;
 use App\Models\PalletAddress;
 use App\Models\PalletAssignment;
 use App\Models\PalletAssignmentDetail;
+use App\Models\PalletColorRule;
+use App\Services\PalletColorService;
 use App\Support\JancodeCode;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -38,6 +41,25 @@ class PalletController extends Controller
 
         $addresses = $query->get();
 
+        // Warna pallet mengikuti negara + status isi (aturan dari DB).
+        $colorService = app(PalletColorService::class);
+        foreach ($addresses as $address) {
+            $assignment = $address->assignment;
+            $cartons = $assignment ? (int) $assignment->total_carton : 0;
+            $buyer = $assignment?->details->first()?->jancode?->buyer;
+            $visual = $colorService->resolve(
+                $assignment?->country,
+                $buyer,
+                $cartons,
+                (int) ($address->max_carton ?: 42)
+            );
+
+            $address->setAttribute('visual_color', $visual['color']);
+            $address->setAttribute('visual_text_color', $visual['text_color']);
+            $address->setAttribute('visual_text_shadow', $visual['text_shadow']);
+            $address->setAttribute('visual_status', $visual['status']);
+        }
+
         // Hitung statistik
         $allAddresses = PalletAddress::with('assignment')->get();
         $totalPositions = $allAddresses->count();
@@ -55,6 +77,8 @@ class PalletController extends Controller
             ->whereIn('import_batch_id', ImportBatch::active()
                 ->where('session_id', ImportSession::currentId() ?? 0)
                 ->pluck('id'))
+            // Packing list yang sudah Finish tidak boleh ditempatkan lagi.
+            ->whereDoesntHave('packingList', fn ($q) => $q->whereNotNull('finished_at'))
             ->get()
             ->map(function ($item) use ($placedCartonsPerJancode) {
                 $placed = (int)($placedCartonsPerJancode[$item->id] ?? 0);
@@ -155,6 +179,9 @@ class PalletController extends Controller
             ];
         }
 
+        $palletColorRules = $colorService->rules();
+        $palletLegend = $colorService->legend();
+
         return view('pallet.index', compact(
             'groupedRows',
             'addresses',
@@ -166,7 +193,9 @@ class PalletController extends Controller
             'totalCapacity',
             'availableJancodes',
             'rowSummaries',
-            'currentSession'
+            'currentSession',
+            'palletColorRules',
+            'palletLegend'
         ));
     }
 
@@ -259,7 +288,11 @@ class PalletController extends Controller
     {
         $this->ensureAddressesSeeded();
 
-        return view('pallet.display');
+        $colorService = app(PalletColorService::class);
+
+        return view('pallet.display', [
+            'palletLegend' => $colorService->legend(),
+        ]);
     }
 
     /**
@@ -296,6 +329,35 @@ class PalletController extends Controller
             'message' => $data['country_mode'] === 'multi'
                 ? "Pallet {$address->code} sekarang boleh diisi beberapa negara."
                 : "Pallet {$address->code} sekarang HANYA boleh 1 negara.",
+        ]);
+    }
+
+    /**
+     * Simpan perubahan warna pallet (hex) dari modal "Atur Warna Pallet".
+     */
+    public function updateColorRules(Request $request)
+    {
+        $data = $request->validate([
+            'rules' => 'required|array|min:1',
+            'rules.*.id' => 'required|integer|exists:pallet_color_rules,id',
+            'rules.*.color' => ['required', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            'rules.*.text_color' => ['required', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
+        ]);
+
+        DB::transaction(function () use ($data) {
+            foreach ($data['rules'] as $row) {
+                PalletColorRule::whereKey($row['id'])->update([
+                    'color' => strtolower($row['color']),
+                    'text_color' => strtolower($row['text_color']),
+                ]);
+            }
+        });
+
+        PalletColorService::flush();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Warna pallet berhasil disimpan.',
         ]);
     }
 
@@ -378,6 +440,8 @@ class PalletController extends Controller
 
         $cartons = $assignment ? (int) $assignment->total_carton : 0;
         $maxCarton = (int) ($address->max_carton ?: 42);
+        $buyer = $assignment?->details->first()?->jancode?->buyer;
+        $visual = app(PalletColorService::class)->resolve($assignment?->country, $buyer, $cartons, $maxCarton);
 
         return response()->json([
             'success' => true,
@@ -394,7 +458,10 @@ class PalletController extends Controller
                 'ocf'          => $assignment->ocf ?? null,
                 'countries'    => array_keys($countries),
                 'total_pcs'    => $totalPcs,
-                'status'       => $cartons <= 0 ? 'empty' : ($cartons >= $maxCarton ? 'full' : 'partial'),
+                'status'       => $visual['status'],
+                'color'        => $visual['color'],
+                'text_color'   => $visual['text_color'],
+                'text_shadow'  => $visual['text_shadow'],
             ],
             'items' => $items,
         ]);
@@ -455,29 +522,43 @@ class PalletController extends Controller
 
     private function buildLiveSnapshot(): array
     {
-        $addresses = PalletAddress::with('assignment')->orderBy('id')->get(['id','code','row_label','col_label','position_no','max_carton','country_mode']);
+        $colorService = app(PalletColorService::class);
+
+        $addresses = PalletAddress::with(['assignment.details.jancode'])
+            ->orderBy('id')
+            ->get(['id','code','row_label','col_label','position_no','max_carton','country_mode']);
         $assignments = PalletAssignment::with(['details.jancode','address'])->get();
         $maxA = PalletAssignment::max('updated_at') ?: '0';
         $maxD = PalletAssignmentDetail::max('updated_at') ?: '0';
         $maxAddr = PalletAddress::max('updated_at') ?: '0';
+        $maxRule = PalletColorRule::max('updated_at') ?: '0';
         $sum = (int) $assignments->sum('total_carton');
         $cnt = $assignments->count();
-        $hash = md5($maxA . '|' . $maxD . '|' . $maxAddr . '|' . $sum . '|' . $cnt);
+        $hash = md5($maxA . '|' . $maxD . '|' . $maxAddr . '|' . $maxRule . '|' . $sum . '|' . $cnt);
         $pallets = [];
         foreach ($addresses as $a) {
             $asg = $a->assignment;
+            $cartons = $asg ? (int) $asg->total_carton : 0;
+            $maxCarton = (int) ($a->max_carton ?: 42);
+            $buyer = $asg?->details->first()?->jancode?->buyer;
+            $visual = $colorService->resolve($asg?->country, $buyer, $cartons, $maxCarton);
+
             $pallets[] = [
                 'id' => $a->id,
                 'code' => $a->code,
                 'row' => $a->row_label,
                 'col' => $a->col_label,
                 'pos' => $a->position_no,
-                'cartons' => $asg ? (int)$asg->total_carton : 0,
+                'cartons' => $cartons,
                 'style' => $asg ? $asg->style : null,
                 'country' => $asg ? $asg->country : null,
                 'ocf' => $asg ? ($asg->ocf ?? null) : null,
                 'country_mode' => $a->country_mode ?: 'single',
-                'max_carton' => (int) ($a->max_carton ?: 42),
+                'max_carton' => $maxCarton,
+                'status' => $visual['status'],
+                'color' => $visual['color'],
+                'text_color' => $visual['text_color'],
+                'text_shadow' => $visual['text_shadow'],
             ];
         }
         $occupied = collect($pallets)->where('cartons','>',0)->count();
@@ -625,6 +706,14 @@ class PalletController extends Controller
         return DB::transaction(function () use ($addressId, $jancodeId, $requestedQty) {
             $address = PalletAddress::lockForUpdate()->findOrFail($addressId);
             $jancode = Jancode::lockForUpdate()->findOrFail($jancodeId);
+            $jancode->loadMissing('packingList');
+
+            if ($jancode->packingList?->isFinishedForBatch((int) $jancode->import_batch_id)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Packing list untuk jancode ini sudah Finished. Karton tidak bisa ditempatkan lagi ke pallet.',
+                ], 422);
+            }
 
             $activeBatch = ImportBatch::find($jancode->import_batch_id);
             if (!$activeBatch || !$activeBatch->is_active) {
@@ -1035,6 +1124,86 @@ class PalletController extends Controller
                 'message' => "Pallet berhasil dikosongkan."
             ]);
         });
+    }
+
+    /**
+     * Tarik karton milik satu packing list dari semua pallet yang dituju.
+     * Dipanggil setelah user mengonfirmasi "Kosongkan pallet?" saat Finish.
+     * Hanya detail milik batch yang di-Finish yang dihapus; karton packing
+     * list lain (jika ada di pallet yang sama) tidak ikut dikeluarkan.
+     */
+    public function clearForPackingList(Request $request, PackingList $packingList)
+    {
+        $sessionId = ImportSession::currentId();
+        if (! $sessionId || (int) $packingList->session_id !== (int) $sessionId) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Packing list tidak ditemukan pada session aktif.',
+            ], 404);
+        }
+
+        if (! $packingList->isFinished()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Packing list belum berstatus Finished.',
+            ], 422);
+        }
+
+        $batchId = (int) ($packingList->finished_import_batch_id ?: 0);
+
+        $result = DB::transaction(function () use ($packingList, $batchId) {
+            $query = PalletAssignmentDetail::with(['assignment.address'])
+                ->where('packing_list_id', $packingList->id);
+
+            if ($batchId > 0) {
+                $query->whereHas('jancode', fn ($q) => $q->where('import_batch_id', $batchId));
+            }
+
+            $details = $query->lockForUpdate()->get();
+
+            $clearedCartons = 0;
+            $codes = [];
+
+            foreach ($details->groupBy('assignment_id') as $assignmentId => $rows) {
+                $assignment = PalletAssignment::with('address')->lockForUpdate()->find($assignmentId);
+
+                if (! $assignment) {
+                    continue;
+                }
+
+                $qty = (int) $rows->sum('qty_carton');
+                $code = $assignment->address?->code;
+
+                PalletAssignmentDetail::whereIn('id', $rows->pluck('id'))->delete();
+
+                $assignment->total_carton = max(0, (int) $assignment->total_carton - $qty);
+
+                if ($assignment->total_carton <= 0) {
+                    $assignment->delete();
+                } else {
+                    $assignment->save();
+                }
+
+                $clearedCartons += $qty;
+
+                if ($code) {
+                    $codes[] = $code;
+                }
+            }
+
+            $codes = array_values(array_unique($codes));
+
+            return [
+                'success' => true,
+                'message' => $clearedCartons > 0
+                    ? 'Karton ditarik dari pallet: ' . implode(', ', $codes) . " ({$clearedCartons} karton)."
+                    : 'Tidak ada karton packing list ini yang masih berada di pallet.',
+                'cleared_cartons' => $clearedCartons,
+                'pallets' => $codes,
+            ];
+        });
+
+        return response()->json($result);
     }
 
     /**

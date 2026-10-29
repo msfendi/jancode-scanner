@@ -225,10 +225,10 @@
             letter-spacing: 0;
             white-space: nowrap;
             line-height: 1;
-            color: #fff;
-            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
-            background: var(--green);
-            transition: background-color 0.2s ease, box-shadow 0.2s ease;
+            color: var(--pallet-fg, #374151);
+            text-shadow: var(--pallet-shadow, none);
+            background: var(--pallet-bg, #e5e7eb);
+            transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
             user-select: none;
             cursor: pointer;
         }
@@ -238,9 +238,12 @@
             box-shadow: 0 0 0 1px #fff;
         }
 
-        .box.vacant { background: var(--green); color: #fff; }
-        .box.partial { background: var(--yellow); color: #fff; }
-        .box.full { background: var(--red); color: #fff; }
+        .box.vacant,
+        .box.partial,
+        .box.full {
+            background: var(--pallet-bg, #e5e7eb);
+            color: var(--pallet-fg, #374151);
+        }
 
         .box.multi {
             box-shadow: inset 0 0 0 2px var(--accent);
@@ -502,9 +505,22 @@
         <div class="spacer"></div>
 
         <div class="legend">
-            <span><i class="lg-green"></i>Kosong</span>
-            <span><i class="lg-yellow"></i>Belum penuh</span>
-            <span><i class="lg-red"></i>Penuh</span>
+            @foreach(($palletLegend['groups'] ?? []) as $group)
+                <span title="Warna terang = belum penuh; warna gelap = penuh">
+                    @if($group['partial'])
+                        <i style="background: {{ $group['partial']->color }};"></i>
+                    @endif
+                    @if($group['full'])
+                        <i style="background: {{ $group['full']->color }};"></i>
+                    @endif
+                    {{ $group['label'] }}
+                </span>
+            @endforeach
+            @if($palletLegend['empty'] ?? null)
+                <span>
+                    <i style="background: {{ $palletLegend['empty']->color }};"></i>Kosong
+                </span>
+            @endif
             <span><i class="lg-multi"></i>Multi-negara</span>
         </div>
 
@@ -638,6 +654,9 @@
                     box.classList.remove('vacant', 'partial', 'full');
                     box.classList.add(next);
                     box.classList.toggle('multi', p.country_mode === 'multi');
+                    box.style.setProperty('--pallet-bg', p.color || '#e5e7eb');
+                    box.style.setProperty('--pallet-fg', p.text_color || '#374151');
+                    box.style.setProperty('--pallet-shadow', p.text_shadow || 'none');
                     // Tampilkan alamat pallet (mis. B-a-01), bukan qty karton.
                     box.textContent = p.code || '';
                     box.setAttribute('data-pallet-id', p.id);
@@ -780,7 +799,10 @@
                 document.getElementById('dCode').textContent = p.code;
 
                 const badge = document.getElementById('dStatus');
-                badge.className = 'detail-badge ' + (p.status || 'empty');
+                badge.className = 'detail-badge';
+                badge.style.background = p.color || '#1f2a44';
+                badge.style.color = p.text_color || '#cfd6e6';
+                badge.style.textShadow = p.text_shadow || 'none';
                 badge.textContent = statusLabel(p.status) + ' · ' + p.cartons + '/' + p.max_carton;
 
                 const countries = (p.countries || []).join(', ') || '-';
@@ -828,6 +850,9 @@
             function openDetail(id) {
                 document.getElementById('dCode').textContent = 'Memuat…';
                 document.getElementById('dStatus').className = 'detail-badge';
+                document.getElementById('dStatus').style.background = '';
+                document.getElementById('dStatus').style.color = '';
+                document.getElementById('dStatus').style.textShadow = '';
                 document.getElementById('dStatus').textContent = '-';
                 document.getElementById('dMeta').innerHTML = '';
                 document.getElementById('dItemsWrap').className = 'detail-loading';

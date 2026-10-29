@@ -110,6 +110,21 @@ oleh migration `2026_10_26_000002_add_extra_cd_pallet_positions` (idempotent).
 Halaman `/pallet`, visualisasi 3D, dan display publik otomatis membaca jumlah
 posisi dari database.
 
+### 5a. Warna pallet per negara & kosongkan setelah Finish
+
+- Aturan warna disimpan di tabel **`pallet_color_rules`** (migration
+  `2026_10_29_000001_create_pallet_color_rules_table`) sehingga bisa diubah tanpa deploy.
+- Default: **Japan** biru (gelap = penuh, terang = belum penuh), **China** merah tua /
+  pink, **Taiwan** hijau, **MUJI negara lain** oranye. Pallet kosong berwarna netral.
+- Di halaman `/pallet`, tombol **Atur Warna** membuka editor warna pallet + warna teks.
+  Perubahan langsung dipakai board 2D admin dan display publik.
+- Setelah **Finish** packing list, jika masih ada karton di pallet, sistem menanyakan
+  apakah pallet yang dituju mau dikosongkan. Jika **Ya**, karton milik batch tersebut
+  ditarik dari pallet; pallet yang menjadi kosong bisa dipakai lagi. Karton packing
+  list lain di pallet yang sama tidak ikut dihapus.
+- Packing list yang sudah Finish tidak muncul lagi di daftar penempatan pallet dan
+  tidak bisa ditempatkan ulang.
+
 ## RBAC (Role & Permission)
 
 Dua role bawaan (dibuat otomatis oleh migration `2026_10_22_000001_seed_rbac_roles`):

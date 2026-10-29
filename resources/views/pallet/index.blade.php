@@ -123,10 +123,11 @@
         text-align: center;
         white-space: nowrap;
         overflow: hidden;
-        color: #fff;
-        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.28);
+        background-color: var(--pallet-bg, #e5e7eb);
+        color: var(--pallet-fg, #374151);
+        text-shadow: var(--pallet-shadow, none);
         cursor: pointer;
-        transition: transform 0.12s ease, box-shadow 0.12s ease;
+        transition: transform 0.12s ease, box-shadow 0.12s ease, background-color 0.2s ease;
         border: 1px solid rgba(0,0,0,0.12);
         line-height: 1;
     }
@@ -139,22 +140,13 @@
         box-shadow: 0 4px 10px rgba(0,0,0,0.22);
         z-index: 3;
     }
-    .pallet-vacant {
-        background-color: #1cc88a;
-        color: #fff;
-    }
+    /* Warna aktual diatur inline dari aturan DB (--pallet-bg / --pallet-fg). */
+    .pallet-vacant,
+    .pallet-partial,
+    .pallet-full,
     .pallet-occupied {
-        background-color: #e74a3b;
-        color: #fff;
-    }
-    /* Status isi pallet: kosong (hijau), terisi belum penuh (kuning), penuh 42 (merah) */
-    .pallet-partial {
-        background-color: #e0a800;
-        color: #fff;
-    }
-    .pallet-full {
-        background-color: #e74a3b;
-        color: #fff;
+        background-color: var(--pallet-bg, #e5e7eb);
+        color: var(--pallet-fg, #374151);
     }
     /* Penanda pallet mode multi-negara */
     .pallet-multi {
@@ -300,6 +292,11 @@
                             <a href="{{ route('pallet.threeD') }}" class="btn btn-sm btn-dark shadow-sm">
                                 <i class="fas fa-cubes fa-sm mr-1"></i> Visualisasi 3D
                             </a>
+                            @can('pallet.manage')
+                                <button class="btn btn-sm btn-outline-primary shadow-sm" data-toggle="modal" data-target="#palletColorModal">
+                                    <i class="fas fa-palette fa-sm mr-1"></i> Atur Warna
+                                </button>
+                            @endcan
                             <button class="btn btn-sm btn-primary shadow-sm" data-toggle="modal" data-target="#quickPlotModal">
                                 <i class="fas fa-plus fa-sm text-white-50 mr-1"></i> Plot Karton Baru
                             </button>
@@ -310,16 +307,46 @@
 
                     @include('layout.session-banner', ['currentSession' => $currentSession])
 
-                    <!-- Penjelasan -->
+                    <!-- Penjelasan & legend warna per negara -->
                     <div class="alert alert-light border shadow-sm mb-4 small">
                         <div class="d-flex">
                             <i class="fas fa-lightbulb fa-lg text-warning mr-3"></i>
                             <div>
                                 Langkah <strong>5</strong>: setelah karton di-<em>scan</em>, tempatkan pada lokasi pallet.
-                                Warna <span class="text-success font-weight-bold">hijau</span> = kosong,
-                                <span class="text-warning font-weight-bold">kuning</span> = terisi sebagian,
-                                <span class="text-danger font-weight-bold">merah</span> = penuh.
+                                Warna pallet mengikuti <strong>negara</strong>: Japan (biru), China (merah tua / pink),
+                                Taiwan (hijau), MUJI negara lain (oranye).
+                                Warna <strong>gelap</strong> = penuh 42 karton, warna <strong>terang</strong> = belum penuh.
+                                Pallet kosong berwarna netral.
                                 Satu pallet maksimal <strong>42 karton</strong> dengan kompatibilitas <strong>1 Country &amp; 1 Style/OCF</strong> per row.
+                                <div class="d-flex flex-wrap align-items-center mt-2" style="gap: 14px;">
+                                    @foreach(($palletLegend['groups'] ?? []) as $group)
+                                        <span class="d-inline-flex align-items-center text-muted">
+                                            @if($group['partial'])
+                                                <span class="d-inline-block rounded mr-1"
+                                                      style="width: 12px; height: 12px; background: {{ $group['partial']->color }}; border: 1px solid rgba(0,0,0,.18);"
+                                                      title="Belum penuh"></span>
+                                            @endif
+                                            @if($group['full'])
+                                                <span class="d-inline-block rounded mr-1"
+                                                      style="width: 12px; height: 12px; background: {{ $group['full']->color }}; border: 1px solid rgba(0,0,0,.18);"
+                                                      title="Penuh"></span>
+                                            @endif
+                                            <span class="font-weight-bold text-dark mr-1">{{ $group['label'] }}</span>
+                                        </span>
+                                    @endforeach
+                                    @if($palletLegend['empty'] ?? null)
+                                        <span class="d-inline-flex align-items-center text-muted">
+                                            <span class="d-inline-block rounded mr-1"
+                                                  style="width: 12px; height: 12px; background: {{ $palletLegend['empty']->color }}; border: 1px solid rgba(0,0,0,.18);"></span>
+                                            <span class="font-weight-bold text-dark">Kosong</span>
+                                        </span>
+                                    @endif
+                                    <span class="d-inline-flex align-items-center text-muted">
+                                        <span class="d-inline-block rounded mr-1"
+                                              style="width: 12px; height: 12px; background: transparent; border: 2px solid #4e73df;"></span>
+                                        <span class="font-weight-bold text-dark">Multi-negara</span>
+                                    </span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -357,7 +384,7 @@
                                 <div class="card-body">
                                     <div class="row no-gutters align-items-center">
                                         <div class="col mr-2">
-                                            <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">Pallet Terisi (Merah)</div>
+                                            <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">Pallet Terisi</div>
                                             <div class="h5 mb-0 font-weight-bold text-danger"><span id="statOccupied">{{ $occupiedCount }}</span> Pallet</div>
                                             <div class="small text-muted"><span id="statPct">{{ $totalPositions > 0 ? round(($occupiedCount / $totalPositions) * 100, 1) : 0 }}</span>% Terpakai</div>
                                         </div>
@@ -374,7 +401,7 @@
                                 <div class="card-body">
                                     <div class="row no-gutters align-items-center">
                                         <div class="col mr-2">
-                                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Pallet Kosong (Hijau)</div>
+                                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Pallet Kosong</div>
                                             <div class="h5 mb-0 font-weight-bold text-success"><span id="statVacant">{{ $vacantCount }}</span> Pallet</div>
                                             <div class="small text-muted">Siap ditempatkan</div>
                                         </div>
@@ -592,12 +619,14 @@
                                                             <span class="pallet-pos-tag">{{ $p }}</span>
                                                             @if($addrA)
                                                                 <div class="pallet-box {{ $stateA }}{{ $multiA }}" data-pallet-id="{{ $addrA->id }}" data-code="{{ $addrA->code }}" onclick="openPalletModal({{ $addrA->id }})"
+                                                                     style="--pallet-bg: {{ $addrA->visual_color ?? '#e5e7eb' }}; --pallet-fg: {{ $addrA->visual_text_color ?? '#374151' }}; --pallet-shadow: {{ $addrA->visual_text_shadow ?? 'none' }};"
                                                                      title="{{ $addrA->code }}: {{ $isOccA ? $cartonsA . '/42 Karton (' . $addrA->assignment->style . ' - ' . $addrA->assignment->country . ')' : 'Kosong (Maks 42)' }}{{ $addrA->country_mode === 'multi' ? ' [Multi Negara]' : ' [1 Negara]' }}">
                                                                     <span class="pallet-code">{{ $addrA->code }}</span>
                                                                 </div>
                                                             @endif
                                                             @if($addrB)
                                                                 <div class="pallet-box {{ $stateB }}{{ $multiB }}" data-pallet-id="{{ $addrB->id }}" data-code="{{ $addrB->code }}" onclick="openPalletModal({{ $addrB->id }})"
+                                                                     style="--pallet-bg: {{ $addrB->visual_color ?? '#e5e7eb' }}; --pallet-fg: {{ $addrB->visual_text_color ?? '#374151' }}; --pallet-shadow: {{ $addrB->visual_text_shadow ?? 'none' }};"
                                                                      title="{{ $addrB->code }}: {{ $isOccB ? $cartonsB . '/42 Karton (' . $addrB->assignment->style . ' - ' . $addrB->assignment->country . ')' : 'Kosong (Maks 42)' }}{{ $addrB->country_mode === 'multi' ? ' [Multi Negara]' : ' [1 Negara]' }}">
                                                                     <span class="pallet-code">{{ $addrB->code }}</span>
                                                                 </div>
@@ -636,12 +665,14 @@
                                                             <span class="pallet-pos-tag">{{ $p }}</span>
                                                             @if($addrC)
                                                                 <div class="pallet-box {{ $stateC }}{{ $multiC }}" data-pallet-id="{{ $addrC->id }}" data-code="{{ $addrC->code }}" onclick="openPalletModal({{ $addrC->id }})"
+                                                                     style="--pallet-bg: {{ $addrC->visual_color ?? '#e5e7eb' }}; --pallet-fg: {{ $addrC->visual_text_color ?? '#374151' }}; --pallet-shadow: {{ $addrC->visual_text_shadow ?? 'none' }};"
                                                                      title="{{ $addrC->code }}: {{ $isOccC ? $cartonsC . '/42 Karton (' . $addrC->assignment->style . ' - ' . $addrC->assignment->country . ')' : 'Kosong (Maks 42)' }}{{ $addrC->country_mode === 'multi' ? ' [Multi Negara]' : ' [1 Negara]' }}">
                                                                     <span class="pallet-code">{{ $addrC->code }}</span>
                                                                 </div>
                                                             @endif
                                                             @if($addrD)
                                                                 <div class="pallet-box {{ $stateD }}{{ $multiD }}" data-pallet-id="{{ $addrD->id }}" data-code="{{ $addrD->code }}" onclick="openPalletModal({{ $addrD->id }})"
+                                                                     style="--pallet-bg: {{ $addrD->visual_color ?? '#e5e7eb' }}; --pallet-fg: {{ $addrD->visual_text_color ?? '#374151' }}; --pallet-shadow: {{ $addrD->visual_text_shadow ?? 'none' }};"
                                                                      title="{{ $addrD->code }}: {{ $isOccD ? $cartonsD . '/42 Karton (' . $addrD->assignment->style . ' - ' . $addrD->assignment->country . ')' : 'Kosong (Maks 42)' }}{{ $addrD->country_mode === 'multi' ? ' [Multi Negara]' : ' [1 Negara]' }}">
                                                                     <span class="pallet-code">{{ $addrD->code }}</span>
                                                                 </div>
@@ -662,6 +693,84 @@
             @include('layout.footer')
         </div>
     </div>
+
+    @can('pallet.manage')
+    <!-- Modal Atur Warna Pallet -->
+    <div class="modal fade" id="palletColorModal" tabindex="-1" role="dialog" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable" role="document">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title font-weight-bold">
+                        <i class="fas fa-palette mr-2"></i> Atur Warna Pallet
+                    </h5>
+                    <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <form id="palletColorForm">
+                    <div class="modal-body p-4">
+                        <p class="small text-muted mb-3">
+                            Warna disimpan di database. Warna <strong>gelap</strong> untuk pallet penuh (42 karton),
+                            warna <strong>terang</strong> untuk pallet belum penuh. Pallet kosong memakai warna netral.
+                            Warna teks dipakai agar alamat pallet tetap terbaca.
+                        </p>
+
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered mb-0">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th>Negara / Status</th>
+                                        <th width="130">Warna Pallet</th>
+                                        <th width="130">Warna Teks</th>
+                                        <th width="100" class="text-center">Preview</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach($palletColorRules as $rule)
+                                        <tr>
+                                            <td class="align-middle">
+                                                <strong>{{ $rule->group_label }}</strong>
+                                                <span class="badge badge-light border ml-1">
+                                                    {{ $rule->status === 'full' ? 'Penuh' : ($rule->status === 'partial' ? 'Belum Penuh' : 'Kosong') }}
+                                                </span>
+                                                @if($rule->country)
+                                                    <small class="text-muted d-block">{{ $rule->country }}</small>
+                                                @endif
+                                            </td>
+                                            <td class="align-middle">
+                                                <input type="color" class="form-control form-control-color"
+                                                       data-rule-id="{{ $rule->id }}" data-field="color"
+                                                       value="{{ $rule->color }}">
+                                            </td>
+                                            <td class="align-middle">
+                                                <input type="color" class="form-control form-control-color"
+                                                       data-rule-id="{{ $rule->id }}" data-field="text_color"
+                                                       value="{{ $rule->text_color }}">
+                                            </td>
+                                            <td class="align-middle text-center">
+                                                <span class="d-inline-block px-2 py-1 rounded font-weight-bold pallet-color-preview"
+                                                      data-rule-id="{{ $rule->id }}"
+                                                      style="background: {{ $rule->color }}; color: {{ $rule->text_color }}; font-family: monospace; font-size: 12px;">
+                                                    B-a-01
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Batal</button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save mr-1"></i> Simpan Warna
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    @endcan
 
     <!-- Modal Detail Pallet & Manajemen Item -->
     <div class="modal fade" id="palletDetailModal" tabindex="-1" role="dialog" aria-hidden="true">
@@ -1065,8 +1174,60 @@
             });
         });
 
+        // ================= ATUR WARNA PALLET =================
+        function updateColorPreview(ruleId) {
+            const $color = $('input[data-rule-id="' + ruleId + '"][data-field="color"]');
+            const $text = $('input[data-rule-id="' + ruleId + '"][data-field="text_color"]');
+            $('.pallet-color-preview[data-rule-id="' + ruleId + '"]').css({
+                background: $color.val(),
+                color: $text.val()
+            });
+        }
+
+        $('#palletColorForm').on('input change', 'input[type="color"]', function () {
+            updateColorPreview($(this).data('rule-id'));
+        });
+
+        $('#palletColorForm').on('submit', function (e) {
+            e.preventDefault();
+
+            const rules = {};
+            $(this).find('input[type="color"][data-rule-id]').each(function () {
+                const id = String($(this).data('rule-id'));
+                rules[id] = rules[id] || { id: id };
+                rules[id][$(this).data('field')] = $(this).val();
+            });
+
+            $.ajax({
+                url: "{{ route('pallet.colorRules') }}",
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ rules: Object.values(rules) }),
+                headers: {
+                    'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content'),
+                    'Accept': 'application/json'
+                },
+                success: function (res) {
+                    $('#palletColorModal').modal('hide');
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Tersimpan',
+                        text: res.message || 'Warna pallet berhasil disimpan.',
+                        timer: 1800,
+                        showConfirmButton: false
+                    }).then(function () { window.location.reload(); });
+                },
+                error: function (xhr) {
+                    const msg = (xhr.responseJSON && xhr.responseJSON.message)
+                        ? xhr.responseJSON.message
+                        : 'Gagal menyimpan warna pallet.';
+                    Swal.fire({ icon: 'error', title: 'Gagal', text: msg });
+                }
+            });
+        });
+
         // ================= STATUS WARNA PALLET =================
-        // Kosong = hijau, terisi belum penuh = kuning, penuh = merah
+        // Warna berasal dari aturan DB (dikirim lewat SSE sebagai info.color).
         function palletStatusClass(cartons, max) {
             const c = parseInt(cartons) || 0;
             const m = parseInt(max) || 42;
@@ -1074,10 +1235,17 @@
             return c >= m ? 'pallet-full' : 'pallet-partial';
         }
 
-        function applyPalletStatus(box, cartons, max) {
-            const next = palletStatusClass(cartons, max);
+        function applyPalletVisual(box, info) {
+            const cartons = parseInt(info.cartons) || 0;
+            const maxCarton = parseInt(info.max_carton) || 42;
+            const next = palletStatusClass(cartons, maxCarton);
+
             box.classList.remove('pallet-vacant', 'pallet-partial', 'pallet-full', 'pallet-occupied');
             box.classList.add(next);
+
+            box.style.setProperty('--pallet-bg', info.color || '#e5e7eb');
+            box.style.setProperty('--pallet-fg', info.text_color || '#374151');
+            box.style.setProperty('--pallet-shadow', info.text_shadow || 'none');
         }
 
         // ================= CARI JANCODE → LOKASI PALLET =================
@@ -1415,7 +1583,7 @@
 
             Swal.fire({
                 title: 'Kosongkan Seluruh Pallet?',
-                text: 'Semua karton pada pallet ini akan dikeluarkan dan status pallet menjadi hijau (kosong).',
+                text: 'Semua karton pada pallet ini akan dikeluarkan dan pallet menjadi kosong.',
                 icon: 'warning',
                 showCancelButton: true,
                 confirmButtonText: 'Ya, Kosongkan',
@@ -1826,7 +1994,7 @@
                     const nextClass = palletStatusClass(cartons, maxCtn);
                     const hadClass = box.classList.contains(nextClass);
                     if(!hadClass) changedCount++;
-                    applyPalletStatus(box, cartons, maxCtn);
+                    applyPalletVisual(box, info);
                     box.classList.toggle('pallet-multi', info.country_mode === 'multi');
                     // Kotak 2D hanya menampilkan alamat pallet; qty karton ada di title & modal.
                     // title
@@ -1835,9 +2003,7 @@
                         : 'Kosong (Maks ' + maxCtn + ')') + (info.country_mode === 'multi' ? ' [Multi Negara]' : ' [1 Negara]');
                     if(!hadClass){
                         box.style.transition = 'transform 0.12s ease';
-                        box.style.boxShadow = nextClass === 'pallet-full'
-                            ? '0 0 0 3px rgba(231,74,59,0.45)'
-                            : (nextClass === 'pallet-partial' ? '0 0 0 3px rgba(246,194,62,0.45)' : '0 0 0 3px rgba(28,200,138,0.4)');
+                        box.style.boxShadow = '0 0 0 3px ' + (info.color || '#adb5bd') + '73';
                         setTimeout(function(){ box.style.boxShadow=''; }, 900);
                     }
                 });
@@ -1853,7 +2019,7 @@
                         if(!id) return;
                         const info = map.get(String(id));
                         if(!info) return;
-                        applyPalletStatus(box, info.cartons, info.max_carton);
+                        applyPalletVisual(box, info);
                         box.classList.toggle('pallet-multi', info.country_mode === 'multi');
                     });
                 }
