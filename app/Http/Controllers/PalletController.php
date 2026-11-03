@@ -124,16 +124,19 @@ class PalletController extends Controller
             $rowTotalPcs = 0;
             $countriesSeen = [];
             $stylesSeen = [];
+            $ocfsSeen = [];
 
             foreach ($assignmentsInRow as $asg) {
                 $rowTotalCartons += $asg->total_carton;
                 if ($asg->country) { $countriesSeen[strtoupper(trim($asg->country))] = true; }
                 if ($asg->style) { $stylesSeen[strtoupper(trim($asg->style))] = true; }
+                if ($asg->ocf) { $ocfsSeen[strtoupper(trim($asg->ocf))] = true; }
                 foreach ($asg->details as $det) {
                     $jc = $det->jancode;
                     if ($jc) {
                         if ($jc->country) { $countriesSeen[strtoupper(trim($jc->country))] = true; }
                         if ($jc->style) { $stylesSeen[strtoupper(trim($jc->style))] = true; }
+                        if ($jc->ocf) { $ocfsSeen[strtoupper(trim($jc->ocf))] = true; }
                         $cName = $jc->color;
                         $sName = $jc->size;
                         $ctn = (int)$det->qty_carton;
@@ -162,6 +165,7 @@ class PalletController extends Controller
 
             $distinctCountries = collect(array_keys($countriesSeen));
             $distinctStyles = collect(array_keys($stylesSeen));
+            $distinctOcfs = collect(array_keys($ocfsSeen));
 
             $rowSummaries[$r] = [
                 'is_locked'       => $isLocked,
@@ -172,7 +176,9 @@ class PalletController extends Controller
                 'style'           => $isLocked
                     ? ($distinctStyles->count() > 1 ? 'CAMPURAN (' . $distinctStyles->count() . ' style)' : $distinctStyles->first())
                     : null,
+                'style_list'      => $distinctStyles->values(),
                 'ocf'             => $rowOcf,
+                'ocf_list'        => $distinctOcfs->values(),
                 'total_cartons'   => $rowTotalCartons,
                 'total_pcs'       => $rowTotalPcs,
                 'color_breakdown' => $colorBreakdown,
@@ -573,14 +579,17 @@ class PalletController extends Controller
             $colorBreakdown = [];
             $countriesSeen = [];
             $stylesSeen = [];
+            $ocfsSeen = [];
             foreach ($inRow as $asg) {
                 if ($asg->country) { $countriesSeen[strtoupper(trim($asg->country))] = true; }
                 if ($asg->style) { $stylesSeen[strtoupper(trim($asg->style))] = true; }
+                if ($asg->ocf) { $ocfsSeen[strtoupper(trim($asg->ocf))] = true; }
                 foreach ($asg->details as $det) {
                     $jc = $det->jancode;
                     if (!$jc) continue;
                     if ($jc->country) { $countriesSeen[strtoupper(trim($jc->country))] = true; }
                     if ($jc->style) { $stylesSeen[strtoupper(trim($jc->style))] = true; }
+                    if ($jc->ocf) { $ocfsSeen[strtoupper(trim($jc->ocf))] = true; }
                     $cName = $jc->color ?: '-';
                     $sName = $jc->size ?: '-';
                     $ctn = (int)$det->qty_carton;
@@ -604,13 +613,15 @@ class PalletController extends Controller
                     'country' => count($rowCountries) > 1 ? ('CAMPURAN (' . count($rowCountries) . ' negara)') : ($rowCountries[0] ?? $first->country),
                     'country_list' => $rowCountries,
                     'style' => count($rowStyles) > 1 ? ('CAMPURAN (' . count($rowStyles) . ' style)') : ($rowStyles[0] ?? $first->style),
+                    'style_list' => $rowStyles,
                     'ocf' => $first->ocf ?: ($firstJc ? ($firstJc->ocf ?? null) : null),
+                    'ocf_list' => array_keys($ocfsSeen),
                     'total_cartons' => $totalCartons,
                     'total_pcs' => $totalPcs,
                     'color_breakdown' => $colorBreakdown,
                 ];
             } else {
-                $rowSummaries[$r] = ['is_locked'=>false,'country'=>null,'country_list'=>[],'style'=>null,'ocf'=>null,'total_cartons'=>0,'total_pcs'=>0,'color_breakdown'=>[]];
+                $rowSummaries[$r] = ['is_locked'=>false,'country'=>null,'country_list'=>[],'style'=>null,'style_list'=>[],'ocf'=>null,'ocf_list'=>[],'total_cartons'=>0,'total_pcs'=>0,'color_breakdown'=>[]];
             }
         }
         $payload = [
@@ -689,7 +700,7 @@ class PalletController extends Controller
     }
 
     /**
-     * Plot / Tambah Penempatan Manual Karton ke Pallet (BR-08 s/d BR-12 + Aturan Row Lock)
+     * Plot / Tambah Penempatan Manual Karton ke Pallet (BR-08 s/d BR-12 + kompatibilitas per pallet)
      */
     public function storeAssignment(Request $request)
     {
@@ -783,26 +794,10 @@ class PalletController extends Controller
                 ], 422);
             }
 
-            // 1. ATURAN ROW LOCKING: Seluruh Row B-I harus satu Style & OCF.
-            //    Country TIDAK lagi dikunci per row supaya pallet mode "multi negara" bisa dipakai.
-            $rowActiveAssignment = PalletAssignment::with('details.jancode')
-                ->whereHas('address', fn($q) => $q->where('row_label', $address->row_label))
-                ->where('total_carton', '>', 0)
-                ->first();
-
-            if ($rowActiveAssignment) {
-                $rowStyle = strtoupper(trim($rowActiveAssignment->style));
-                $firstJc = $rowActiveAssignment->details->first()?->jancode;
-                $rowOcf = strtoupper(trim($rowActiveAssignment->ocf ?: ($firstJc ? $firstJc->ocf : '')));
-
-                if ($rowStyle !== $jancodeStyle || ($rowOcf && $rowOcf !== $jancodeOcf)) {
-                    return response()->json([
-                        'success' => false,
-                        'error'   => 'row_locked',
-                        'message' => "Pelanggaran Aturan Row: Seluruh Row {$address->row_label} sudah dikunci untuk Style [{$rowStyle}], OCF [{$rowOcf}]. Pallet pada Row {$address->row_label} tidak dapat dicampur dengan Style/OCF lain."
-                    ], 422);
-                }
-            }
+            // 1. ATURAN KOMPATIBILITAS PER PALLET (bukan per row):
+            //    - Satu pallet hanya boleh 1 Style dan 1 OCF.
+            //    - Satu row boleh berisi beberapa Style/OCF, asalkan tiap pallet tetap konsisten.
+            //    - Country mengikuti mode per pallet (single / multi).
 
             // 2. BR-12: Total karton yang ditempatkan tidak boleh melebihi sisa hasil scan
             if ($alreadyPlaced + $addQty > $receiveQty) {
@@ -816,15 +811,24 @@ class PalletController extends Controller
             $assignment = PalletAssignment::where('pallet_address_id', $addressId)->lockForUpdate()->first();
 
             if ($assignment && $assignment->total_carton > 0) {
-                // BR-09: Style selalu dikunci per pallet.
+                // BR-09: Style dan OCF selalu dikunci per pallet (bukan per row).
                 $existingCountry = strtoupper(trim($assignment->country));
                 $existingStyle = strtoupper(trim($assignment->style));
+                $existingOcf = strtoupper(trim($assignment->ocf ?? ''));
 
                 if ($existingStyle !== $jancodeStyle) {
                     return response()->json([
                         'success' => false,
                         'error'   => 'style_locked',
-                        'message' => "Pelanggaran BR-09: Pallet {$address->code} sudah terisi Style [{$existingStyle}]. Tidak bisa mencampur dengan Style [{$jancodeStyle}]."
+                        'message' => "Pelanggaran BR-09: Pallet {$address->code} sudah terisi Style [{$existingStyle}]. Tidak bisa mencampur dengan Style [{$jancodeStyle}]. Style berbeda boleh berada di row yang sama, tetapi tidak boleh dalam pallet yang sama."
+                    ], 422);
+                }
+
+                if ($existingOcf && $jancodeOcf && $existingOcf !== $jancodeOcf) {
+                    return response()->json([
+                        'success' => false,
+                        'error'   => 'ocf_locked',
+                        'message' => "Pelanggaran BR-09: Pallet {$address->code} sudah terisi OCF [{$existingOcf}]. Tidak bisa mencampur dengan OCF [{$jancodeOcf}]. OCF berbeda boleh berada di row yang sama, tetapi tidak boleh dalam pallet yang sama."
                     ], 422);
                 }
 
@@ -962,37 +966,21 @@ class PalletController extends Controller
             $jancodeStyle = strtoupper(trim($sourceAssignment->style));
             $sourceOcf = strtoupper(trim($sourceAssignment->ocf ?: ($jancode->ocf ?: '')));
 
-            // 1. ATURAN ROW LOCKING: Target row tidak boleh punya country, style, atau ocf berbeda
-            $targetRowActiveAssignment = PalletAssignment::with('details.jancode')
-                ->whereHas('address', fn($q) => $q->where('row_label', $targetAddress->row_label))
-                ->where('total_carton', '>', 0)
-                ->where('pallet_address_id', '!=', $sourceAddress->id)
-                ->first();
-
-            if ($targetRowActiveAssignment) {
-                $targetRowCountry = strtoupper(trim($targetRowActiveAssignment->country));
-                $targetRowStyle = strtoupper(trim($targetRowActiveAssignment->style));
-                $firstTargetJc = $targetRowActiveAssignment->details->first()?->jancode;
-                $targetRowOcf = strtoupper(trim($targetRowActiveAssignment->ocf ?: ($firstTargetJc ? $firstTargetJc->ocf : '')));
-
-                if ($targetRowCountry !== $jancodeCountry || $targetRowStyle !== $jancodeStyle || ($targetRowOcf && $sourceOcf && $targetRowOcf !== $sourceOcf)) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => "Pelanggaran Aturan Row: Row {$targetAddress->row_label} sudah dikunci untuk Country [{$targetRowCountry}], Style [{$targetRowStyle}], OCF [{$targetRowOcf}]. Tidak dapat memindahkan karton ke Row {$targetAddress->row_label}."
-                    ], 422);
-                }
-            }
-
-            // Validasi di target pallet
+            // 1. ATURAN KOMPATIBILITAS PER PALLET (bukan per row):
+            //    Row tujuan boleh berisi Style/OCF lain, tetapi pallet tujuan harus
+            //    kosong atau memiliki Style/OCF/Country yang sama dengan karton sumber.
             if ($targetAssignment && $targetAssignment->total_carton > 0) {
                 $targetCountry = strtoupper(trim($targetAssignment->country));
                 $targetStyle = strtoupper(trim($targetAssignment->style));
+                $targetOcf = strtoupper(trim($targetAssignment->ocf ?? ''));
 
-                // BR-09: Style dan country harus cocok
-                if ($targetCountry !== $jancodeCountry || $targetStyle !== $jancodeStyle) {
+                // BR-09: Style, OCF, dan country harus cocok
+                if ($targetCountry !== $jancodeCountry
+                    || $targetStyle !== $jancodeStyle
+                    || ($targetOcf && $sourceOcf && $targetOcf !== $sourceOcf)) {
                     return response()->json([
                         'success' => false,
-                        'message' => "Tidak bisa memindahkan ke Pallet {$targetAddress->code}: Pallet tujuan memiliki Style [{$targetStyle}] / Country [{$targetCountry}], sedangkan karton yang dipindah adalah Style [{$jancodeStyle}] / Country [{$jancodeCountry}]."
+                        'message' => "Tidak bisa memindahkan ke Pallet {$targetAddress->code}: Pallet tujuan memiliki Style [{$targetStyle}] / OCF [{$targetOcf}] / Country [{$targetCountry}], sedangkan karton yang dipindah adalah Style [{$jancodeStyle}] / OCF [{$sourceOcf}] / Country [{$jancodeCountry}]."
                     ], 422);
                 }
 

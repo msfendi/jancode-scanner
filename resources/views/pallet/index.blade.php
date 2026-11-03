@@ -37,9 +37,9 @@
 
     /* Card Tiap Row B-I: Vertikal Column Layout */
     .pallet-row-card {
-        flex: 0 0 290px;
-        width: 290px;
-        min-width: 290px;
+        flex: 0 0 320px;
+        width: 320px;
+        min-width: 320px;
         border: 1px solid #d1d3e2;
         border-radius: 8px;
         background: #ffffff;
@@ -283,7 +283,7 @@
                     <div class="d-sm-flex align-items-center justify-content-between mb-4">
                         <div>
                             <h1 class="h4 mb-1 text-gray-800 font-weight-bold">Manage Pallet Location &amp; Placement</h1>
-                            <p class="text-muted small mb-0">Total {{ number_format($totalPositions, 0, ',', '.') }} Alamat Pallet (Row B–I) &bull; Kapasitas Maks 42 Karton/Pallet &bull; Aturan Kompatibilitas 1 Country & 1 Style/OCF per Row</p>
+                            <p class="text-muted small mb-0">Total {{ number_format($totalPositions, 0, ',', '.') }} Alamat Pallet (Row B-I) &bull; Kapasitas Maks 42 Karton/Pallet &bull; Per Pallet: 1 Country &amp; 1 Style/OCF &bull; Satu Row Boleh Beberapa Style</p>
                         </div>
                         <div>
                             <a href="{{ route('scanner.index') }}" class="btn btn-sm btn-success shadow-sm">
@@ -317,7 +317,8 @@
                                 Taiwan (hijau), MUJI negara lain (oranye).
                                 Warna <strong>gelap</strong> = penuh 42 karton, warna <strong>terang</strong> = belum penuh.
                                 Pallet kosong berwarna netral.
-                                Satu pallet maksimal <strong>42 karton</strong> dengan kompatibilitas <strong>1 Country &amp; 1 Style/OCF</strong> per row.
+                                Satu pallet maksimal <strong>42 karton</strong> dengan kompatibilitas <strong>1 Country &amp; 1 Style/OCF per pallet</strong>.
+                                Satu <strong>row boleh berisi beberapa Style/OCF</strong>, tetapi Style/OCF berbeda tidak boleh berada dalam pallet yang sama.
                                 <div class="d-flex flex-wrap align-items-center mt-2" style="gap: 14px;">
                                     @foreach(($palletLegend['groups'] ?? []) as $group)
                                         <span class="d-inline-flex align-items-center text-muted">
@@ -528,26 +529,53 @@
                                                             <i class="fas fa-warehouse text-primary mr-1"></i> ROW {{ $rowLetter }}
                                                         </h6>
                                                         @if($isRowLocked)
-                                                            <span class="badge badge-danger px-2 py-1"><i class="fas fa-lock mr-1"></i> Terkunci</span>
+                                                            <span class="badge badge-warning px-2 py-1"><i class="fas fa-boxes mr-1"></i> Terisi</span>
                                                         @else
-                                                            <span class="badge badge-success px-2 py-1"><i class="fas fa-lock-open mr-1"></i> Terbuka</span>
+                                                            <span class="badge badge-success px-2 py-1"><i class="fas fa-box-open mr-1"></i> Kosong</span>
                                                         @endif
                                                     </div>
 
                                                     @if($isRowLocked)
+                                                        @php
+                                                            $rowStyles = collect($summary['style_list'] ?? []);
+                                                            $rowOcfs = collect($summary['ocf_list'] ?? []);
+                                                            if ($rowStyles->isEmpty() && !empty($summary['style'])) {
+                                                                $rowStyles = collect([$summary['style']]);
+                                                            }
+                                                            if ($rowOcfs->isEmpty() && !empty($summary['ocf'])) {
+                                                                $rowOcfs = collect([$summary['ocf']]);
+                                                            }
+                                                        @endphp
                                                         <div class="mt-2 pt-2 border-top small">
-                                                            <div class="text-truncate font-weight-bold text-dark" title="{{ $summary['country'] }}">
+                                                            <div class="text-truncate font-weight-bold text-dark" data-row-country title="{{ $summary['country'] }}">
                                                                 <i class="fas fa-globe text-secondary mr-1"></i> {{ $summary['country'] }}
                                                             </div>
-                                                            <div class="text-truncate text-muted" title="{{ $summary['style'] }} | OCF: {{ $summary['ocf'] }}">
-                                                                <i class="fas fa-tshirt text-secondary mr-1"></i> {{ $summary['style'] }}
-                                                                <span class="badge badge-secondary ml-1">OCF: {{ $summary['ocf'] ?: '-' }}</span>
+                                                            <div class="d-flex flex-wrap align-items-center mt-1" data-row-styles
+                                                                 title="Style di row ini: {{ $rowStyles->implode(', ') }}">
+                                                                <i class="fas fa-tshirt text-secondary mr-1"></i>
+                                                                @foreach($rowStyles->take(4) as $rowStyle)
+                                                                    <span class="badge badge-light border text-dark mr-1 mb-1">{{ $rowStyle }}</span>
+                                                                @endforeach
+                                                                @if($rowStyles->count() > 4)
+                                                                    <span class="badge badge-light border text-muted mr-1 mb-1">+{{ $rowStyles->count() - 4 }}</span>
+                                                                @endif
+                                                            </div>
+                                                            <div class="d-flex flex-wrap align-items-center mt-1" data-row-ocfs
+                                                                 title="OCF di row ini: {{ $rowOcfs->implode(', ') }}">
+                                                                @forelse($rowOcfs->take(4) as $rowOcf)
+                                                                    <span class="badge badge-secondary mr-1 mb-1">OCF: {{ $rowOcf }}</span>
+                                                                @empty
+                                                                    <span class="badge badge-secondary mr-1 mb-1">OCF: -</span>
+                                                                @endforelse
+                                                                @if($rowOcfs->count() > 4)
+                                                                    <span class="badge badge-light border text-muted mr-1 mb-1">+{{ $rowOcfs->count() - 4 }} OCF</span>
+                                                                @endif
                                                             </div>
                                                             <div class="d-flex justify-content-between align-items-center mt-1">
-                                                                <span class="font-weight-bold text-danger">
+                                                                <span class="font-weight-bold text-danger" data-row-cartons>
                                                                     <i class="fas fa-boxes mr-1"></i> {{ $summary['total_cartons'] }} ctn
                                                                 </span>
-                                                                <span class="text-dark small">
+                                                                <span class="text-dark small" data-row-pcs>
                                                                     ({{ number_format($summary['total_pcs']) }} pcs)
                                                                 </span>
                                                             </div>
@@ -801,9 +829,9 @@
                         <div class="col-md-4">
                             <div class="card border-left-primary shadow-sm py-2">
                                 <div class="card-body py-2">
-                                    <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Terkunci Style</div>
+                                    <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Style / OCF Pallet</div>
                                     <div class="h5 mb-0 font-weight-bold text-gray-800" id="modalLockedStyle">-</div>
-                                    <div class="small text-muted">Aturan BR-09 (1 Style/Pallet)</div>
+                                    <div class="small text-muted">Aturan BR-09 (1 Style &amp; 1 OCF/Pallet)</div>
                                 </div>
                             </div>
                         </div>
@@ -959,7 +987,7 @@
                                     @endif
                                 @endforeach
                             </select>
-                            <small class="text-muted">Pallet tujuan harus kosong atau memiliki Style & Country yang sama (BR-09).</small>
+                            <small class="text-muted">Pallet tujuan harus kosong atau memiliki Style, OCF &amp; Country yang sama (BR-09). Row boleh berisi style lain, tetapi pallet tidak boleh dicampur.</small>
                         </div>
                     </div>
                     <div class="modal-footer">
@@ -1084,7 +1112,9 @@
                 $('#modalPalletCode').text(addr.code);
                 $('#modalTotalCarton').text(assign ? assign.total_carton : 0);
                 $('#modalAvailableSpace').text(res.available_space);
-                $('#modalLockedStyle').text(assign ? assign.style : '- (Bebas)');
+                $('#modalLockedStyle').text(assign
+                    ? (assign.style || '-') + (assign.ocf ? ' / OCF ' + assign.ocf : '')
+                    : '- (Bebas)');
                 $('#modalLockedCountry').text(assign ? assign.country : '- (Bebas)');
 
                 // Mode negara pallet (single / multi)
@@ -1191,39 +1221,73 @@
         $('#palletColorForm').on('submit', function (e) {
             e.preventDefault();
 
+            const $form = $(this);
+            const $submit = $form.find('button[type="submit"]');
+            const $submitHtml = $submit.html();
             const rules = {};
-            $(this).find('input[type="color"][data-rule-id]').each(function () {
+            $form.find('input[type="color"][data-rule-id]').each(function () {
                 const id = String($(this).data('rule-id'));
                 rules[id] = rules[id] || { id: id };
                 rules[id][$(this).data('field')] = $(this).val();
             });
 
-            $.ajax({
-                url: "{{ route('pallet.colorRules') }}",
-                type: 'POST',
-                contentType: 'application/json',
-                data: JSON.stringify({ rules: Object.values(rules) }),
-                headers: {
-                    'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content'),
-                    'Accept': 'application/json'
-                },
-                success: function (res) {
-                    $('#palletColorModal').modal('hide');
-                    Swal.fire({
-                        icon: 'success',
-                        title: 'Tersimpan',
-                        text: res.message || 'Warna pallet berhasil disimpan.',
-                        timer: 1800,
-                        showConfirmButton: false
-                    }).then(function () { window.location.reload(); });
-                },
-                error: function (xhr) {
-                    const msg = (xhr.responseJSON && xhr.responseJSON.message)
-                        ? xhr.responseJSON.message
-                        : 'Gagal menyimpan warna pallet.';
-                    Swal.fire({ icon: 'error', title: 'Gagal', text: msg });
-                }
-            });
+            // Di server single-worker (mis. `php artisan serve`), koneksi SSE live
+            // dapat menahan worker sehingga POST simpan warna ikut menunggu.
+            // Jeda live dulu, beri waktu server menutup stream, lalu simpan.
+            const live = window._palletLive;
+            const liveWasActive = !!(live && live.isActive && live.isActive());
+            if (liveWasActive && live.pause) {
+                live.pause();
+            }
+
+            $submit.prop('disabled', true).html('<i class="fas fa-spinner fa-spin mr-1"></i> Menyimpan...');
+
+            const doSave = function () {
+                $.ajax({
+                    url: "{{ route('pallet.colorRules') }}",
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ rules: Object.values(rules) }),
+                    headers: {
+                        'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content'),
+                        'Accept': 'application/json'
+                    },
+                    success: function (res) {
+                        $('#palletColorModal').modal('hide');
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Tersimpan',
+                            text: res.message || 'Warna pallet berhasil disimpan.',
+                            timer: 1800,
+                            showConfirmButton: false
+                        }).then(function () { window.location.reload(); });
+                    },
+                    error: function (xhr) {
+                        if (liveWasActive && live.resume) {
+                            live.resume();
+                        }
+                        $submit.prop('disabled', false).html($submitHtml);
+
+                        const json = xhr.responseJSON || {};
+                        let msg = json.message || 'Gagal menyimpan warna pallet.';
+                        if (xhr.status === 419) {
+                            msg = 'Sesi login kedaluwarsa. Muat ulang halaman lalu coba lagi.';
+                        } else if (json.errors) {
+                            msg = Object.values(json.errors).flat().join(' ');
+                        } else if (xhr.status) {
+                            msg = 'HTTP ' + xhr.status + ': ' + msg;
+                        }
+                        Swal.fire({ icon: 'error', title: 'Gagal Menyimpan Warna', text: msg });
+                    }
+                });
+            };
+
+            // Stream SSE lokal dicek setiap ~2 detik; beri jeda aman sebelum POST.
+            if (liveWasActive) {
+                setTimeout(doSave, 2200);
+            } else {
+                doSave();
+            }
         });
 
         // ================= STATUS WARNA PALLET =================
@@ -1441,6 +1505,16 @@
                 return;
             }
 
+            if (data.error === 'style_locked' || data.error === 'ocf_locked') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Pallet Hanya 1 Style/OCF',
+                    html: msg,
+                    confirmButtonText: 'Mengerti'
+                });
+                return;
+            }
+
             if (data.error === 'row_locked') {
                 Swal.fire({ icon: 'error', title: 'Aturan Row Terkunci', text: msg });
                 return;
@@ -1652,7 +1726,9 @@
                     'row'       => $row,
                     'country'   => strtolower($s['country'] ?? ''),
                     'style'     => strtolower($s['style'] ?? ''),
+                    'styles'    => collect($s['style_list'] ?? [])->map(fn($v) => strtolower($v))->values()->all(),
                     'ocf'       => strtolower($s['ocf'] ?? ''),
+                    'ocfs'      => collect($s['ocf_list'] ?? [])->map(fn($v) => strtolower($v))->values()->all(),
                     'is_locked' => !empty($s['is_locked']),
                 ];
             })->values()->all();
@@ -1672,9 +1748,11 @@
             let matched = [];
             palletRowMeta.forEach(function(meta) {
                 let ok = true;
+                const styles = (meta.styles && meta.styles.length) ? meta.styles : [meta.style];
+                const ocfs = (meta.ocfs && meta.ocfs.length) ? meta.ocfs : [meta.ocf];
                 if (qCountry && !meta.country.includes(qCountry)) ok = false;
-                if (qOcf && !meta.ocf.includes(qOcf)) ok = false;
-                if (qStyle && !meta.style.includes(qStyle)) ok = false;
+                if (qOcf && !ocfs.some(v => v.includes(qOcf))) ok = false;
+                if (qStyle && !styles.some(v => v.includes(qStyle))) ok = false;
                 if (ok && meta.is_locked) matched.push(meta.row);
             });
 
@@ -1702,9 +1780,13 @@
             } else {
                 let tagHtml = matched.map(function(row) {
                     const meta = palletRowMeta.find(m => m.row === row);
+                    const styles = meta ? ((meta.styles && meta.styles.length) ? meta.styles : [meta.style]) : [];
+                    const ocfs = meta ? ((meta.ocfs && meta.ocfs.length) ? meta.ocfs : [meta.ocf]) : [];
+                    const styleLabel = styles.length > 1 ? styles.slice(0, 2).join(' / ') : (styles[0] || '');
+                    const ocfLabel = ocfs.length > 1 ? (ocfs.length + ' OCF') : (ocfs[0] ? 'OCF:' + ocfs[0].toUpperCase() : '');
                     return `<span class="search-result-tag" onclick="scrollToRow('${row}')" title="Scroll ke Row ${row}">
                         <i class="fas fa-map-marker-alt mr-1"></i> ROW ${row}
-                        <small class="ml-1 opacity-75">${meta ? meta.style + (meta.ocf ? ' / OCF:' + meta.ocf.toUpperCase() : '') : ''}</small>
+                        <small class="ml-1 opacity-75">${styleLabel}${ocfLabel ? ' / ' + ocfLabel : ''}</small>
                     </span>`;
                 }).join('');
                 tagsEl.innerHTML = tagHtml;
@@ -1903,35 +1985,74 @@
                         const row = card.getAttribute('data-row');
                         const r = data.rows[row];
                         if(!r) return;
-                        // patch header badge + style/country/ocf text if locked
+                        // patch header badge + country/style/OCF chips if occupied
                         // card header is first div.card-header; find it
                         const hdr = card.querySelector('.card-header');
                         if(!hdr) return;
                         const badge = hdr.querySelector('.badge');
                         if(badge){
                             if(r.is_locked){
-                                badge.className = 'badge badge-danger px-2 py-1';
-                                badge.innerHTML = '<i class="fas fa-lock mr-1"></i> Terkunci';
+                                badge.className = 'badge badge-warning px-2 py-1';
+                                badge.innerHTML = '<i class="fas fa-boxes mr-1"></i> Terisi';
                                 card.classList.add('locked-card');
                             } else {
                                 badge.className = 'badge badge-success px-2 py-1';
-                                badge.innerHTML = '<i class="fas fa-lock-open mr-1"></i> Terbuka';
+                                badge.innerHTML = '<i class="fas fa-box-open mr-1"></i> Kosong';
                                 card.classList.remove('locked-card');
                             }
                         }
-                        // find country/style lines: first truncate divs under border-top
-                        const countryEl = hdr.querySelector('.border-top .font-weight-bold');
+
+                        const chip = function(value, cls, prefix){
+                            const span = document.createElement('span');
+                            span.className = cls;
+                            span.textContent = (prefix || '') + value;
+                            return span;
+                        };
+
+                        const countryEl = hdr.querySelector('[data-row-country]');
                         if(countryEl && r.is_locked){
                             countryEl.innerHTML = '<i class="fas fa-globe text-secondary mr-1"></i> ' + (r.country||'-');
                         }
+
+                        const stylesEl = hdr.querySelector('[data-row-styles]');
+                        if(stylesEl && r.is_locked){
+                            const styles = (r.style_list && r.style_list.length) ? r.style_list : (r.style ? [r.style] : []);
+                            stylesEl.innerHTML = '<i class="fas fa-tshirt text-secondary mr-1"></i>';
+                            styles.slice(0, 4).forEach(function(st){
+                                stylesEl.appendChild(chip(st, 'badge badge-light border text-dark mr-1 mb-1'));
+                                stylesEl.appendChild(document.createTextNode(' '));
+                            });
+                            if(styles.length > 4){
+                                stylesEl.appendChild(chip('+' + (styles.length - 4), 'badge badge-light border text-muted mr-1 mb-1'));
+                            }
+                            stylesEl.title = 'Style di row ini: ' + styles.join(', ');
+                        }
+
+                        const ocfsEl = hdr.querySelector('[data-row-ocfs]');
+                        if(ocfsEl && r.is_locked){
+                            const ocfs = (r.ocf_list && r.ocf_list.length) ? r.ocf_list : (r.ocf ? [r.ocf] : []);
+                            ocfsEl.innerHTML = '';
+                            if(ocfs.length === 0){
+                                ocfsEl.appendChild(chip('-', 'badge badge-secondary mr-1 mb-1', 'OCF: '));
+                            } else {
+                                ocfs.slice(0, 4).forEach(function(ocf){
+                                    ocfsEl.appendChild(chip(ocf, 'badge badge-secondary mr-1 mb-1', 'OCF: '));
+                                    ocfsEl.appendChild(document.createTextNode(' '));
+                                });
+                                if(ocfs.length > 4){
+                                    ocfsEl.appendChild(chip('+' + (ocfs.length - 4) + ' OCF', 'badge badge-light border text-muted mr-1 mb-1'));
+                                }
+                            }
+                            ocfsEl.title = 'OCF di row ini: ' + (ocfs.length ? ocfs.join(', ') : '-');
+                        }
+
                         // cartons + pcs line
-                        const ctnEl = hdr.querySelector('.text-danger');
+                        const ctnEl = hdr.querySelector('[data-row-cartons]');
                         if(ctnEl && r.is_locked){
                             ctnEl.innerHTML = '<i class="fas fa-boxes mr-1"></i> ' + r.total_cartons + ' ctn';
                         }
-                        // update pcs sibling
                         if(r.is_locked){
-                            const pcsEl = hdr.querySelector('.border-top .text-dark.small');
+                            const pcsEl = hdr.querySelector('[data-row-pcs]');
                             if(pcsEl) pcsEl.textContent = '(' + (r.total_pcs||0).toLocaleString('id-ID') + ' pcs)';
                         }
                         // rebuild breakdown Size & Color (always update even if collapsed)
@@ -2059,18 +2180,32 @@
                     setLiveState('#1cc88a', 'Live: terhubung');
                 };
             }
+            function pauseLive(){
+                if(paused) return;
+                paused = true;
+                if(btnPause){
+                    btnPause.textContent = 'Lanjutkan';
+                    btnPause.classList.remove('btn-outline-secondary');
+                    btnPause.classList.add('btn-warning');
+                }
+                if(es){ try{ es.close(); }catch(e){} }
+                setLiveState('#858796', 'Live: dijeda');
+            }
+
+            function resumeLive(){
+                if(!paused) return;
+                paused = false;
+                if(btnPause){
+                    btnPause.textContent = 'Jeda';
+                    btnPause.classList.remove('btn-warning');
+                    btnPause.classList.add('btn-outline-secondary');
+                }
+                connect();
+            }
+
             if(btnPause){
                 btnPause.addEventListener('click', function(){
-                    paused = !paused;
-                    btnPause.textContent = paused ? 'Lanjutkan' : 'Jeda';
-                    btnPause.classList.toggle('btn-outline-secondary', !paused);
-                    btnPause.classList.toggle('btn-warning', paused);
-                    if(paused){
-                        if(es){ try{ es.close(); }catch(e){} }
-                        setLiveState('#858796', 'Live: dijeda');
-                    } else {
-                        connect();
-                    }
+                    if(paused) resumeLive(); else pauseLive();
                 });
             }
             // pause when tab hidden to save resources
@@ -2084,8 +2219,13 @@
             });
             // start
             connect();
-            // expose for debug
-            window._palletLive = { connect: connect };
+            // expose for debug + dipakai form simpan warna
+            window._palletLive = {
+                connect: connect,
+                pause: pauseLive,
+                resume: resumeLive,
+                isActive: function(){ return !paused && es && es.readyState === 1; }
+            };
         })();
 
         // Close fullscreen with Escape key (kecuali sedang ada modal / swal terbuka)

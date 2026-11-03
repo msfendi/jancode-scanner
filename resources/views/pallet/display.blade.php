@@ -686,7 +686,8 @@
                     const r = data.rows ? data.rows[row] : null;
                     if (r && r.is_locked) {
                         el.textContent = (r.country || '-') + ' · ' + (r.total_cartons || 0) + ' ctn';
-                        el.title = (r.style || '-') + ' · ' + (r.country || '-');
+                        const rowStyles = (r.style_list && r.style_list.length) ? r.style_list : [r.style || '-'];
+                        el.title = rowStyles.join(', ') + ' · ' + (r.country || '-');
                     } else {
                         el.textContent = 'kosong';
                         el.title = 'Belum terisi';

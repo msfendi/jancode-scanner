@@ -125,6 +125,17 @@ posisi dari database.
 - Packing list yang sudah Finish tidak muncul lagi di daftar penempatan pallet dan
   tidak bisa ditempatkan ulang.
 
+### 5b. Multi-style dalam satu row
+
+- Satu **row** (B–I) boleh berisi beberapa **style/OCF**.
+- Satu **pallet/alamat** tetap hanya boleh berisi **1 style dan 1 OCF**; karton
+  dengan style/OCF berbeda harus ditempatkan di pallet lain, meskipun masih di row yang sama.
+- Country tetap mengikuti mode per pallet: pallet **single** hanya 1 negara,
+  pallet **multi** boleh beberapa negara.
+- Header tiap row menampilkan chip style/OCF yang ada di row tersebut, sehingga
+  row dengan 2 style atau lebih tetap terbaca. Pencarian style/OCF juga mencocokkan
+  seluruh isi row, bukan hanya style pertama.
+
 ## RBAC (Role & Permission)
 
 Dua role bawaan (dibuat otomatis oleh migration `2026_10_22_000001_seed_rbac_roles`):
