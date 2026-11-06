@@ -346,9 +346,16 @@ class JancodeController extends Controller
 
         try {
             DB::transaction(function () use ($sheets, $plan, $request, $importService, &$created, &$importedCount, &$skippedCount) {
-                // Session yang dipakai sheet lain pada file yang sama boleh
-                // memakai group_key yang sama (tiap sheet = 1 session).
-                $siblingSessionIds = [];
+                // Seluruh session yang direncanakan pada file ini boleh memegang
+                // group_key yang sama (tiap sheet = 1 session), sehingga update
+                // file berisi beberapa sheet dengan group yang sama tidak ditolak
+                // karena "sudah menjadi milik session lain".
+                $plannedSessionIds = collect($plan)
+                    ->map(fn ($p) => isset($p['session']) && $p['session'] ? (int) $p['session']->id : null)
+                    ->filter()
+                    ->unique()
+                    ->values()
+                    ->all();
 
                 foreach (array_values($sheets) as $index => $sheet) {
                     $target       = $plan[$index] ?? null;
@@ -364,11 +371,10 @@ class JancodeController extends Controller
                         'batch_name'        => $request->input('batch_name'),
                         'supplier_name'     => $request->input('supplier_name'),
                         'imported_by'       => auth()->id(),
-                        'allow_group_session_ids' => $siblingSessionIds,
+                        'allow_group_session_ids' => $plannedSessionIds,
                     ];
 
                     $result = $importService->importSheet($sheet, $meta);
-                    $siblingSessionIds[] = (int) $targetSession->id;
 
                     if (!$result) {
                         continue;
@@ -477,9 +483,12 @@ class JancodeController extends Controller
      * Susun rencana routing group -> session.
      *
      * Aturan (SETIAP SHEET = SATU SESSION):
-     *  1. Jika session lain sudah memegang kombinasi group_key ini (dan belum
-     *     dipakai sheet lain pada file yang sama) -> pakai session itu, agar
-     *     import file berikutnya menjadi revisi baru.
+     *  1. Jika masih ada session pemilik group ini yang belum dipakai file
+     *     ini -> pakai session itu, agar data masuk sebagai revisi baru di
+     *     session yang benar. Bila sheet ini sebelumnya sudah pernah diimport
+     *     (ada batch dengan sheet_name yang sama pada pemilik lain), utamakan
+     *     pemilik tersebut supaya SHANGHAI 1 tidak tertukar dengan SHANGHAI 2
+     *     saat update.
      *  2. Jika session aktif masih kosong (baru di-start) -> pakai untuk
      *     sheet pertama.
      *  3. Selain itu -> buat session baru KHUSUS untuk sheet tersebut.
@@ -497,10 +506,32 @@ class JancodeController extends Controller
             $header   = $sheet['header'] ?? [];
             $groupKey = ImportBatch::buildGroupKey($header);
 
-            // 1. Session yang sudah memegang kombinasi ini (belum dipakai file ini).
-            $owner = ImportSession::findByGroup($groupKey, null);
+            // 1. Session pemilik group yang belum dipakai file ini.
+            $unusedOwners = ImportSession::ownersByGroup($groupKey)
+                ->reject(fn ($s) => in_array((int) $s->id, $usedSessionIds, true))
+                ->values();
 
-            if ($owner && !in_array((int) $owner->id, $usedSessionIds, true)) {
+            $owner = null;
+
+            // Utamakan pemilik yang sudah punya batch dengan sheet_name sama
+            // (update/revisi file yang sama agar tidak tertukar antar sheet).
+            $sheetName = $sheet['sheet_name'] ?? null;
+            if ($sheetName) {
+                $matchingSessionId = ImportBatch::where('group_key', $groupKey)
+                    ->where('sheet_name', $sheetName)
+                    ->orderByDesc('id')
+                    ->value('session_id');
+
+                if ($matchingSessionId) {
+                    $owner = $unusedOwners->first(
+                        fn ($s) => (int) $s->id === (int) $matchingSessionId
+                    );
+                }
+            }
+
+            $owner ??= $unusedOwners->first();
+
+            if ($owner) {
                 if (!$dryRun && $owner->isClosed()) {
                     $owner->reopen();
                 }

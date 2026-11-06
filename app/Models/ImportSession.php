@@ -192,6 +192,30 @@ class ImportSession extends Model
     }
 
     /**
+     * Semua session yang memegang kombinasi group_key ini.
+     *
+     * Karena aturan "1 sheet = 1 session", satu file yang berisi beberapa sheet
+     * dengan group yang sama akan menghasilkan beberapa session pemilik. Saat
+     * file yang sama diimport ulang (update/revisi), routing harus memakai
+     * session pemilik yang masih belum dipakai, bukan membuat session baru
+     * atau menolak import.
+     */
+    public static function ownersByGroup(string $groupKey)
+    {
+        if ($groupKey === '') {
+            return collect();
+        }
+
+        return static::query()
+            ->where('group_key', $groupKey)
+            // Utamakan session yang masih OPEN agar user diarahkan ke session
+            // yang memang bisa dipakai untuk import / scan lanjutan.
+            ->orderByRaw("CASE WHEN status = 'open' THEN 0 ELSE 1 END")
+            ->orderByDesc('id')
+            ->get();
+    }
+
+    /**
      * Ikat group_key + metadata header saat import pertama.
      */
     public function bindGroup(string $groupKey, array $header, ?string $supplierName = null): void

@@ -136,6 +136,21 @@ posisi dari database.
   row dengan 2 style atau lebih tetap terbaca. Pencarian style/OCF juga mencocokkan
   seluruh isi row, bukan hanya style pertama.
 
+### 5c. Import file berisi beberapa sheet dengan group sama
+
+- Aturan tetap **1 sheet = 1 session**: setiap sheet menjadi satu session sendiri,
+  dan setiap sheet menjadi satu revisi pada packing list di session itu.
+- Bila satu file berisi dua sheet dengan group yang sama (mis. `SHANGHAI 1` dan
+  `SHANGHAI 2` untuk `AB30LA7S / 26131 / SHANGHAI D7-CN`), sheet diarahkan ke
+  **session pemilik group yang masih belum dipakai file ini**, sehingga tidak
+  dibuatkan session baru yang bentrok.
+- Saat file yang sama diimport ulang (update), sheet yang namanya pernah diimport
+  (mis. `SHANGHAI 1`) lebih dulu diarahkan ke session yang sudah punya batch
+  dengan nama sheet itu — jadi `SHANGHAI 1` tidak tertukar dengan `SHANGHAI 2`.
+- Import tidak lagi gagal dengan error "Kombinasi ... sudah menjadi milik
+  session ...", selama session tujuan memang pemilik group atau bagian dari
+  rencana import file yang sama.
+
 ## RBAC (Role & Permission)
 
 Dua role bawaan (dibuat otomatis oleh migration `2026_10_22_000001_seed_rbac_roles`):
