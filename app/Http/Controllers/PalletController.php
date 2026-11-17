@@ -10,6 +10,7 @@ use App\Models\PalletAddress;
 use App\Models\PalletAssignment;
 use App\Models\PalletAssignmentDetail;
 use App\Models\PalletColorRule;
+use App\Models\PalletRowLayout;
 use App\Services\PalletColorService;
 use App\Support\JancodeCode;
 use Illuminate\Http\Request;
@@ -23,8 +24,13 @@ class PalletController extends Controller
      */
     public function index(Request $request)
     {
-        // Pastikan 528 alamat pallet sudah di-seed
+        // Pastikan seluruh alamat pallet sudah di-seed (termasuk e & f)
         $this->ensureAddressesSeeded();
+
+        // Layout kolom per row (2/3 kolom per area) dari DB.
+        $rowLayouts = PalletRowLayout::layoutMap();
+        $rowAreas = PalletRowLayout::areasMap($rowLayouts);
+        $activeColumns = PalletRowLayout::activeColumnsMap($rowLayouts);
 
         $selectedRow = $request->input('row', 'all'); // 'all' atau 'B', 'C', dll
 
@@ -39,7 +45,13 @@ class PalletController extends Controller
             $query->where('row_label', strtoupper($selectedRow));
         }
 
-        $addresses = $query->get();
+        $addresses = $query->get()
+            ->filter(function ($address) use ($activeColumns) {
+                $columns = $activeColumns[$address->row_label] ?? [];
+
+                return in_array($address->col_label, $columns, true);
+            })
+            ->values();
 
         // Warna pallet mengikuti negara + status isi (aturan dari DB).
         $colorService = app(PalletColorService::class);
@@ -60,12 +72,17 @@ class PalletController extends Controller
             $address->setAttribute('visual_status', $visual['status']);
         }
 
-        // Hitung statistik
+        // Hitung statistik berdasarkan kolom yang aktif pada layout tiap row.
         $allAddresses = PalletAddress::with('assignment')->get();
-        $totalPositions = $allAddresses->count();
-        $occupiedCount = $allAddresses->filter(fn($a) => $a->assignment && $a->assignment->total_carton > 0)->count();
+        $activeAddresses = $allAddresses->filter(function ($address) use ($activeColumns) {
+            $columns = $activeColumns[$address->row_label] ?? [];
+
+            return in_array($address->col_label, $columns, true);
+        });
+        $totalPositions = $activeAddresses->count();
+        $occupiedCount = $activeAddresses->filter(fn($a) => $a->assignment && $a->assignment->total_carton > 0)->count();
         $vacantCount = $totalPositions - $occupiedCount;
-        $totalCartons = $allAddresses->sum(fn($a) => $a->assignment ? $a->assignment->total_carton : 0);
+        $totalCartons = $activeAddresses->sum(fn($a) => $a->assignment ? $a->assignment->total_carton : 0);
         $totalCapacity = $totalPositions * 42;
 
         // Daftar Master Jancode yang memiliki sisa karton hasil scan yang siap ditempatkan
@@ -98,7 +115,7 @@ class PalletController extends Controller
             ->filter(fn($item) => $item->unplaced_carton > 0)
             ->values();
 
-        // Kelompokkan alamat per Row untuk visualisasi (a & b horizontal depan, c & d belakang)
+        // Kelompokkan alamat per Row untuk visualisasi (kolom mengikuti layout row)
         $groupedRows = [];
         foreach ($addresses as $addr) {
             $r = $addr->row_label;
@@ -201,13 +218,15 @@ class PalletController extends Controller
             'rowSummaries',
             'currentSession',
             'palletColorRules',
-            'palletLegend'
+            'palletLegend',
+            'rowLayouts',
+            'rowAreas'
         ));
     }
 
     /**
      * Visualisasi 3D layout pallet (Three.js).
-     * Menampilkan gudang 528 posisi dalam bentuk 3D + animasi handlift in/out karton.
+     * Menampilkan gudang (alamat pallet aktif) dalam bentuk 3D + animasi handlift in/out karton.
      */
     public function threeD()
     {
@@ -225,11 +244,19 @@ class PalletController extends Controller
     {
         $this->ensureAddressesSeeded();
 
+        $activeColumns = PalletRowLayout::activeColumnsMap();
+
         $addresses = PalletAddress::with(['assignment.details.jancode'])
             ->orderBy('row_label')
             ->orderBy('col_label')
             ->orderBy('position_no')
-            ->get();
+            ->get()
+            ->filter(function ($address) use ($activeColumns) {
+                $columns = $activeColumns[$address->row_label] ?? [];
+
+                return in_array($address->col_label, $columns, true);
+            })
+            ->values();
 
         $pallets = [];
         $occupied = 0;
@@ -298,6 +325,8 @@ class PalletController extends Controller
 
         return view('pallet.display', [
             'palletLegend' => $colorService->legend(),
+            'rowLayouts'   => PalletRowLayout::layoutMap(),
+            'rowAreas'     => PalletRowLayout::areasMap(),
         ]);
     }
 
@@ -365,6 +394,82 @@ class PalletController extends Controller
             'success' => true,
             'message' => 'Warna pallet berhasil disimpan.',
         ]);
+    }
+
+    /**
+     * Simpan layout kolom per row dari modal "Atur Layout".
+     *
+     * Layout hanya mengubah tampilan; alamat e/f tetap tersimpan di DB.
+     * Perubahan ke 2 kolom ditolak bila kolom e/f pada row tersebut masih
+     * berisi pallet, supaya data tidak "hilang" dari tampilan.
+     */
+    public function updateRowLayout(Request $request)
+    {
+        $data = $request->validate([
+            'layouts'                    => 'required|array|min:1',
+            'layouts.*.row_label'        => 'required|string|in:B,C,D,E,F,G,H,I',
+            'layouts.*.columns_per_area' => 'required|integer|in:2,3',
+        ]);
+
+        $blockedRows = [];
+
+        foreach ($data['layouts'] as $item) {
+            $row = strtoupper($item['row_label']);
+
+            if ((int) $item['columns_per_area'] === 2 && $this->rowHasOccupiedColumns($row, ['e', 'f'])) {
+                $blockedRows[] = $row;
+            }
+        }
+
+        if (! empty($blockedRows)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Row ' . implode(', ', array_unique($blockedRows))
+                    . ' masih memiliki pallet terisi di kolom e/f. Kosongkan atau pindahkan isinya terlebih dahulu sebelum mengubah ke 2 kolom.',
+            ], 422);
+        }
+
+        DB::transaction(function () use ($data) {
+            foreach ($data['layouts'] as $item) {
+                PalletRowLayout::updateOrCreate(
+                    ['row_label' => strtoupper($item['row_label'])],
+                    ['columns_per_area' => (int) $item['columns_per_area']]
+                );
+            }
+        });
+
+        PalletRowLayout::flushCache();
+
+        return response()->json([
+            'success' => true,
+            'layouts' => PalletRowLayout::layoutMap(),
+            'message' => 'Layout kolom per row berhasil disimpan.',
+        ]);
+    }
+
+    /**
+     * Cek apakah ada pallet terisi pada kolom tertentu di sebuah row.
+     */
+    private function rowHasOccupiedColumns(string $rowLabel, array $columns): bool
+    {
+        return PalletAssignment::query()
+            ->where('total_carton', '>', 0)
+            ->whereHas('address', function ($query) use ($rowLabel, $columns) {
+                $query->where('row_label', strtoupper($rowLabel))
+                    ->whereIn('col_label', $columns);
+            })
+            ->exists();
+    }
+
+    /**
+     * Cek apakah alamat aktif pada layout row saat ini.
+     */
+    private function isAddressActive(PalletAddress $address): bool
+    {
+        $activeColumns = PalletRowLayout::activeColumnsMap();
+        $columns = $activeColumns[$address->row_label] ?? [];
+
+        return in_array($address->col_label, $columns, true);
     }
 
     /**
@@ -530,10 +635,31 @@ class PalletController extends Controller
     {
         $colorService = app(PalletColorService::class);
 
+        // Hanya alamat pada kolom yang aktif sesuai layout row yang dikirim
+        // ke board, supaya statistik live sama dengan tampilan.
+        $activeColumns = PalletRowLayout::activeColumnsMap();
+
         $addresses = PalletAddress::with(['assignment.details.jancode'])
             ->orderBy('id')
-            ->get(['id','code','row_label','col_label','position_no','max_carton','country_mode']);
-        $assignments = PalletAssignment::with(['details.jancode','address'])->get();
+            ->get(['id','code','row_label','col_label','position_no','max_carton','country_mode'])
+            ->filter(function ($address) use ($activeColumns) {
+                $columns = $activeColumns[$address->row_label] ?? [];
+
+                return in_array($address->col_label, $columns, true);
+            })
+            ->values();
+        $assignments = PalletAssignment::with(['details.jancode','address'])->get()
+            ->filter(function ($assignment) use ($activeColumns) {
+                $address = $assignment->address;
+                if (! $address) {
+                    return false;
+                }
+
+                $columns = $activeColumns[$address->row_label] ?? [];
+
+                return in_array($address->col_label, $columns, true);
+            })
+            ->values();
         $maxA = PalletAssignment::max('updated_at') ?: '0';
         $maxD = PalletAssignmentDetail::max('updated_at') ?: '0';
         $maxAddr = PalletAddress::max('updated_at') ?: '0';
@@ -718,6 +844,13 @@ class PalletController extends Controller
             $address = PalletAddress::lockForUpdate()->findOrFail($addressId);
             $jancode = Jancode::lockForUpdate()->findOrFail($jancodeId);
             $jancode->loadMissing('packingList');
+
+            if (! $this->isAddressActive($address)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Pallet {$address->code} sedang nonaktif pada layout row ini (mode 2 kolom). Ubah layout row ke 3 kolom terlebih dahulu.",
+                ], 422);
+            }
 
             if ($jancode->packingList?->isFinishedForBatch((int) $jancode->import_batch_id)) {
                 return response()->json([
@@ -961,6 +1094,13 @@ class PalletController extends Controller
 
             $targetAddress = PalletAddress::lockForUpdate()->findOrFail($targetAddressId);
             $targetAssignment = PalletAssignment::where('pallet_address_id', $targetAddressId)->lockForUpdate()->first();
+
+            if (! $this->isAddressActive($targetAddress)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Pallet tujuan {$targetAddress->code} sedang nonaktif pada layout row ini (mode 2 kolom). Ubah layout row ke 3 kolom terlebih dahulu.",
+                ], 422);
+            }
 
             $jancodeCountry = strtoupper(trim($sourceAssignment->country));
             $jancodeStyle = strtoupper(trim($sourceAssignment->style));
@@ -1211,13 +1351,14 @@ class PalletController extends Controller
     }
 
     /**
-     * Helper: Seed 528 posisi jika belum ada
+     * Helper: Seed seluruh alamat pallet (a–f) jika belum ada
      */
     private function ensureAddressesSeeded()
     {
         $rows = ['B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'];
-        // a & b: 14 posisi; c & d: 19 posisi (bertambah dari 16).
-        $columns = ['a' => 14, 'b' => 14, 'c' => 19, 'd' => 19];
+        // a & b: 14 posisi; c, d, e, f: 19 posisi.
+        // e/f dipakai saat row memakai layout 3 kolom per area.
+        $columns = ['a' => 14, 'b' => 14, 'c' => 19, 'd' => 19, 'e' => 19, 'f' => 19];
 
         $existing = PalletAddress::pluck('code')->flip();
         $now = now();

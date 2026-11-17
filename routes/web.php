@@ -107,6 +107,7 @@ Route::group(['middleware' => 'auth'], function () {
         Route::get('/find-jancode', [\App\Http\Controllers\PalletController::class, 'findJancode'])->name('findJancode');
         Route::post('/{id}/country-mode', [\App\Http\Controllers\PalletController::class, 'updateCountryMode'])->name('countryMode');
         Route::post('/color-rules', [\App\Http\Controllers\PalletController::class, 'updateColorRules'])->name('colorRules')->middleware('can:pallet.manage');
+        Route::post('/row-layouts', [\App\Http\Controllers\PalletController::class, 'updateRowLayout'])->name('rowLayouts')->middleware('can:pallet.manage');
         Route::get('/detail/{id}', [\App\Http\Controllers\PalletController::class, 'getDetail'])->name('detail');
         Route::post('/store', [\App\Http\Controllers\PalletController::class, 'storeAssignment'])->name('store');
         Route::post('/move', [\App\Http\Controllers\PalletController::class, 'moveCarton'])->name('move');

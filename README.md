@@ -103,12 +103,29 @@ tidak diimport dan tidak dihitung sebagai baris gagal. Hanya JAN yang tidak
 valid (bukan 13 digit) yang ditandai gagal.
 
 ### 5. Layout pallet (BR-07)
-Row **B–I**, kolom **a & b = 14 posisi**, kolom **c & d = 19 posisi**
-(bertambah dari 16). Total **528 alamat pallet** (8 row × 66 posisi), kapasitas
-42 karton per pallet. Penambahan posisi `c-17..c-19` dan `d-17..d-19` dilakukan
-oleh migration `2026_10_26_000002_add_extra_cd_pallet_positions` (idempotent).
-Halaman `/pallet`, visualisasi 3D, dan display publik otomatis membaca jumlah
-posisi dari database.
+Row **B–I**, kolom **a & b = 14 posisi**, kolom **c, d, e, f = 19 posisi**.
+Total **832 alamat pallet** (8 row × 104 posisi), kapasitas 42 karton per pallet.
+Penambahan posisi `c-17..c-19` dan `d-17..d-19` dilakukan oleh migration
+`2026_10_26_000002_add_extra_cd_pallet_positions`, sedangkan kolom **e & f**
+(19 posisi) ditambahkan oleh migration `2026_11_17_000002_add_ef_pallet_positions`
+(keduanya idempotent). Halaman `/pallet`, visualisasi 3D, dan display publik
+otomatis membaca jumlah posisi dari database.
+
+### 5d. Layout kolom dinamis per row (2 atau 3 kolom)
+
+- Setiap row memiliki **2 area**: **ATAS** dan **BAWAH**. Jumlah kolom per area
+  dapat diatur **per row** melalui tombol **Atur Layout** di `/pallet`
+  (permission `pallet.manage`).
+- **Mode 3 kolom** → ATAS `a | b | c`, BAWAH `d | e | f`.
+- **Mode 2 kolom** → ATAS `a | b`, BAWAH `c | d`; kolom `e` & `f` nonaktif.
+- Konfigurasi disimpan di tabel **`pallet_row_layouts`** (migration
+  `2026_11_17_000001_create_pallet_row_layouts_table`), default **2 kolom** per row.
+- Alamat `e`/`f` selalu ada di database agar data tidak hilang saat layout diubah.
+  Perubahan ke mode 2 ditolak bila kolom `e`/`f` pada row tersebut masih berisi
+  pallet; kosongkan/pindahkan dulu isinya.
+- Board `/pallet`, display publik, dan data 3D hanya menampilkan kolom yang aktif
+  sesuai layout tiap row. Statistik pallet juga dihitung dari kolom aktif.
+
 
 ### 5a. Warna pallet per negara & kosongkan setelah Finish
 

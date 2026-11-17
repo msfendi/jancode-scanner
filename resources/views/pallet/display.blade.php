@@ -554,6 +554,7 @@
             'use strict';
 
             const ROWS = ['B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'];
+            const ROW_AREAS = @json($rowAreas ?? []);
             const STREAM_URL = @json(route('pallet.public.stream'));
             const DETAIL_URL = @json(route('pallet.public.detail', ['id' => '__id__']));
             const boxMap = new Map();
@@ -582,29 +583,34 @@
                     title.innerHTML = '<span class="row-label">ROW ' + row + '</span><span class="row-sub" data-row-sub>—</span>';
                     card.appendChild(title);
 
-                    const halves = [
-                        { label: 'DEPAN · a | b', cols: ['a', 'b'], count: 14 },
-                        { label: 'BELAKANG · c | d', cols: ['c', 'd'], count: 19 },
+                    const fallbackAreas = [
+                        { label: 'AREA ATAS', columns: ['a', 'b'], positions: 14 },
+                        { label: 'AREA BAWAH', columns: ['c', 'd'], positions: 19 },
                     ];
+                    const areas = (ROW_AREAS && ROW_AREAS[row]) ? ROW_AREAS[row] : fallbackAreas;
 
-                    halves.forEach(function (half) {
+                    areas.forEach(function (area) {
+                        const cols = area.columns || [];
+                        const count = parseInt(area.positions, 10) || 19;
+
                         const wrap = document.createElement('div');
                         wrap.className = 'half';
 
                         const h = document.createElement('div');
                         h.className = 'half-title';
-                        h.textContent = half.label;
+                        h.textContent = area.label + ' · ' + cols.join(' | ');
                         wrap.appendChild(h);
 
                         const grid = document.createElement('div');
                         grid.className = 'positions';
-                        grid.style.gridTemplateRows = 'repeat(' + half.count + ', minmax(0, 1fr))';
+                        grid.style.gridTemplateRows = 'repeat(' + count + ', minmax(0, 1fr))';
 
-                        for (let p = 1; p <= half.count; p++) {
+                        for (let p = 1; p <= count; p++) {
                             const line = document.createElement('div');
                             line.className = 'pos-row';
+                            line.style.gridTemplateColumns = 'repeat(' + cols.length + ', minmax(0, 1fr))';
 
-                            half.cols.forEach(function (col) {
+                            cols.forEach(function (col) {
                                 const box = document.createElement('div');
                                 box.className = 'box vacant';
                                 box.setAttribute('data-key', row + ':' + col + ':' + p);

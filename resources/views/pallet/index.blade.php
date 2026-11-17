@@ -54,6 +54,21 @@
         border-top: 5px solid #e74a3b;
     }
 
+    /* Layout 3 kolom per area butuh kartu lebih lebar */
+    .pallet-row-card.mode-3 {
+        flex: 0 0 440px;
+        width: 440px;
+        min-width: 440px;
+    }
+
+    /* Slot kosong agar kolom tetap sejajar saat jumlah posisi berbeda (a/b 14, c/d/e/f 19) */
+    .pallet-box.pallet-absent {
+        visibility: hidden;
+        pointer-events: none;
+        background: transparent;
+        border: 1px dashed transparent;
+    }
+
     /* Highlight matching cards in search */
     .pallet-row-card.search-match {
         border: 3px solid #f6c23e;
@@ -296,6 +311,9 @@
                                 <button class="btn btn-sm btn-outline-primary shadow-sm" data-toggle="modal" data-target="#palletColorModal">
                                     <i class="fas fa-palette fa-sm mr-1"></i> Atur Warna
                                 </button>
+                                <button class="btn btn-sm btn-outline-dark shadow-sm" data-toggle="modal" data-target="#palletLayoutModal">
+                                    <i class="fas fa-columns fa-sm mr-1"></i> Atur Layout
+                                </button>
                             @endcan
                             <button class="btn btn-sm btn-primary shadow-sm" data-toggle="modal" data-target="#quickPlotModal">
                                 <i class="fas fa-plus fa-sm text-white-50 mr-1"></i> Plot Karton Baru
@@ -370,7 +388,7 @@
                                         <div class="col mr-2">
                                             <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Total Alamat Pallet</div>
                                             <div class="h5 mb-0 font-weight-bold text-gray-800">{{ $totalPositions }} Posisi</div>
-                                            <div class="small text-muted">8 Row (B–I) &times; 60 Posisi</div>
+                                            <div class="small text-muted">{{ count($rowLayouts) }} Row (B–I) &middot; layout dinamis 2/3 kolom</div>
                                         </div>
                                         <div class="col-auto">
                                             <i class="fas fa-th fa-2x text-gray-300"></i>
@@ -521,7 +539,7 @@
                                                 $summary = $rowSummaries[$rowLetter] ?? null;
                                                 $isRowLocked = $summary && $summary['is_locked'];
                                             @endphp
-                                            <div class="pallet-row-card {{ $isRowLocked ? 'locked-card' : '' }}" data-row="{{ $rowLetter }}">
+                                            <div class="pallet-row-card {{ $isRowLocked ? 'locked-card' : '' }} mode-{{ $rowLayouts[$rowLetter] ?? 2 }}" data-row="{{ $rowLetter }}">
                                                 <!-- Header Row Card -->
                                                 <div class="card-header py-2 bg-light border-bottom">
                                                     <div class="d-flex justify-content-between align-items-center">
@@ -619,94 +637,51 @@
 
                                                 <!-- Body Pallet Vertikal Grid -->
                                                 <div class="card-body p-2" style="background: #fafbfe;">
-                                                    <!-- BAGIAN 1: Subrow a & b (1 s/d 14) -->
-                                                    <div class="text-center font-weight-bold small text-primary mb-1">
-                                                        AREA DEPAN (a & b)
-                                                    </div>
-                                                    <div class="subrow-vert-header">
-                                                        <div class="subrow-header-pos">Pos</div>
-                                                        <div class="subrow-header-col">a</div>
-                                                        <div class="subrow-header-col">b</div>
-                                                    </div>
+                                                    @php
+                                                        $cardAreas = $rowAreas[$rowLetter] ?? [];
+                                                    @endphp
 
-                                                    @for($p = 1; $p <= 14; $p++)
-                                                        @php
-                                                            $addrA = $groupedRows[$rowLetter]['a'][$p] ?? null;
-                                                            $isOccA = $addrA && $addrA->assignment && $addrA->assignment->total_carton > 0;
-                                                            $cartonsA = $isOccA ? $addrA->assignment->total_carton : 0;
-                                                            $stateA = !$isOccA ? 'pallet-vacant' : ($cartonsA >= (int) $addrA->max_carton ? 'pallet-full' : 'pallet-partial');
-                                                            $multiA = ($addrA && $addrA->country_mode === 'multi') ? ' pallet-multi' : '';
+                                                    @foreach($cardAreas as $area)
+                                                        @if(!$loop->first)
+                                                            <hr class="my-3" style="border-top: 2px dashed #b7b9cc;">
+                                                        @endif
 
-                                                            $addrB = $groupedRows[$rowLetter]['b'][$p] ?? null;
-                                                            $isOccB = $addrB && $addrB->assignment && $addrB->assignment->total_carton > 0;
-                                                            $cartonsB = $isOccB ? $addrB->assignment->total_carton : 0;
-                                                            $stateB = !$isOccB ? 'pallet-vacant' : ($cartonsB >= (int) $addrB->max_carton ? 'pallet-full' : 'pallet-partial');
-                                                            $multiB = ($addrB && $addrB->country_mode === 'multi') ? ' pallet-multi' : '';
-                                                        @endphp
-                                                        <div class="pallet-vert-row">
-                                                            <span class="pallet-pos-tag">{{ $p }}</span>
-                                                            @if($addrA)
-                                                                <div class="pallet-box {{ $stateA }}{{ $multiA }}" data-pallet-id="{{ $addrA->id }}" data-code="{{ $addrA->code }}" onclick="openPalletModal({{ $addrA->id }})"
-                                                                     style="--pallet-bg: {{ $addrA->visual_color ?? '#e5e7eb' }}; --pallet-fg: {{ $addrA->visual_text_color ?? '#374151' }}; --pallet-shadow: {{ $addrA->visual_text_shadow ?? 'none' }};"
-                                                                     title="{{ $addrA->code }}: {{ $isOccA ? $cartonsA . '/42 Karton (' . $addrA->assignment->style . ' - ' . $addrA->assignment->country . ')' : 'Kosong (Maks 42)' }}{{ $addrA->country_mode === 'multi' ? ' [Multi Negara]' : ' [1 Negara]' }}">
-                                                                    <span class="pallet-code">{{ $addrA->code }}</span>
-                                                                </div>
-                                                            @endif
-                                                            @if($addrB)
-                                                                <div class="pallet-box {{ $stateB }}{{ $multiB }}" data-pallet-id="{{ $addrB->id }}" data-code="{{ $addrB->code }}" onclick="openPalletModal({{ $addrB->id }})"
-                                                                     style="--pallet-bg: {{ $addrB->visual_color ?? '#e5e7eb' }}; --pallet-fg: {{ $addrB->visual_text_color ?? '#374151' }}; --pallet-shadow: {{ $addrB->visual_text_shadow ?? 'none' }};"
-                                                                     title="{{ $addrB->code }}: {{ $isOccB ? $cartonsB . '/42 Karton (' . $addrB->assignment->style . ' - ' . $addrB->assignment->country . ')' : 'Kosong (Maks 42)' }}{{ $addrB->country_mode === 'multi' ? ' [Multi Negara]' : ' [1 Negara]' }}">
-                                                                    <span class="pallet-code">{{ $addrB->code }}</span>
-                                                                </div>
-                                                            @endif
+                                                        <div class="text-center font-weight-bold small {{ $area['key'] === 'top' ? 'text-primary' : 'text-secondary' }} mb-1">
+                                                            {{ $area['label'] }} ({{ implode(' & ', $area['columns']) }})
                                                         </div>
-                                                    @endfor
-
-                                                    <!-- DIVIDER ANTARA DEPAN & BELAKANG -->
-                                                    <hr class="my-3" style="border-top: 2px dashed #b7b9cc;">
-
-                                                    <!-- BAGIAN 2: Subrow c & d (1 s/d 19) -->
-                                                    <div class="text-center font-weight-bold small text-secondary mb-1">
-                                                        AREA BELAKANG (c & d)
-                                                    </div>
-                                                    <div class="subrow-vert-header">
-                                                        <div class="subrow-header-pos">Pos</div>
-                                                        <div class="subrow-header-col text-secondary">c</div>
-                                                        <div class="subrow-header-col text-secondary">d</div>
-                                                    </div>
-
-                                                    @for($p = 1; $p <= 19; $p++)
-                                                        @php
-                                                            $addrC = $groupedRows[$rowLetter]['c'][$p] ?? null;
-                                                            $isOccC = $addrC && $addrC->assignment && $addrC->assignment->total_carton > 0;
-                                                            $cartonsC = $isOccC ? $addrC->assignment->total_carton : 0;
-                                                            $stateC = !$isOccC ? 'pallet-vacant' : ($cartonsC >= (int) $addrC->max_carton ? 'pallet-full' : 'pallet-partial');
-                                                            $multiC = ($addrC && $addrC->country_mode === 'multi') ? ' pallet-multi' : '';
-
-                                                            $addrD = $groupedRows[$rowLetter]['d'][$p] ?? null;
-                                                            $isOccD = $addrD && $addrD->assignment && $addrD->assignment->total_carton > 0;
-                                                            $cartonsD = $isOccD ? $addrD->assignment->total_carton : 0;
-                                                            $stateD = !$isOccD ? 'pallet-vacant' : ($cartonsD >= (int) $addrD->max_carton ? 'pallet-full' : 'pallet-partial');
-                                                            $multiD = ($addrD && $addrD->country_mode === 'multi') ? ' pallet-multi' : '';
-                                                        @endphp
-                                                        <div class="pallet-vert-row">
-                                                            <span class="pallet-pos-tag">{{ $p }}</span>
-                                                            @if($addrC)
-                                                                <div class="pallet-box {{ $stateC }}{{ $multiC }}" data-pallet-id="{{ $addrC->id }}" data-code="{{ $addrC->code }}" onclick="openPalletModal({{ $addrC->id }})"
-                                                                     style="--pallet-bg: {{ $addrC->visual_color ?? '#e5e7eb' }}; --pallet-fg: {{ $addrC->visual_text_color ?? '#374151' }}; --pallet-shadow: {{ $addrC->visual_text_shadow ?? 'none' }};"
-                                                                     title="{{ $addrC->code }}: {{ $isOccC ? $cartonsC . '/42 Karton (' . $addrC->assignment->style . ' - ' . $addrC->assignment->country . ')' : 'Kosong (Maks 42)' }}{{ $addrC->country_mode === 'multi' ? ' [Multi Negara]' : ' [1 Negara]' }}">
-                                                                    <span class="pallet-code">{{ $addrC->code }}</span>
-                                                                </div>
-                                                            @endif
-                                                            @if($addrD)
-                                                                <div class="pallet-box {{ $stateD }}{{ $multiD }}" data-pallet-id="{{ $addrD->id }}" data-code="{{ $addrD->code }}" onclick="openPalletModal({{ $addrD->id }})"
-                                                                     style="--pallet-bg: {{ $addrD->visual_color ?? '#e5e7eb' }}; --pallet-fg: {{ $addrD->visual_text_color ?? '#374151' }}; --pallet-shadow: {{ $addrD->visual_text_shadow ?? 'none' }};"
-                                                                     title="{{ $addrD->code }}: {{ $isOccD ? $cartonsD . '/42 Karton (' . $addrD->assignment->style . ' - ' . $addrD->assignment->country . ')' : 'Kosong (Maks 42)' }}{{ $addrD->country_mode === 'multi' ? ' [Multi Negara]' : ' [1 Negara]' }}">
-                                                                    <span class="pallet-code">{{ $addrD->code }}</span>
-                                                                </div>
-                                                            @endif
+                                                        <div class="subrow-vert-header">
+                                                            <div class="subrow-header-pos">Pos</div>
+                                                            @foreach($area['columns'] as $col)
+                                                                <div class="subrow-header-col {{ $area['key'] === 'top' ? '' : 'text-secondary' }}">{{ $col }}</div>
+                                                            @endforeach
                                                         </div>
-                                                    @endfor
+
+                                                        @for($p = 1; $p <= $area['positions']; $p++)
+                                                            <div class="pallet-vert-row">
+                                                                <span class="pallet-pos-tag">{{ $p }}</span>
+                                                                @foreach($area['columns'] as $col)
+                                                                    @php
+                                                                        $addr = $groupedRows[$rowLetter][$col][$p] ?? null;
+                                                                        $isOccupied = $addr && $addr->assignment && $addr->assignment->total_carton > 0;
+                                                                        $cartons = $isOccupied ? (int) $addr->assignment->total_carton : 0;
+                                                                        $state = !$isOccupied ? 'pallet-vacant' : ($cartons >= (int) $addr->max_carton ? 'pallet-full' : 'pallet-partial');
+                                                                        $multi = ($addr && $addr->country_mode === 'multi') ? ' pallet-multi' : '';
+                                                                    @endphp
+
+                                                                    @if($addr)
+                                                                        <div class="pallet-box {{ $state }}{{ $multi }}" data-pallet-id="{{ $addr->id }}" data-code="{{ $addr->code }}" onclick="openPalletModal({{ $addr->id }})"
+                                                                             style="--pallet-bg: {{ $addr->visual_color ?? '#e5e7eb' }}; --pallet-fg: {{ $addr->visual_text_color ?? '#374151' }}; --pallet-shadow: {{ $addr->visual_text_shadow ?? 'none' }};"
+                                                                             title="{{ $addr->code }}: {{ $isOccupied ? $cartons . '/42 Karton (' . $addr->assignment->style . ' - ' . $addr->assignment->country . ')' : 'Kosong (Maks 42)' }}{{ $addr->country_mode === 'multi' ? ' [Multi Negara]' : ' [1 Negara]' }}">
+                                                                            <span class="pallet-code">{{ $addr->code }}</span>
+                                                                        </div>
+                                                                    @else
+                                                                        {{-- Slot kosong agar kolom tetap sejajar (mis. a/b hanya 14 posisi) --}}
+                                                                        <div class="pallet-box pallet-absent" aria-hidden="true"></div>
+                                                                    @endif
+                                                                @endforeach
+                                                            </div>
+                                                        @endfor
+                                                    @endforeach
                                                 </div>
                                             </div>
                                         @endif
@@ -792,6 +767,72 @@
                         <button type="button" class="btn btn-secondary" data-dismiss="modal">Batal</button>
                         <button type="submit" class="btn btn-primary">
                             <i class="fas fa-save mr-1"></i> Simpan Warna
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Atur Layout Kolom per Row -->
+    <div class="modal fade" id="palletLayoutModal" tabindex="-1" role="dialog" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable" role="document">
+            <div class="modal-content">
+                <div class="modal-header bg-dark text-white">
+                    <h5 class="modal-title font-weight-bold">
+                        <i class="fas fa-columns mr-2"></i> Atur Layout Kolom per Row
+                    </h5>
+                    <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <form id="palletLayoutForm">
+                    <div class="modal-body p-4">
+                        <p class="small text-muted mb-3">
+                            Setiap row memiliki <strong>2 area</strong> (atas &amp; bawah). Pilih
+                            <strong>2 atau 3 kolom</strong> per area untuk tiap row:
+                        </p>
+                        <ul class="small text-muted mb-3">
+                            <li><strong>3 kolom</strong> &rarr; atas <code>a | b | c</code>, bawah <code>d | e | f</code>.</li>
+                            <li><strong>2 kolom</strong> &rarr; atas <code>a | b</code>, bawah <code>c | d</code> (kolom <code>e</code> &amp; <code>f</code> nonaktif).</li>
+                        </ul>
+
+                        <div class="alert alert-warning small py-2">
+                            <i class="fas fa-info-circle mr-1"></i>
+                            Kolom <code>a</code>/<code>b</code> memiliki 14 posisi, sedangkan <code>c</code>/<code>d</code>/<code>e</code>/<code>f</code> memiliki 19 posisi.
+                            Perubahan ke 2 kolom ditolak bila kolom <code>e</code>/<code>f</code> masih berisi pallet.
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered align-middle mb-0">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th width="90">Row</th>
+                                        <th width="150">Kolom / Area</th>
+                                        <th>Preview</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach($rowLayouts as $layoutRow => $layoutMode)
+                                        <tr>
+                                            <td class="align-middle"><strong>ROW {{ $layoutRow }}</strong></td>
+                                            <td class="align-middle">
+                                                <select class="form-control form-control-sm" data-layout-row="{{ $layoutRow }}">
+                                                    <option value="2" {{ $layoutMode === 2 ? 'selected' : '' }}>2 kolom</option>
+                                                    <option value="3" {{ $layoutMode === 3 ? 'selected' : '' }}>3 kolom</option>
+                                                </select>
+                                            </td>
+                                            <td class="align-middle small text-muted" data-layout-preview="{{ $layoutRow }}"></td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Batal</button>
+                        <button type="submit" class="btn btn-dark">
+                            <i class="fas fa-save mr-1"></i> Simpan Layout
                         </button>
                     </div>
                 </form>
@@ -1283,6 +1324,94 @@
             };
 
             // Stream SSE lokal dicek setiap ~2 detik; beri jeda aman sebelum POST.
+            if (liveWasActive) {
+                setTimeout(doSave, 2200);
+            } else {
+                doSave();
+            }
+        });
+
+        // ================= ATUR LAYOUT KOLOM PER ROW =================
+        function layoutPreviewText(mode) {
+            return Number(mode) === 3
+                ? 'Atas: a | b | c   ·   Bawah: d | e | f'
+                : 'Atas: a | b   ·   Bawah: c | d   (e & f nonaktif)';
+        }
+
+        function refreshLayoutPreviews() {
+            $('#palletLayoutForm select[data-layout-row]').each(function () {
+                const row = $(this).data('layout-row');
+                $('[data-layout-preview="' + row + '"]').text(layoutPreviewText($(this).val()));
+            });
+        }
+
+        $(document).ready(refreshLayoutPreviews);
+        $('#palletLayoutForm').on('change', 'select[data-layout-row]', refreshLayoutPreviews);
+
+        $('#palletLayoutForm').on('submit', function (e) {
+            e.preventDefault();
+
+            const $form = $(this);
+            const $submit = $form.find('button[type="submit"]');
+            const $submitHtml = $submit.html();
+            const layouts = [];
+
+            $form.find('select[data-layout-row]').each(function () {
+                layouts.push({
+                    row_label: String($(this).data('layout-row')),
+                    columns_per_area: parseInt($(this).val(), 10)
+                });
+            });
+
+            // Server single-worker: jeda SSE dulu sebelum POST (sama seperti simpan warna).
+            const live = window._palletLive;
+            const liveWasActive = !!(live && live.isActive && live.isActive());
+            if (liveWasActive && live.pause) {
+                live.pause();
+            }
+
+            $submit.prop('disabled', true).html('<i class="fas fa-spinner fa-spin mr-1"></i> Menyimpan...');
+
+            const doSave = function () {
+                $.ajax({
+                    url: "{{ route('pallet.rowLayouts') }}",
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ layouts: layouts }),
+                    headers: {
+                        'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content'),
+                        'Accept': 'application/json'
+                    },
+                    success: function (res) {
+                        $('#palletLayoutModal').modal('hide');
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Tersimpan',
+                            text: res.message || 'Layout row berhasil disimpan.',
+                            timer: 1600,
+                            showConfirmButton: false
+                        }).then(function () { window.location.reload(); });
+                    },
+                    error: function (xhr) {
+                        if (liveWasActive && live.resume) {
+                            live.resume();
+                        }
+                        $submit.prop('disabled', false).html($submitHtml);
+
+                        const json = xhr.responseJSON || {};
+                        let msg = json.message || 'Gagal menyimpan layout.';
+                        if (xhr.status === 419) {
+                            msg = 'Sesi login kedaluwarsa. Muat ulang halaman lalu coba lagi.';
+                        } else if (json.errors) {
+                            msg = Object.values(json.errors).flat().join(' ');
+                        } else if (xhr.status) {
+                            msg = 'HTTP ' + xhr.status + ': ' + msg;
+                        }
+                        Swal.fire({ icon: 'error', title: 'Gagal Menyimpan Layout', text: msg });
+                    }
+                });
+            };
+
             if (liveWasActive) {
                 setTimeout(doSave, 2200);
             } else {
