@@ -61,7 +61,7 @@
         min-width: 440px;
     }
 
-    /* Slot kosong agar kolom tetap sejajar saat jumlah posisi berbeda (a/b 14, c/d/e/f 19) */
+    /* Slot kosong agar kolom tetap sejajar saat jumlah posisi berbeda (a/b/e 14, c/d/f 19) */
     .pallet-box.pallet-absent {
         visibility: hidden;
         pointer-events: none;
@@ -793,13 +793,13 @@
                             <strong>2 atau 3 kolom</strong> per area untuk tiap row:
                         </p>
                         <ul class="small text-muted mb-3">
-                            <li><strong>3 kolom</strong> &rarr; atas <code>a | b | c</code>, bawah <code>d | e | f</code>.</li>
+                            <li><strong>3 kolom</strong> &rarr; atas <code>a | b | e</code>, bawah <code>c | d | f</code>.</li>
                             <li><strong>2 kolom</strong> &rarr; atas <code>a | b</code>, bawah <code>c | d</code> (kolom <code>e</code> &amp; <code>f</code> nonaktif).</li>
                         </ul>
 
                         <div class="alert alert-warning small py-2">
                             <i class="fas fa-info-circle mr-1"></i>
-                            Kolom <code>a</code>/<code>b</code> memiliki 14 posisi, sedangkan <code>c</code>/<code>d</code>/<code>e</code>/<code>f</code> memiliki 19 posisi.
+                            Kolom <code>a</code>/<code>b</code>/<code>e</code> memiliki 14 posisi, sedangkan <code>c</code>/<code>d</code>/<code>f</code> memiliki 19 posisi.
                             Perubahan ke 2 kolom ditolak bila kolom <code>e</code>/<code>f</code> masih berisi pallet.
                         </div>
 
@@ -1334,7 +1334,7 @@
         // ================= ATUR LAYOUT KOLOM PER ROW =================
         function layoutPreviewText(mode) {
             return Number(mode) === 3
-                ? 'Atas: a | b | c   ·   Bawah: d | e | f'
+                ? 'Atas: a | b | e   ·   Bawah: c | d | f'
                 : 'Atas: a | b   ·   Bawah: c | d   (e & f nonaktif)';
         }
 

@@ -103,11 +103,11 @@ tidak diimport dan tidak dihitung sebagai baris gagal. Hanya JAN yang tidak
 valid (bukan 13 digit) yang ditandai gagal.
 
 ### 5. Layout pallet (BR-07)
-Row **B–I**, kolom **a & b = 14 posisi**, kolom **c, d, e, f = 19 posisi**.
-Total **832 alamat pallet** (8 row × 104 posisi), kapasitas 42 karton per pallet.
+Row **B–I**, kolom **a, b, e = 14 posisi**, kolom **c, d, f = 19 posisi**.
+Total **792 alamat pallet** (8 row × 99 posisi), kapasitas 42 karton per pallet.
 Penambahan posisi `c-17..c-19` dan `d-17..d-19` dilakukan oleh migration
-`2026_10_26_000002_add_extra_cd_pallet_positions`, sedangkan kolom **e & f**
-(19 posisi) ditambahkan oleh migration `2026_11_17_000002_add_ef_pallet_positions`
+`2026_10_26_000002_add_extra_cd_pallet_positions`, sedangkan kolom **e** (14 posisi)
+dan **f** (19 posisi) ditambahkan oleh migration `2026_11_17_000002_add_ef_pallet_positions`
 (keduanya idempotent). Halaman `/pallet`, visualisasi 3D, dan display publik
 otomatis membaca jumlah posisi dari database.
 
@@ -116,7 +116,7 @@ otomatis membaca jumlah posisi dari database.
 - Setiap row memiliki **2 area**: **ATAS** dan **BAWAH**. Jumlah kolom per area
   dapat diatur **per row** melalui tombol **Atur Layout** di `/pallet`
   (permission `pallet.manage`).
-- **Mode 3 kolom** → ATAS `a | b | c`, BAWAH `d | e | f`.
+- **Mode 3 kolom** → ATAS `a | b | e`, BAWAH `c | d | f` (e = 14 posisi, f = 19 posisi).
 - **Mode 2 kolom** → ATAS `a | b`, BAWAH `c | d`; kolom `e` & `f` nonaktif.
 - Konfigurasi disimpan di tabel **`pallet_row_layouts`** (migration
   `2026_11_17_000001_create_pallet_row_layouts_table`), default **2 kolom** per row.

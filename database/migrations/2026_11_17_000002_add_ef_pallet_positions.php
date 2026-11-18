@@ -9,14 +9,12 @@ return new class extends Migration
     /** Row gudang BR-07. */
     private const ROWS = ['B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'];
 
-    /** Kolom baru untuk mode 3 kolom per area. */
-    private const COLUMNS = ['e', 'f'];
-
-    private const POSITIONS = 19;
+    /** Kolom baru untuk mode 3 kolom per area: e (atas) = 14, f (bawah) = 19. */
+    private const COLUMNS = ['e' => 14, 'f' => 19];
 
     /**
-     * Menambah kolom e & f masing-masing 19 posisi untuk tiap row.
-     * 8 row x 2 kolom x 19 posisi = 304 alamat baru (528 -> 832).
+     * Menambah kolom e (14 posisi) & f (19 posisi) untuk tiap row.
+     * 8 row x (14 + 19) posisi = 264 alamat baru (528 -> 792).
      *
      * Alamat e/f selalu dibuat, tetapi hanya ditampilkan bila row memakai
      * layout 3 kolom per area. Pada mode 2 kolom, e/f nonaktif namun datanya
@@ -33,8 +31,8 @@ return new class extends Migration
         $insert = [];
 
         foreach (self::ROWS as $row) {
-            foreach (self::COLUMNS as $col) {
-                for ($p = 1; $p <= self::POSITIONS; $p++) {
+            foreach (self::COLUMNS as $col => $positions) {
+                for ($p = 1; $p <= $positions; $p++) {
                     $code = sprintf('%s-%s-%02d', $row, $col, $p);
 
                     if ($existing->has($code)) {
@@ -66,7 +64,7 @@ return new class extends Migration
         }
 
         DB::table('pallet_address')
-            ->whereIn('col_label', self::COLUMNS)
+            ->whereIn('col_label', array_keys(self::COLUMNS))
             ->delete();
     }
 };

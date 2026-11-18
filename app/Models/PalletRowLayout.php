@@ -12,8 +12,8 @@ use Illuminate\Database\Eloquent\Model;
  * berbeda antar row.
  *
  * Mode 3 kolom:
- *   ATAS   : a b c
- *   BAWAH  : d e f
+ *   ATAS   : a b e   (e = 14 posisi)
+ *   BAWAH  : c d f   (c, d & f = 19 posisi)
  *
  * Mode 2 kolom:
  *   ATAS   : a b
@@ -30,14 +30,14 @@ class PalletRowLayout extends Model
 
     /**
      * Jumlah posisi tiap kolom.
-     * a/b mengikuti area depan (14), c/d/e/f mengikuti area belakang (19).
+     * a/b/e mengikuti area depan (14), c/d/f mengikuti area belakang (19).
      */
     public const COLUMN_POSITIONS = [
         'a' => 14,
         'b' => 14,
         'c' => 19,
         'd' => 19,
-        'e' => 19,
+        'e' => 14,
         'f' => 19,
     ];
 
@@ -99,8 +99,8 @@ class PalletRowLayout extends Model
         $columnsPerArea = self::columnsPerArea($rowLabel, $layoutMap);
 
         if ($columnsPerArea === 3) {
-            $top = ['a', 'b', 'c'];
-            $bottom = ['d', 'e', 'f'];
+            $top = ['a', 'b', 'e'];
+            $bottom = ['c', 'd', 'f'];
         } else {
             $top = ['a', 'b'];
             $bottom = ['c', 'd'];

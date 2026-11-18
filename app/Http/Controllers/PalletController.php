@@ -1356,9 +1356,9 @@ class PalletController extends Controller
     private function ensureAddressesSeeded()
     {
         $rows = ['B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'];
-        // a & b: 14 posisi; c, d, e, f: 19 posisi.
+        // a, b & e: 14 posisi; c, d & f: 19 posisi.
         // e/f dipakai saat row memakai layout 3 kolom per area.
-        $columns = ['a' => 14, 'b' => 14, 'c' => 19, 'd' => 19, 'e' => 19, 'f' => 19];
+        $columns = ['a' => 14, 'b' => 14, 'c' => 19, 'd' => 19, 'e' => 14, 'f' => 19];
 
         $existing = PalletAddress::pluck('code')->flip();
         $now = now();

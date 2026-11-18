@@ -606,7 +606,7 @@
                         <span></span><span></span><span></span><span class="p"></span>
                     </div>
                     <div class="cap">
-                        <b>832 alamat pallet</b>
+                        <b>792 alamat pallet</b>
                         8 row &middot; layout dinamis 2/3 kolom
                     </div>
                 </div>
