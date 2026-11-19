@@ -77,15 +77,15 @@
         }
 
         .label .qr {
-            width: 13mm;
-            height: 13mm;
-            flex: 0 0 13mm;
+            width: 15mm;
+            height: 15mm;
+            flex: 0 0 15mm;
         }
 
         .label .code {
             flex: 1 1 auto;
             text-align: center;
-            font-size: 18mm;
+            font-size: 16mm;
             line-height: 1;
             font-weight: 700;
             letter-spacing: 0.2mm;

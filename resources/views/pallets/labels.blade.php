@@ -48,15 +48,15 @@
             color: #0d6efd;
         }
 
-        /* Lembar A4: 1 kolom x 7 baris = 7 label (150 x 40 mm) */
+        /* Lembar A4: 3 kolom x 4 baris = 12 label (66 x 66 mm) */
         .sheet {
-            width: 150mm;
+            width: 198mm;
             margin: 8mm auto;
             padding-bottom: 0.6mm;
             background: #fff;
             display: grid;
-            grid-template-columns: 150mm;
-            grid-auto-rows: 40mm;
+            grid-template-columns: repeat(3, 66mm);
+            grid-auto-rows: 66mm;
             page-break-after: always;
             break-after: page;
         }
@@ -77,13 +77,13 @@
         }
 
         .label .qr {
-            width: 24mm;
-            height: 24mm;
+            width: 38mm;
+            height: 38mm;
         }
 
         .label .code {
-            margin-top: 1.5mm;
-            font-size: 8mm;
+            margin-top: 2mm;
+            font-size: 10mm;
             line-height: 1;
             font-weight: 700;
             letter-spacing: 0.2mm;
@@ -106,7 +106,7 @@
     <div class="toolbar">
         <div>
             <strong>Label Pallet</strong> — {{ $total }} label,
-            {{ count($sheets) }} lembar A4 (7 label/lembar, 150 × 40 mm)
+            {{ count($sheets) }} lembar A4 (12 label/lembar, 66 × 66 mm)
         </div>
         <div>
             <a href="{{ route('pallets.index') }}" class="btn secondary">Kembali</a>
