@@ -18,7 +18,7 @@ class QrLabelService
     /** Ukuran sel label per tipe, dalam milimeter. */
     public const LABEL_SIZES = [
         'location' => ['width' => 100, 'height' => 35],
-        'pallet'   => ['width' => 66, 'height' => 66],
+        'pallet'   => ['width' => 50, 'height' => 50],
     ];
 
     /**
@@ -26,11 +26,11 @@ class QrLabelService
      *
      * Area cetak 202 x 289 mm (margin 4 mm):
      *   lokasi : 2 kolom x 8 baris (100 x 35 mm) = 16
-     *   pallet : 3 kolom x 4 baris (66 x 66 mm)  = 12
+     *   pallet : 4 kolom x 5 baris (50 x 50 mm)  = 20
      */
     public const PER_SHEET = [
         'location' => 16,
-        'pallet'   => 12,
+        'pallet'   => 20,
     ];
 
     /**
