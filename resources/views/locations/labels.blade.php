@@ -72,20 +72,20 @@
             flex-direction: row;
             align-items: center;
             justify-content: space-between;
-            padding: 3mm;
+            padding: 2.5mm;
             overflow: hidden;
         }
 
         .label .qr {
-            width: 19mm;
-            height: 19mm;
-            flex: 0 0 19mm;
+            width: 13mm;
+            height: 13mm;
+            flex: 0 0 13mm;
         }
 
         .label .code {
             flex: 1 1 auto;
             text-align: center;
-            font-size: 15mm;
+            font-size: 18mm;
             line-height: 1;
             font-weight: 700;
             letter-spacing: 0.2mm;
