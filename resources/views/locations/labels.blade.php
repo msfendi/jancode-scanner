@@ -48,15 +48,15 @@
             color: #0d6efd;
         }
 
-        /* Lembar A4: 2 kolom x 3 baris = 6 label (90 x 90 mm) */
+        /* Lembar A4: 2 kolom x 7 baris = 14 label (100 x 40 mm) */
         .sheet {
-            width: 180mm;
+            width: 200mm;
             margin: 8mm auto;
             padding-bottom: 0.6mm;
             background: #fff;
             display: grid;
-            grid-template-columns: repeat(2, 90mm);
-            grid-auto-rows: 90mm;
+            grid-template-columns: repeat(2, 100mm);
+            grid-auto-rows: 40mm;
             page-break-after: always;
             break-after: page;
         }
@@ -69,21 +69,23 @@
         .label {
             border: 0.4mm solid #4a4a4a;
             display: flex;
-            flex-direction: column;
+            flex-direction: row;
             align-items: center;
-            justify-content: center;
-            padding: 4mm;
+            justify-content: space-between;
+            padding: 3mm;
             overflow: hidden;
         }
 
         .label .qr {
-            width: 56mm;
-            height: 56mm;
+            width: 26mm;
+            height: 26mm;
+            flex: 0 0 26mm;
         }
 
         .label .code {
-            margin-top: 3mm;
-            font-size: 11mm;
+            flex: 1 1 auto;
+            text-align: center;
+            font-size: 10mm;
             font-weight: 700;
             letter-spacing: 0.2mm;
             white-space: nowrap;
@@ -105,7 +107,7 @@
     <div class="toolbar">
         <div>
             <strong>Label Lokasi</strong> — {{ $total }} label,
-            {{ count($sheets) }} lembar A4 (6 label/lembar, 90 × 90 mm)
+            {{ count($sheets) }} lembar A4 (14 label/lembar, 100 × 40 mm)
         </div>
         <div>
             <a href="{{ route('locations.index') }}" class="btn secondary">Kembali</a>
@@ -119,6 +121,7 @@
                 <div class="label">
                     <img class="qr" src="{{ $item->qr_data_uri }}" alt="QR {{ $item->code }}">
                     <span class="code">{{ $item->code }}</span>
+                    <img class="qr" src="{{ $item->qr_data_uri }}" alt="QR {{ $item->code }}">
                 </div>
             @endforeach
         </div>

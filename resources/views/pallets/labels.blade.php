@@ -67,25 +67,24 @@
         }
 
         .label {
-            position: relative;
             display: flex;
+            flex-direction: column;
             align-items: center;
-            justify-content: space-between;
+            justify-content: center;
             border: 0.4mm solid #4a4a4a;
-            padding: 4mm;
+            padding: 3mm;
             overflow: hidden;
         }
 
         .label .qr {
-            width: 26mm;
-            height: 26mm;
-            flex: 0 0 26mm;
+            width: 24mm;
+            height: 24mm;
         }
 
         .label .code {
-            flex: 1 1 auto;
-            text-align: center;
-            font-size: 12mm;
+            margin-top: 1.5mm;
+            font-size: 8mm;
+            line-height: 1;
             font-weight: 700;
             letter-spacing: 0.2mm;
             white-space: nowrap;
@@ -121,7 +120,6 @@
                 <div class="label">
                     <img class="qr" src="{{ $item->qr_data_uri }}" alt="QR {{ $item->code }}">
                     <span class="code">{{ $item->code }}</span>
-                    <img class="qr" src="{{ $item->qr_data_uri }}" alt="QR {{ $item->code }}">
                 </div>
             @endforeach
         </div>
