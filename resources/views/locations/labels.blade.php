@@ -48,7 +48,7 @@
             color: #0d6efd;
         }
 
-        /* Lembar A4: 2 kolom x 7 baris = 14 label (100 x 40 mm) */
+        /* Lembar A4: 2 kolom x 8 baris = 16 label (100 x 35 mm) */
         .sheet {
             width: 200mm;
             margin: 8mm auto;
@@ -56,7 +56,7 @@
             background: #fff;
             display: grid;
             grid-template-columns: repeat(2, 100mm);
-            grid-auto-rows: 40mm;
+            grid-auto-rows: 35mm;
             page-break-after: always;
             break-after: page;
         }
@@ -77,15 +77,16 @@
         }
 
         .label .qr {
-            width: 26mm;
-            height: 26mm;
-            flex: 0 0 26mm;
+            width: 19mm;
+            height: 19mm;
+            flex: 0 0 19mm;
         }
 
         .label .code {
             flex: 1 1 auto;
             text-align: center;
-            font-size: 10mm;
+            font-size: 15mm;
+            line-height: 1;
             font-weight: 700;
             letter-spacing: 0.2mm;
             white-space: nowrap;
@@ -107,7 +108,7 @@
     <div class="toolbar">
         <div>
             <strong>Label Lokasi</strong> — {{ $total }} label,
-            {{ count($sheets) }} lembar A4 (14 label/lembar, 100 × 40 mm)
+            {{ count($sheets) }} lembar A4 (16 label/lembar, 100 × 35 mm)
         </div>
         <div>
             <a href="{{ route('locations.index') }}" class="btn secondary">Kembali</a>

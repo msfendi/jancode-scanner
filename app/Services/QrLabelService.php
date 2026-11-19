@@ -17,7 +17,7 @@ class QrLabelService
 {
     /** Ukuran sel label per tipe, dalam milimeter. */
     public const LABEL_SIZES = [
-        'location' => ['width' => 100, 'height' => 40],
+        'location' => ['width' => 100, 'height' => 35],
         'pallet'   => ['width' => 150, 'height' => 40],
     ];
 
@@ -25,11 +25,11 @@ class QrLabelService
      * Jumlah label per lembar A4.
      *
      * Area cetak 202 x 289 mm (margin 4 mm):
-     *   lokasi : 2 kolom x 7 baris (100 x 40 mm) = 14
+     *   lokasi : 2 kolom x 8 baris (100 x 35 mm) = 16
      *   pallet : 1 kolom x 7 baris (150 x 40 mm) = 7
      */
     public const PER_SHEET = [
-        'location' => 14,
+        'location' => 16,
         'pallet'   => 7,
     ];
 
