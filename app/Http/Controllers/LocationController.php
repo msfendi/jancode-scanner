@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\PalletAddress;
+use App\Models\PalletRowLayout;
 use App\Services\QrLabelService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -14,10 +15,9 @@ use Illuminate\Support\Facades\DB;
  */
 class LocationController extends Controller
 {
-    /** Urutan kolom pada board: area atas (a, b, e) lalu bawah (c, d, f). */
+    /** Urutan line pada board: a, b, c. */
     private const COLUMN_ORDER_SQL = "CASE pallet_address.col_label
-        WHEN 'a' THEN 1 WHEN 'b' THEN 2 WHEN 'e' THEN 3
-        WHEN 'c' THEN 4 WHEN 'd' THEN 5 WHEN 'f' THEN 6 ELSE 7 END";
+        WHEN 'a' THEN 1 WHEN 'b' THEN 2 WHEN 'c' THEN 3 ELSE 4 END";
 
     public function index()
     {
@@ -45,7 +45,7 @@ class LocationController extends Controller
         return view('locations.index', [
             'locations' => $locations,
             'rows'      => PalletAddress::query()->distinct()->orderBy('row_label')->pluck('row_label'),
-            'columns'   => ['a', 'b', 'e', 'c', 'd', 'f'],
+            'columns'   => PalletRowLayout::LINES,
         ]);
     }
 

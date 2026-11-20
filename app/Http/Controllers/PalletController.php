@@ -416,7 +416,7 @@ class PalletController extends Controller
         foreach ($data['layouts'] as $item) {
             $row = strtoupper($item['row_label']);
 
-            if ((int) $item['columns_per_area'] === 2 && $this->rowHasOccupiedColumns($row, ['e', 'f'])) {
+            if ((int) $item['columns_per_area'] === 2 && $this->rowHasOccupiedColumns($row, ['c'])) {
                 $blockedRows[] = $row;
             }
         }
@@ -425,7 +425,7 @@ class PalletController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Row ' . implode(', ', array_unique($blockedRows))
-                    . ' masih memiliki pallet terisi di kolom e/f. Kosongkan atau pindahkan isinya terlebih dahulu sebelum mengubah ke 2 kolom.',
+                    . ' masih memiliki pallet terisi di line c (posisi 01-33). Kosongkan atau pindahkan isinya terlebih dahulu sebelum mengubah ke 2 line.',
             ], 422);
         }
 
@@ -1356,9 +1356,8 @@ class PalletController extends Controller
     private function ensureAddressesSeeded()
     {
         $rows = ['B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'];
-        // a, b & e: 14 posisi; c, d & f: 19 posisi.
-        // e/f dipakai saat row memakai layout 3 kolom per area.
-        $columns = ['a' => 14, 'b' => 14, 'c' => 19, 'd' => 19, 'e' => 14, 'f' => 19];
+        // Line a, b, c — masing-masing 33 posisi (01-14 depan, 15-33 belakang).
+        $columns = ['a' => 33, 'b' => 33, 'c' => 33];
 
         $existing = PalletAddress::pluck('code')->flip();
         $now = now();

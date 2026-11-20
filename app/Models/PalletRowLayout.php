@@ -5,40 +5,39 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * Konfigurasi layout kolom per row pallet.
+ * Konfigurasi layout line per row pallet.
  *
- * Setiap row (B–I) memiliki 2 area (atas & bawah) yang masing-masing berisi
- * 2 atau 3 kolom. Pengaturan disimpan per row supaya tampilan board bisa
- * berbeda antar row.
+ * Setiap row (B–I) punya 3 line: a, b, c. Tiap line berisi 33 posisi
+ * menerus — 01–14 di area depan, 15–33 di area belakang (dipisah garis,
+ * sisi belakang tanpa teks).
  *
- * Mode 3 kolom:
- *   ATAS   : a b e   (e = 14 posisi)
- *   BAWAH  : c d f   (c, d & f = 19 posisi)
- *
- * Mode 2 kolom:
- *   ATAS   : a b
- *   BAWAH  : c d
- *   (e & f nonaktif, alamatnya tetap ada di DB agar data tidak hilang)
+ * Pengaturan per row menentukan berapa line yang dipakai:
+ *   mode 3 : line a, b, c  (99 slot/row)
+ *   mode 2 : line a, b     (66 slot/row, line c disembunyikan)
+ * Data line yang disembunyikan tetap ada di DB agar tidak hilang.
  */
 class PalletRowLayout extends Model
 {
     /** Row gudang BR-07. */
     public const ROWS = ['B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'];
 
-    /** Default kolom per area. */
+    /** Default line aktif per row. */
     public const DEFAULT_COLUMNS_PER_AREA = 2;
 
-    /**
-     * Jumlah posisi tiap kolom.
-     * a/b/e mengikuti area depan (14), c/d/f mengikuti area belakang (19).
-     */
+    /** Nama line (dulu kolom). */
+    public const LINES = ['a', 'b', 'c'];
+
+    /** Batas posisi area depan. Posisi di atas ini masuk area belakang. */
+    public const FRONT_POSITIONS = 14;
+
+    /** Jumlah posisi maksimum per line (depan + belakang). */
+    public const TOTAL_POSITIONS = 33;
+
+    /** Jumlah posisi tiap line. */
     public const COLUMN_POSITIONS = [
-        'a' => 14,
-        'b' => 14,
-        'c' => 19,
-        'd' => 19,
-        'e' => 14,
-        'f' => 19,
+        'a' => self::TOTAL_POSITIONS,
+        'b' => self::TOTAL_POSITIONS,
+        'c' => self::TOTAL_POSITIONS,
     ];
 
     protected $table = 'pallet_row_layouts';
@@ -92,24 +91,48 @@ class PalletRowLayout extends Model
     /**
      * Definisi area untuk satu row.
      *
-     * @return array<int, array{key:string,label:string,columns:array<int,string>,positions:int}>
+     * Area depan memakai posisi 1..14, area belakang 15..33 pada line yang
+     * sama. Sisi belakang sengaja tanpa label teks (hanya garis pembatas).
+     *
+     * @return array<int, array{key:string,label:string,columns:array<int,string>,positions:int,from:int,to:int}>
      */
     public static function areasForRow(string $rowLabel, ?array $layoutMap = null): array
     {
-        $columnsPerArea = self::columnsPerArea($rowLabel, $layoutMap);
-
-        if ($columnsPerArea === 3) {
-            $top = ['a', 'b', 'e'];
-            $bottom = ['c', 'd', 'f'];
-        } else {
-            $top = ['a', 'b'];
-            $bottom = ['c', 'd'];
-        }
+        $lines = self::linesForRow($rowLabel, $layoutMap);
 
         return [
-            self::buildArea('top', 'AREA ATAS', $top),
-            self::buildArea('bottom', 'AREA BAWAH', $bottom),
+            self::buildArea('depan', 'DEPAN', $lines, 1, self::FRONT_POSITIONS),
+            self::buildArea('belakang', '', $lines, self::FRONT_POSITIONS + 1, self::TOTAL_POSITIONS),
         ];
+    }
+
+    /**
+     * Line yang aktif pada sebuah row.
+     *
+     * @return array<int,string>
+     */
+    public static function linesForRow(string $rowLabel, ?array $layoutMap = null): array
+    {
+        return self::columnsPerArea($rowLabel, $layoutMap) === 3
+            ? self::LINES
+            : array_slice(self::LINES, 0, 2);
+    }
+
+    /**
+     * Pemetaan line aktif tiap row (dipakai untuk menandai sel yang aktif).
+     *
+     * @return array<string, array<int,string>>
+     */
+    public static function linesMap(?array $layoutMap = null): array
+    {
+        $layoutMap ??= self::layoutMap();
+        $map = [];
+
+        foreach (self::ROWS as $row) {
+            $map[$row] = self::linesForRow($row, $layoutMap);
+        }
+
+        return $map;
     }
 
     /**
@@ -152,20 +175,17 @@ class PalletRowLayout extends Model
 
     /**
      * @param  array<int,string>  $columns
-     * @return array{key:string,label:string,columns:array<int,string>,positions:int}
+     * @return array{key:string,label:string,columns:array<int,string>,positions:int,from:int,to:int}
      */
-    private static function buildArea(string $key, string $label, array $columns): array
+    private static function buildArea(string $key, string $label, array $columns, int $from, int $to): array
     {
-        $positions = 0;
-        foreach ($columns as $column) {
-            $positions = max($positions, (int) (self::COLUMN_POSITIONS[$column] ?? 19));
-        }
-
         return [
             'key'       => $key,
             'label'     => $label,
             'columns'   => $columns,
-            'positions' => $positions,
+            'positions' => $to,
+            'from'      => $from,
+            'to'        => $to,
         ];
     }
 }

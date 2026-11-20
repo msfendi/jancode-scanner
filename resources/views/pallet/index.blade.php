@@ -642,21 +642,29 @@
                                                     @endphp
 
                                                     @foreach($cardAreas as $area)
+                                                        @php
+                                                            $areaFrom = (int) ($area['from'] ?? 1);
+                                                            $areaTo    = (int) ($area['to'] ?? $area['positions']);
+                                                            $isFront   = ($area['key'] ?? '') === 'depan';
+                                                        @endphp
+
                                                         @if(!$loop->first)
                                                             <hr class="my-3" style="border-top: 2px dashed #b7b9cc;">
                                                         @endif
 
-                                                        <div class="text-center font-weight-bold small {{ $area['key'] === 'top' ? 'text-primary' : 'text-secondary' }} mb-1">
-                                                            {{ $area['label'] }} ({{ implode(' & ', $area['columns']) }})
-                                                        </div>
+                                                        @if(trim((string) ($area['label'] ?? '')) !== '')
+                                                            <div class="text-center font-weight-bold small {{ $isFront ? 'text-primary' : 'text-secondary' }} mb-1">
+                                                                {{ $area['label'] }} ({{ implode(' & ', $area['columns']) }})
+                                                            </div>
+                                                        @endif
                                                         <div class="subrow-vert-header">
                                                             <div class="subrow-header-pos">Pos</div>
                                                             @foreach($area['columns'] as $col)
-                                                                <div class="subrow-header-col {{ $area['key'] === 'top' ? '' : 'text-secondary' }}">{{ $col }}</div>
+                                                                <div class="subrow-header-col {{ $isFront ? '' : 'text-secondary' }}">{{ $col }}</div>
                                                             @endforeach
                                                         </div>
 
-                                                        @for($p = 1; $p <= $area['positions']; $p++)
+                                                        @for($p = $areaFrom; $p <= $areaTo; $p++)
                                                             <div class="pallet-vert-row">
                                                                 <span class="pallet-pos-tag">{{ $p }}</span>
                                                                 @foreach($area['columns'] as $col)
