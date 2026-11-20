@@ -52,7 +52,7 @@ class PalletRowLayout extends Model
     ];
 
     /**
-     * Peta row => jumlah kolom per area (2/3).
+     * Peta row => jumlah line aktif (2/3).
      *
      * @return array<string,int>
      */

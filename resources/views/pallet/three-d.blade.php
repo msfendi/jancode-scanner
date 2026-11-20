@@ -87,7 +87,7 @@
                                 Visualisasi 3D Layout Pallet
                             </h1>
                             <p class="text-muted small mb-0">
-                                Gudang Row B–I (kolom a–d) &bull; simulasi handlift angkut karton masuk / keluar
+                                Gudang Row B–I (line a–c, 33 posisi/line) &bull; simulasi handlift angkut karton masuk / keluar
                             </p>
                         </div>
                         <div>
