@@ -48,8 +48,8 @@
             color: #0d6efd;
         }
 
-        /* Lembar A4: 6 baris x 2 kolom = 12 label (100 x 48 mm)
-           Isi ke BAWAH dulu (6 baris), lalu pindah ke kolom kanan. */
+        /* Lembar A4: 9 baris x 2 kolom = 18 label (100 x 32 mm)
+           Isi ke BAWAH dulu (9 baris), lalu pindah ke kolom kanan. */
         .sheet {
             width: 200mm;
             margin: 8mm auto;
@@ -57,7 +57,7 @@
             background: #fff;
             display: grid;
             grid-template-columns: repeat(2, 100mm);
-            grid-template-rows: repeat(6, 48mm);
+            grid-template-rows: repeat(9, 32mm);
             grid-auto-flow: column;
             page-break-after: always;
             break-after: page;
@@ -79,9 +79,9 @@
         }
 
         .label .qr {
-            width: 20mm;
-            height: 20mm;
-            flex: 0 0 20mm;
+            width: 15mm;
+            height: 15mm;
+            flex: 0 0 15mm;
         }
 
         .label .code {
@@ -110,7 +110,7 @@
     <div class="toolbar">
         <div>
             <strong>Label Lokasi</strong> — {{ $total }} label,
-            {{ count($sheets) }} lembar A4 (12 label/lembar, 100 × 48 mm, isi ke bawah dulu)
+            {{ count($sheets) }} lembar A4 (18 label/lembar, 100 × 32 mm, isi ke bawah dulu)
         </div>
         <div>
             <a href="{{ route('locations.index') }}" class="btn secondary">Kembali</a>
