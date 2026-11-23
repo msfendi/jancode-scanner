@@ -6,15 +6,19 @@ use App\Models\ImportBatch;
 use App\Models\ImportSession;
 use App\Models\Jancode;
 use App\Models\PackingList;
+use App\Models\Pallet;
 use App\Models\PalletAddress;
 use App\Models\PalletAssignment;
 use App\Models\PalletAssignmentDetail;
 use App\Models\PalletColorRule;
 use App\Models\PalletRowLayout;
 use App\Services\PalletColorService;
+use App\Services\PalletPlacementService;
+use App\Services\QrLabelService;
 use App\Support\JancodeCode;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class PalletController extends Controller
@@ -812,6 +816,7 @@ class PalletController extends Controller
                 'max_carton'  => $address->max_carton,
                 'country_mode' => $address->country_mode ?: 'single',
                 'is_occupied' => $currentCartons > 0,
+                'qr_location' => app(QrLabelService::class)->dataUri($address->code, 220, 1),
             ],
             'assignment'      => $assignment ? [
                 'id'           => $assignment->id,
@@ -822,6 +827,166 @@ class PalletController extends Controller
             ] : null,
             'available_space' => $availableSpace,
             'items'           => $items,
+            'pallet'          => $this->palletBindingPayload($address),
+        ]);
+    }
+
+    /**
+     * Data pallet yang menempati sebuah lokasi + QR untuk modal detail.
+     */
+    private function palletBindingPayload(PalletAddress $address): ?array
+    {
+        $pallet = Pallet::with('assignment')
+            ->where('current_location_id', $address->id)
+            ->first();
+
+        if (! $pallet) {
+            return null;
+        }
+
+        $qr = app(QrLabelService::class);
+
+        return [
+            'id'           => $pallet->id,
+            'code'         => $pallet->code,
+            'status'       => $pallet->status,
+            'status_label' => $pallet->status_label,
+            'max_carton'   => $pallet->max_carton,
+            'placed_at'    => $pallet->placed_at?->format('d M Y H:i'),
+            'total_carton' => (int) ($pallet->assignment->total_carton ?? 0),
+            'qr_pallet'    => $qr->dataUri($pallet->code, 220, 1),
+            'qr_location'  => $qr->dataUri($address->code, 220, 1),
+            'label_url'    => route('pallet.pairLabel', $address->id),
+        ];
+    }
+
+    /**
+     * Tempatkan pallet ke lokasi (wajib scan QR lokasi + QR pallet).
+     */
+    public function placePallet(Request $request)
+    {
+        $data = $request->validate([
+            'location_code' => 'required|string|max:20',
+            'pallet_code'   => 'required|string|max:20',
+            'expected_location_code' => 'nullable|string|max:20',
+        ]);
+
+        // QR lokasi yang discan harus lokasi yang sedang dibuka di board.
+        if (! empty($data['expected_location_code'])
+            && strcasecmp(trim($data['expected_location_code']), trim($data['location_code'])) !== 0) {
+            throw ValidationException::withMessages([
+                'location_code' => 'QR lokasi ' . $data['location_code'] . ' bukan lokasi yang sedang dibuka (' . $data['expected_location_code'] . ').',
+            ]);
+        }
+
+        $result = app(PalletPlacementService::class)
+            ->place($data['location_code'], $data['pallet_code'], auth()->id());
+
+        return response()->json([
+            'success' => true,
+            'message' => $result['unchanged']
+                ? 'Pallet ' . $result['pallet']->code . ' sudah berada di ' . $result['location']->code . '.'
+                : 'Pallet ' . $result['pallet']->code . ' ditempatkan di ' . $result['location']->code . '.',
+            'pallet'  => $result['pallet']->code,
+            'location' => $result['location']->code,
+        ]);
+    }
+
+    /**
+     * Pindahkan pallet + isinya ke lokasi lain (scan QR pallet + QR lokasi tujuan).
+     */
+    public function movePallet(Request $request)
+    {
+        $data = $request->validate([
+            'pallet_code'   => 'required|string|max:20',
+            'location_code' => 'required|string|max:20',
+        ]);
+
+        $result = app(PalletPlacementService::class)
+            ->movePallet($data['pallet_code'], $data['location_code'], auth()->id());
+
+        return response()->json([
+            'success'  => true,
+            'message'  => $result['unchanged']
+                ? 'Pallet ' . $result['pallet']->code . ' sudah berada di ' . $result['location']->code . '.'
+                : 'Pallet ' . $result['pallet']->code . ' dipindah ke ' . $result['location']->code . '.',
+            'pallet'   => $result['pallet']->code,
+            'location' => $result['location']->code,
+        ]);
+    }
+
+    /**
+     * Kosongkan isi pallet (pallet tetap di lokasi).
+     */
+    public function emptyPallet($palletId)
+    {
+        $pallet = Pallet::findOrFail($palletId);
+        $removed = app(PalletPlacementService::class)->emptyContents($pallet);
+
+        return response()->json([
+            'success' => true,
+            'message' => $removed . ' baris karton dikeluarkan dari ' . $pallet->code . '.',
+        ]);
+    }
+
+    /**
+     * Finish: kosongkan isi + lepas pallet dari lokasi.
+     */
+    public function finishPallet($palletId)
+    {
+        $pallet = Pallet::findOrFail($palletId);
+        $result = app(PalletPlacementService::class)->finish($pallet, auth()->id());
+
+        return response()->json([
+            'success'  => true,
+            'message'  => 'Pallet ' . $pallet->code . ' difinish: '
+                . $result['removed'] . ' baris karton dikeluarkan'
+                . ($result['location'] ? ', lokasi ' . $result['location']->code . ' kosong.' : '.'),
+        ]);
+    }
+
+    /**
+     * Validasi pasangan QR (lokasi + pallet) tanpa mengubah data.
+     */
+    public function validatePair(Request $request)
+    {
+        $data = $request->validate([
+            'location_code' => 'required|string|max:20',
+            'pallet_code'   => 'required|string|max:20',
+        ]);
+
+        [$location, $pallet] = app(PalletPlacementService::class)
+            ->assertBoundPair($data['location_code'], $data['pallet_code']);
+
+        return response()->json([
+            'success'      => true,
+            'message'      => 'Pasangan valid: ' . $pallet->code . ' di ' . $location->code . '.',
+            'location_code' => $location->code,
+            'pallet_code'  => $pallet->code,
+            'total_carton' => (int) ($pallet->assignment->total_carton ?? 0),
+        ]);
+    }
+
+    /**
+     * Label pasangan: QR lokasi + QR pallet dalam satu kartu (untuk ditempel
+     * di pallet fisik yang berdiri di lokasi tersebut).
+     */
+    public function pairLabel($addressId)
+    {
+        $address = PalletAddress::findOrFail($addressId);
+        $pallet  = Pallet::where('current_location_id', $address->id)->first();
+
+        if (! $pallet) {
+            abort(404, 'Lokasi ' . $address->code . ' belum ditempati pallet.');
+        }
+
+        $qr = app(QrLabelService::class);
+
+        return view('pallet.pair-label', [
+            'address' => $address,
+            'pallet'  => $pallet,
+            'qrLocation' => $qr->dataUri($address->code, 320, 2),
+            'qrPallet'   => $qr->dataUri($pallet->code, 320, 2),
         ]);
     }
 

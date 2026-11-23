@@ -33,13 +33,39 @@ class Pallet extends Model
         'code',
         'status',
         'max_carton',
+        'current_location_id',
+        'placed_at',
         'zone',
         'notes',
     ];
 
     protected $casts = [
         'max_carton' => 'integer',
+        'placed_at'  => 'datetime',
     ];
+
+    /** Lokasi tempat pallet berdiri sekarang. */
+    public function location()
+    {
+        return $this->belongsTo(PalletAddress::class, 'current_location_id');
+    }
+
+    /** Isi pallet (style/country/ocf + daftar karton). */
+    public function assignment()
+    {
+        return $this->hasOne(PalletAssignment::class, 'pallet_id');
+    }
+
+    /** Riwayat penempatan. */
+    public function placements()
+    {
+        return $this->hasMany(PalletPlacement::class, 'pallet_id')->orderByDesc('id');
+    }
+
+    public function isPlaced(): bool
+    {
+        return $this->current_location_id !== null;
+    }
 
     /**
      * Kode pallet berikutnya, melanjutkan nomor terbesar yang ada.

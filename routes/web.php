@@ -113,6 +113,14 @@ Route::group(['middleware' => 'auth'], function () {
         Route::post('/move', [\App\Http\Controllers\PalletController::class, 'moveCarton'])->name('move');
         Route::delete('/detail/{id}', [\App\Http\Controllers\PalletController::class, 'removeDetail'])->name('removeDetail');
         Route::delete('/clear/{addressId}', [\App\Http\Controllers\PalletController::class, 'clearPallet'])->name('clear');
+
+        // Penempatan pallet (scan QR lokasi + QR pallet)
+        Route::post('/place', [\App\Http\Controllers\PalletController::class, 'placePallet'])->name('place')->middleware('can:pallet.manage');
+        Route::post('/move-pallet', [\App\Http\Controllers\PalletController::class, 'movePallet'])->name('movePallet')->middleware('can:pallet.manage');
+        Route::post('/validate-pair', [\App\Http\Controllers\PalletController::class, 'validatePair'])->name('validatePair');
+        Route::post('/{palletId}/empty', [\App\Http\Controllers\PalletController::class, 'emptyPallet'])->name('empty')->whereNumber('palletId')->middleware('can:pallet.manage');
+        Route::post('/{palletId}/finish', [\App\Http\Controllers\PalletController::class, 'finishPallet'])->name('finish')->whereNumber('palletId')->middleware('can:pallet.manage');
+        Route::get('/pair-label/{addressId}', [\App\Http\Controllers\PalletController::class, 'pairLabel'])->name('pairLabel')->whereNumber('addressId');
     });
 
     // Master Lokasi (QR)

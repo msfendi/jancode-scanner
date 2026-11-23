@@ -13,11 +13,17 @@ class PalletAssignment extends Model
 
     protected $fillable = [
         'pallet_address_id',
+        'pallet_id',
         'style',
         'country',
         'ocf',
         'total_carton',
     ];
+
+    public function pallet()
+    {
+        return $this->belongsTo(Pallet::class, 'pallet_id');
+    }
 
     public function address()
     {

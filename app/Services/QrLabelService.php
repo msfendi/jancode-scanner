@@ -17,7 +17,7 @@ class QrLabelService
 {
     /** Ukuran sel label per tipe, dalam milimeter. */
     public const LABEL_SIZES = [
-        'location' => ['width' => 100, 'height' => 35],
+        'location' => ['width' => 100, 'height' => 48],
         'pallet'   => ['width' => 50, 'height' => 50],
     ];
 
@@ -25,13 +25,16 @@ class QrLabelService
      * Jumlah label per lembar A4.
      *
      * Area cetak 202 x 289 mm (margin 4 mm):
-     *   lokasi : 2 kolom x 8 baris (100 x 35 mm) = 16
+     *   lokasi : 2 kolom x 6 baris (100 x 48 mm) = 12, isi ke BAWAH dulu
      *   pallet : 4 kolom x 5 baris (50 x 50 mm)  = 20
      */
     public const PER_SHEET = [
-        'location' => 16,
+        'location' => 12,
         'pallet'   => 20,
     ];
+
+    /** Jumlah baris (tinggi) tiap kolom pada lembar label lokasi. */
+    public const LOCATION_ROWS = 6;
 
     /**
      * QR code format SVG (ringan, tanpa imagick).
