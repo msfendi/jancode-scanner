@@ -1064,27 +1064,15 @@
                         </div>
 
                         <div class="form-group">
-                            <label class="font-weight-bold">Pilih Pallet Tujuan:</label>
-                            <select class="form-control" id="moveTargetPalletSelect" name="target_pallet_address_id" required>
-                                <option value="">-- Pilih Pallet Tujuan --</option>
-                                @foreach($addresses as $addr)
-                                    @php
-                                        $tAssign = $addr->assignment;
-                                        $tCartons = $tAssign ? $tAssign->total_carton : 0;
-                                        $tSisa = max(0, 42 - $tCartons);
-                                        $statusStr = $tCartons == 0 ? 'Kosong (42 slot)' : "Terisi {$tCartons}/42 ({$tAssign->style} - {$tAssign->country})";
-                                    @endphp
-                                    @if($tSisa > 0)
-                                        <option value="{{ $addr->id }}" 
-                                                data-style="{{ $tAssign ? $tAssign->style : '' }}"
-                                                data-country="{{ $tAssign ? $tAssign->country : '' }}"
-                                                data-sisa="{{ $tSisa }}">
-                                            {{ $addr->code }} &mdash; {{ $statusStr }}
-                                        </option>
-                                    @endif
-                                @endforeach
-                            </select>
-                            <small class="text-muted">Pallet tujuan harus kosong atau memiliki Style, OCF &amp; Country yang sama (BR-09). Row boleh berisi style lain, tetapi pallet tidak boleh dicampur.</small>
+                            <label class="font-weight-bold">Pallet Tujuan (wajib scan):</label>
+                            <input type="text" class="form-control mb-2" id="moveTargetLocationCode" name="target_location_code"
+                                placeholder="1. Scan QR lokasi tujuan (mis. B-a-15)" autocomplete="off">
+                            <input type="text" class="form-control" id="moveTargetPalletCode" name="target_pallet_code"
+                                placeholder="2. Scan QR pallet tujuan (mis. PLT-0042)" autocomplete="off">
+                            <small class="text-muted d-block mt-1">
+                                Kedua QR harus cocok: pallet tujuan harus benar-benar berada di lokasi tujuan.
+                                Pallet tujuan harus kosong atau memiliki Style, OCF &amp; Country yang sama (BR-09).
+                            </small>
                         </div>
                     </div>
                     <div class="modal-footer">
@@ -1787,8 +1775,20 @@
             $('#moveItemDesc').text(`Pallet Asal: ${sourcePalletCode} | Warna: ${color} | Size: ${size}`);
             $('#moveMaxQty').text(currentQty);
             $('#moveQtyInput').val(currentQty).attr('max', currentQty);
-            $('#moveCartonModal').modal('show');
+            $('#moveTargetLocationCode').val('').removeClass('is-invalid');
+            $('#moveTargetPalletCode').val('').removeClass('is-invalid');
+            $('#moveCartonModal').one('shown.bs.modal', function () {
+                $('#moveTargetLocationCode').focus();
+            }).modal('show');
         }
+
+        // USB scanner: Enter pindah ke field berikutnya / submit
+        $('#moveTargetLocationCode').on('keydown', function (e) {
+            if (e.key === 'Enter') { e.preventDefault(); $('#moveTargetPalletCode').focus(); }
+        });
+        $('#moveTargetPalletCode').on('keydown', function (e) {
+            if (e.key === 'Enter') { e.preventDefault(); $('#formMoveCarton').trigger('submit'); }
+        });
 
         // Submit Pindah Karton
         $('#formMoveCarton').on('submit', function(e) {
@@ -2524,8 +2524,9 @@
             $('#scanPalletCode').val('').removeClass('is-invalid');
             $('#errLocationCode, #errPalletCode').text('');
             $('#scanAlert').addClass('d-none').text('');
-            $('#palletScanModal').modal('show');
-            setTimeout(function () { $('#scanLocationCode').focus(); }, 350);
+            $('#palletScanModal').one('shown.bs.modal', function () {
+                $('#scanLocationCode').focus();
+            }).modal('show');
         }
 
         $('#btnPlacePallet').on('click', function () { openScan('place'); });
