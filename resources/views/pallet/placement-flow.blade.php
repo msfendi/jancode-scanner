@@ -67,9 +67,13 @@
             $('#scanStep2').addClass('d-none');
             $('#scanStep3').addClass('d-none');
             $('#scanVideo').addClass('d-none');
+            $('#scanPlaceholder').removeClass('d-none');
+            $('#scanViewfinder').addClass('d-none').removeClass('qr-hit');
+            $('#scanGuide').text('Arahkan QR ke dalam kotak. Kode terbaca otomatis.');
             $('#btnScanStart').removeClass('d-none');
             $('#btnScanStop').addClass('d-none');
             $('#btnScanRetry').addClass('d-none');
+            $('#btnScanTorch').addClass('d-none').removeClass('btn-dark').addClass('btn-outline-dark');
             $('#scanCamStatus').text('');
             $('#scanManualLocation').focus();
 
@@ -91,6 +95,9 @@
 
             const video = document.getElementById('scanVideo');
             video.classList.remove('d-none');
+            $('#scanPlaceholder').addClass('d-none');
+            $('#scanViewfinder').removeClass('d-none qr-hit');
+            $('#scanGuide').text('Arahkan QR ke dalam kotak. Kode terbaca otomatis.');
 
             this.scanner = new window.QrScanner(video, {
                 onResult: function (value) { self.onDecoded(value); },
@@ -99,13 +106,47 @@
                     $('#btnScanStart').addClass('d-none');
                     $('#btnScanStop').addClass('d-none');
                     $('#btnScanRetry').removeClass('d-none');
+                    $('#scanViewfinder').addClass('d-none');
                 },
                 onStatus: function (msg) { self.camStatus(msg); }
             });
 
-            this.scanner.start().catch(function () { /* pesan sudah tampil via onError */ });
+            this.scanner.start().then(function () {
+                self.torchButton();
+            }).catch(function () { /* pesan sudah tampil via onError */ });
+
             $('#btnScanStart').addClass('d-none');
             $('#btnScanStop').removeClass('d-none');
+        },
+
+        /**
+         * Tombol senter hanya muncul bila kamera mendukung torch.
+         */
+        torchButton: function () {
+            const self = this;
+            const track = this.scanner && this.scanner.stream
+                ? this.scanner.stream.getVideoTracks()[0]
+                : null;
+
+            if (!track || !track.getCapabilities) {
+                return;
+            }
+
+            let caps = {};
+            try { caps = track.getCapabilities() || {}; } catch (e) { return; }
+
+            if (!caps.torch) {
+                return;
+            }
+
+            const $btn = $('#btnScanTorch').removeClass('d-none');
+            let on = false;
+
+            $btn.off('click').on('click', function () {
+                on = !on;
+                track.applyConstraints({ advanced: [{ torch: on }] }).catch(function () {});
+                $btn.toggleClass('btn-dark', on).toggleClass('btn-outline-dark', !on);
+            });
         },
 
         stopCamera: function () {
@@ -115,8 +156,11 @@
             }
             const video = document.getElementById('scanVideo');
             if (video) { video.classList.add('d-none'); video.srcObject = null; }
+            $('#scanPlaceholder').removeClass('d-none');
+            $('#scanViewfinder').addClass('d-none').removeClass('qr-hit');
             $('#btnScanStart').removeClass('d-none');
             $('#btnScanStop').addClass('d-none');
+            $('#btnScanTorch').addClass('d-none').removeClass('btn-dark').addClass('btn-outline-dark');
         },
 
         camStatus: function (msg, isError) {
@@ -129,13 +173,22 @@
         onDecoded: function (value) {
             if (!value) return;
 
-            if (this.step === 1) {
-                $('#scanLocationCode').val(value);
-                this.submitLocation();
-            } else if (this.step === 2) {
-                $('#scanPalletCode').val(value);
-                this.submitPallet();
-            }
+            // Umpan balik cepat: bingkai hijau + getar singkat, supaya user
+            // tahu kode sudah tertangkap sebelum layar berpindah.
+            $('#scanViewfinder').addClass('qr-hit');
+            this.camStatus('Terbaca: ' + value);
+            if (navigator.vibrate) { try { navigator.vibrate(60); } catch (e) {} }
+
+            const self = this;
+            setTimeout(function () {
+                if (self.step === 1) {
+                    $('#scanLocationCode').val(value);
+                    self.submitLocation();
+                } else if (self.step === 2) {
+                    $('#scanPalletCode').val(value);
+                    self.submitPallet();
+                }
+            }, 250);
         },
 
         submitLocation: function () {

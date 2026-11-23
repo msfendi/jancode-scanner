@@ -78,25 +78,59 @@
                 return playResult.catch(function () { /* dibiarkan: tick tetap jalan */ });
             }
         }).then(function () {
-            if (global.BarcodeDetector) {
-                var formats = ['qr_code'];
-                if (global.BarcodeDetector.getSupportedFormats) {
-                    try {
-                        formats = global.BarcodeDetector.getSupportedFormats();
-                    } catch (e) { /* default */ }
-                }
-                self.detector = new global.BarcodeDetector({ formats: formats });
-                self.useNative = true;
-            } else if (global.jsQR) {
-                self.detector = null;
-                self.useNative = false;
-            } else {
-                throw new Error('no-decoder');
+            // Pilih decoder.
+            //
+            // Di Chrome Android `BarcodeDetector` tersedia dan
+            // `getSupportedFormats()` mengembalikan **Promise**. Meneruskan
+            // Promise itu sebagai `formats` memicu:
+            //   "Failed to read the 'formats' property ... must have a
+            //    callable @@iterator property."
+            // Jadi hasilnya di-await dulu, dan hanya array yang dipakai.
+            //
+            // Apa pun yang gagal (format tidak didukung / konstruktor melempar
+            // "Failed to construct 'BarcodeDetector'") jatuh ke jsQR — kamera
+            // tidak boleh mati hanya karena decoder native bermasalah.
+            self.useNative = false;
+            self.detector = null;
+
+            var hasNative = global.BarcodeDetector && typeof global.BarcodeDetector === 'function';
+
+            if (!hasNative) {
+                if (!global.jsQR) throw new Error('no-decoder');
+                self.running = true;
+                self.onStatus('Kamera aktif. Arahkan ke QR.');
+                self._tick();
+                return;
             }
 
-            self.running = true;
-            self.onStatus('Kamera aktif. Arahkan ke QR.');
-            self._tick();
+            return Promise.resolve()
+                .then(function () {
+                    if (typeof global.BarcodeDetector.getSupportedFormats !== 'function') {
+                        return ['qr_code'];
+                    }
+                    return global.BarcodeDetector.getSupportedFormats();
+                })
+                .then(function (supported) {
+                    var formats = Array.isArray(supported) ? supported : ['qr_code'];
+
+                    if (formats.indexOf('qr_code') === -1) {
+                        throw new Error('qr_code tidak didukung');
+                    }
+
+                    self.detector = new global.BarcodeDetector({ formats: formats });
+                    self.useNative = true;
+                })
+                .catch(function () {
+                    self.detector = null;
+                    self.useNative = false;
+
+                    if (!global.jsQR) throw new Error('no-decoder');
+                })
+                .then(function () {
+                    self.running = true;
+                    self.onStatus('Kamera aktif. Arahkan ke QR.');
+                    self._tick();
+                });
         }).catch(function (err) {
             if (err && err.name === 'NotAllowedError') {
                 self.onError('Izin kamera ditolak.');

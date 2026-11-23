@@ -17,6 +17,103 @@
         margin-bottom: 4px;
     }
 
+    /* ===== Viewport kamera + area bidik QR ===== */
+    .qr-viewport {
+        position: relative;
+        width: 100%;
+        height: 300px;
+        background: #111;
+        border-radius: 10px;
+        overflow: hidden;
+    }
+
+    .qr-viewport video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+
+    .qr-placeholder {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        color: #8b93a7;
+        background: repeating-linear-gradient(45deg, #171a21, #171a21 12px, #1d212a 12px, #1d212a 24px);
+    }
+
+    .qr-viewfinder {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 200px;
+        height: 200px;
+        transform: translate(-50%, -50%);
+        box-shadow: 0 0 0 9999px rgba(0, 0, 0, .45);
+        border-radius: 10px;
+        pointer-events: none;
+    }
+
+    .qr-corner {
+        position: absolute;
+        width: 30px;
+        height: 30px;
+        border: 3px solid #4e73df;
+    }
+
+    .qr-tl { top: -2px; left: -2px; border-right: 0; border-bottom: 0; border-top-left-radius: 10px; }
+    .qr-tr { top: -2px; right: -2px; border-left: 0; border-bottom: 0; border-top-right-radius: 10px; }
+    .qr-bl { bottom: -2px; left: -2px; border-right: 0; border-top: 0; border-bottom-left-radius: 10px; }
+    .qr-br { bottom: -2px; right: -2px; border-left: 0; border-top: 0; border-bottom-right-radius: 10px; }
+
+    .qr-laser {
+        position: absolute;
+        left: 6px;
+        right: 6px;
+        height: 2px;
+        background: linear-gradient(90deg, transparent, #4e73df, transparent);
+        animation: qr-scan 2.2s linear infinite;
+    }
+
+    @keyframes qr-scan {
+        0%   { top: 8px; opacity: .2; }
+        50%  { opacity: 1; }
+        100% { top: calc(100% - 10px); opacity: .2; }
+    }
+
+    .qr-viewfinder.qr-hit .qr-corner {
+        border-color: #1cc88a;
+    }
+
+    .qr-viewfinder.qr-hit {
+        box-shadow: 0 0 0 9999px rgba(28, 200, 138, .18);
+    }
+
+    .qr-status {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        padding: 6px 10px;
+        font-size: 12px;
+        color: #e8ecf5;
+        background: rgba(0, 0, 0, .55);
+        text-align: center;
+    }
+
+    .qr-status.text-danger {
+        background: rgba(180, 30, 30, .75);
+        color: #fff !important;
+    }
+
+    @media (max-width: 576px) {
+        .qr-viewport { height: 240px; }
+        .qr-viewfinder { width: 170px; height: 170px; }
+    }
+
     /* Container Drag-to-Scroll Horizontal Board */
     .pallet-board-wrapper {
         position: relative;
@@ -2477,21 +2574,44 @@
 
                     <!-- Kamera -->
                     <div id="scanCameraBox" class="mb-3">
-                        <div class="position-relative border rounded bg-dark mb-2" style="overflow:hidden;">
-                            <video id="scanVideo" playsinline muted class="d-none w-100" style="max-height:260px;object-fit:cover;"></video>
-                            <div id="scanCamStatus" class="small text-muted text-center py-2"></div>
+                        <div class="qr-viewport mb-2">
+                            <video id="scanVideo" playsinline muted class="d-none"></video>
+
+                            <!-- Area bidik: kotak dengan sudut, tempat QR diarahkan -->
+                            <div id="scanViewfinder" class="qr-viewfinder d-none" aria-hidden="true">
+                                <span class="qr-corner qr-tl"></span>
+                                <span class="qr-corner qr-tr"></span>
+                                <span class="qr-corner qr-bl"></span>
+                                <span class="qr-corner qr-br"></span>
+                                <div class="qr-laser"></div>
+                            </div>
+
+                            <div id="scanPlaceholder" class="qr-placeholder">
+                                <i class="fas fa-qrcode fa-2x mb-2"></i>
+                                <div class="small">Kamera belum aktif</div>
+                            </div>
+
+                            <div id="scanCamStatus" class="qr-status"></div>
                         </div>
-                        <div class="d-flex gap-2">
-                            <button type="button" class="btn btn-sm btn-primary" id="btnScanStart">
+
+                        <div class="small text-muted text-center mb-2" id="scanGuide">
+                            Arahkan QR ke dalam kotak. Kode terbaca otomatis.
+                        </div>
+
+                        <div class="d-flex flex-wrap align-items-center">
+                            <button type="button" class="btn btn-sm btn-primary mr-2 mb-1" id="btnScanStart">
                                 <i class="fas fa-camera mr-1"></i> Scan dengan Kamera
                             </button>
-                            <button type="button" class="btn btn-sm btn-outline-secondary d-none" id="btnScanStop">
+                            <button type="button" class="btn btn-sm btn-outline-secondary mr-2 mb-1 d-none" id="btnScanStop">
                                 <i class="fas fa-stop mr-1"></i> Stop
                             </button>
-                            <button type="button" class="btn btn-sm btn-outline-warning d-none" id="btnScanRetry">
+                            <button type="button" class="btn btn-sm btn-outline-warning mr-2 mb-1 d-none" id="btnScanRetry">
                                 <i class="fas fa-rotate mr-1"></i> Coba Lagi
                             </button>
-                            <span class="small text-muted align-self-center">atau ketik kode QR (USB scanner)</span>
+                            <button type="button" class="btn btn-sm btn-outline-dark mb-1 d-none" id="btnScanTorch" title="Senter">
+                                <i class="fas fa-bolt mr-1"></i> Senter
+                            </button>
+                            <span class="small text-muted mb-1">atau ketik kode QR (USB scanner)</span>
                         </div>
                     </div>
 
