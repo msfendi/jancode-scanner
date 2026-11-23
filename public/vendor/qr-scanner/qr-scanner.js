@@ -26,6 +26,15 @@
         this.onResult = options.onResult || function () {};
         this.onError = options.onError || function () {};
         this.onStatus = options.onStatus || function () {};
+        // Area pindai (opsional). Kalau diisi, hanya bagian ini yang di-decode
+        // sehingga QR tetangga di luar kotak bidik tidak ikut terbaca.
+        // Fungsi ini harus mengembalikan {x, y, w, h} dalam piksel frame video.
+        this.scanRegion = options.scanRegion || null;
+        // Berapa kali kode yang sama harus terbaca berturut-turut sebelum
+        // diterima. 1 = langsung terima (paling cepat, paling rawan salah).
+        this.requiredHits = Math.max(1, parseInt(options.requiredHits, 10) || 2);
+        this._pendingValue = null;
+        this._pendingHits = 0;
         this._tick = this._tick.bind(this);
     }
 
@@ -164,10 +173,32 @@
         if (this.useNative) {
             this.detector.detect(this.video)
                 .then(function (codes) {
-                    if (codes && codes.length && codes[0].rawValue) {
-                        self._hit(codes[0].rawValue);
-                        return;
+                    var accepted = false;
+
+                    if (codes && codes.length) {
+                        for (var i = 0; i < codes.length; i++) {
+                            var box = codes[i].boundingBox;
+                            var center = box
+                                ? { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+                                : null;
+
+                            if (self._insideRegion(center, w, h)) {
+                                self._confirm(codes[i].rawValue);
+                                accepted = true;
+
+                                if (!self.running) {
+                                    return;
+                                }
+                                break;
+                            }
+                        }
                     }
+
+                    if (!accepted) {
+                        self._pendingValue = null;
+                        self._pendingHits = 0;
+                    }
+
                     self.frameId = global.requestAnimationFrame(self._tick);
                 })
                 .catch(function () {
@@ -190,15 +221,125 @@
                 { inversionAttempts: 'attemptBoth' }
             );
 
+            var accepted = false;
+
             if (result && result.data) {
-                this._hit(result.data);
-                return;
+                // Ambil titik tengah QR, lalu pastikan berada di dalam kotak
+                // bidik. Frame TIDAK dipotong supaya QR yang lebih besar dari
+                // kotak tetap terbaca; QR tetangga di luar kotak tetap ditolak.
+                var loc = result.location;
+                var center = loc
+                    ? {
+                        x: (loc.topLeftCorner.x + loc.bottomRightCorner.x) / 2,
+                        y: (loc.topLeftCorner.y + loc.bottomRightCorner.y) / 2
+                    }
+                    : null;
+
+                if (this._insideRegion(center, w, h)) {
+                    this._confirm(result.data);
+                    accepted = true;
+
+                    // _confirm menghentikan loop hanya saat kode sudah terbaca
+                    // `requiredHits` kali; sebelum itu lanjut frame berikutnya.
+                    if (!this.running) {
+                        return;
+                    }
+                }
+            }
+
+            // Hanya reset penghitung bila frame ini tidak menghasilkan QR yang
+            // diterima. Kalau reset dijalankan setiap frame, konfirmasi
+            // berturut-turut tidak akan pernah tercapai.
+            if (!accepted) {
+                this._pendingValue = null;
+                this._pendingHits = 0;
             }
         } catch (e) {
             // Frame buram/terlalu kecil: abaikan, lanjut frame berikutnya.
         }
 
         this.frameId = global.requestAnimationFrame(this._tick);
+    };
+
+    /**
+     * Apakah titik tengah QR berada di dalam kotak bidik?
+     *
+     * Kotak bidik diukur dalam piksel elemen yang terlihat, sedangkan posisi QR
+     * dari decoder memakai koordinat frame video. Karena video ditampilkan dengan
+     * `object-fit: cover`, perlu dipetakan dulu (skala cover + offset).
+     *
+     * Bila posisi QR tidak diketahui, hasil dianggap sah — lebih baik menerima
+     * daripada memblokir pemindaian.
+     */
+    QrScanner.prototype._insideRegion = function (center, frameW, frameH) {
+        if (!this.scanRegion || !center) {
+            return true;
+        }
+
+        var region = null;
+        try {
+            region = this.scanRegion();
+        } catch (e) {
+            return true;
+        }
+
+        if (!region || !region.w || !region.h) {
+            return true;
+        }
+
+        var vw = this.video.clientWidth;
+        var vh = this.video.clientHeight;
+
+        if (!vw || !vh) {
+            return true;
+        }
+
+        // object-fit: cover
+        var scale = Math.max(vw / frameW, vh / frameH);
+        var offX = (vw - frameW * scale) / 2;
+        var offY = (vh - frameH * scale) / 2;
+
+        var rx = (region.x - offX) / scale;
+        var ry = (region.y - offY) / scale;
+        var rw = region.w / scale;
+        var rh = region.h / scale;
+
+        // Toleransi 12%: QR yang sedikit melewati tepi kotak tetap diterima.
+        var padX = rw * 0.12;
+        var padY = rh * 0.12;
+
+        return center.x >= (rx - padX)
+            && center.x <= (rx + rw + padX)
+            && center.y >= (ry - padY)
+            && center.y <= (ry + rh + padY);
+    };
+
+    /**
+     * Konfirmasi hasil decode.
+     *
+     * Kode harus terbaca `requiredHits` kali berturut-turut (nilai sama) baru
+     * diterima. Ini mencegah salah baca sesaat — mis. QR tetangga yang kebetulan
+     * lebih tajam pada satu frame.
+     */
+    QrScanner.prototype._confirm = function (value) {
+        value = String(value).trim();
+
+        if (this._pendingValue === value) {
+            this._pendingHits++;
+        } else {
+            this._pendingValue = value;
+            this._pendingHits = 1;
+        }
+
+        if (this.onCandidate) {
+            this.onCandidate(value, this._pendingHits, this.requiredHits);
+        }
+
+        if (this._pendingHits >= this.requiredHits) {
+            this._pendingValue = null;
+            this._pendingHits = 0;
+            this._hit(value);
+        }
     };
 
     QrScanner.prototype._hit = function (value) {

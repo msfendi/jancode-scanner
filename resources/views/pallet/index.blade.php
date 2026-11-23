@@ -1011,6 +1011,9 @@
                                 <button type="button" class="btn btn-sm btn-warning d-none" id="btnMovePallet">
                                     <i class="fas fa-dolly mr-1"></i>Pindah Pallet
                                 </button>
+                                <button type="button" class="btn btn-sm btn-info d-none" id="btnSwapPallet">
+                                    <i class="fas fa-exchange-alt mr-1"></i>Tukar Pallet
+                                </button>
                                 <a href="#" target="_blank" class="btn btn-sm btn-outline-success d-none" id="btnPairLabel">
                                     <i class="fas fa-print mr-1"></i>Label Pasangan
                                 </a>
@@ -2615,30 +2618,30 @@
                         </div>
                     </div>
 
-                    <!-- Langkah 1: lokasi -->
+                    <!-- Langkah 1 -->
                     <div id="scanStep1" class="mb-3">
                         <div class="step-badge">Langkah 1</div>
-                        <label class="small font-weight-bold">QR Lokasi</label>
+                        <label class="small font-weight-bold" id="scanStep1Label">QR Lokasi</label>
                         <div class="input-group input-group-sm">
-                            <input type="text" class="form-control" id="scanLocationCode" autocomplete="off" placeholder="mis. B-a-15">
+                            <input type="text" class="form-control" id="scanStep1Input" autocomplete="off" placeholder="mis. B-a-15">
                             <div class="input-group-append">
-                                <button class="btn btn-outline-primary" type="button" id="btnScanSubmitLocation">Verifikasi</button>
+                                <button class="btn btn-outline-primary" type="button" id="btnScanStep1">Verifikasi</button>
                             </div>
                         </div>
-                        <div class="invalid-feedback d-block" id="errLocationCode"></div>
+                        <div class="invalid-feedback d-block" id="scanStep1Error"></div>
                     </div>
 
-                    <!-- Langkah 2: pallet -->
+                    <!-- Langkah 2 -->
                     <div id="scanStep2" class="mb-3 d-none">
                         <div class="step-badge">Langkah 2</div>
-                        <label class="small font-weight-bold">QR Pallet</label>
+                        <label class="small font-weight-bold" id="scanStep2Label">QR Pallet</label>
                         <div class="input-group input-group-sm">
-                            <input type="text" class="form-control" id="scanPalletCode" autocomplete="off" placeholder="mis. PLT-0042">
+                            <input type="text" class="form-control" id="scanStep2Input" autocomplete="off" placeholder="mis. PLT-0042">
                             <div class="input-group-append">
-                                <button class="btn btn-outline-primary" type="button" id="btnScanSubmitPallet">Kunci Pallet</button>
+                                <button class="btn btn-outline-primary" type="button" id="btnScanStep2">Lanjut</button>
                             </div>
                         </div>
-                        <div class="invalid-feedback d-block" id="errPalletCode"></div>
+                        <div class="invalid-feedback d-block" id="scanStep2Error"></div>
                     </div>
 
                     <!-- Langkah 3: siap -->
@@ -2663,6 +2666,7 @@
         const routes = {
             place: "{{ route('pallet.place') }}",
             move: "{{ route('pallet.movePallet') }}",
+            swap: "{{ route('pallet.swapPallet') }}",
             validate: "{{ route('pallet.validatePair') }}",
             finish: "{{ url('pallet') }}/__id__/finish"
         };
@@ -2691,6 +2695,7 @@
                 $('#qrPalletCode').text(binding.code);
                 $('#btnPlacePallet').addClass('d-none');
                 $('#btnMovePallet').removeClass('d-none');
+                $('#btnSwapPallet').removeClass('d-none');
                 $('#btnPairLabel').removeClass('d-none').attr('href', binding.label_url || '#');
                 $('#btnFinishPallet').removeClass('d-none');
             } else {
@@ -2701,6 +2706,7 @@
                 $('#qrPalletCode').text('-');
                 $('#btnPlacePallet').removeClass('d-none');
                 $('#btnMovePallet').addClass('d-none');
+                $('#btnSwapPallet').addClass('d-none');
                 $('#btnPairLabel').addClass('d-none');
                 $('#btnFinishPallet').addClass('d-none');
             }

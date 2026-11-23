@@ -1,21 +1,51 @@
-/*!
- * Modal Penempatan Pallet 3 langkah:
- *   1. Scan QR Lokasi  -> dicek cocok dengan lokasi yang sedang dibuka
- *   2. Scan QR Pallet  -> pallet di-lock ke lokasi tersebut
- *   3. Pilih item hasil scan -> tempatkan karton
- *
- * Kamera memakai QrScanner (BarcodeDetector native / jsQR fallback).
- */
 <script>
+/*!
+ * Modal Penempatan / Pemindahan Pallet — alur 2 langkah scan QR.
+ *
+ * TEMPATKAN (mode place), urutan:
+ *   1. QR Lokasi  -> wajib sama dengan area yang sedang dibuka di board
+ *   2. QR Pallet  -> pallet dikunci ke lokasi tersebut
+ *
+ * PINDAH (mode move), urutan:
+ *   1. QR Pallet  -> pallet yang mau dipindah (bebas, bukan area yang dibuka)
+ *   2. QR Lokasi  -> lokasi TUJUAN, harus kosong
+ *
+ * Setelah pasangan valid, form penempatan karton dibuka.
+ */
 (function ($) {
     'use strict';
 
     window.PalletPlacementFlow = {
-        step: 0,          // 0 = belum mulai, 1 = lokasi, 2 = pallet, 3 = siap pilih item
+        mode: 'place',
+        step: 1,
         locationCode: null,
         palletCode: null,
         scanner: null,
-        onLocked: null,   // callback({ location_code, pallet_code })
+        expectedLocationCode: null,   // hanya dipakai mode place
+        expectedAddressId: null,
+        onLocked: null,
+
+        /** Urutan field tiap langkah, per mode. */
+        orders: {
+            place: ['location', 'pallet'],
+            move: ['pallet', 'location'],
+            swap: ['pallet_from', 'pallet_to']
+        },
+
+        labels: {
+            place: {
+                location: { label: 'QR Lokasi', placeholder: 'mis. B-a-15', button: 'Verifikasi' },
+                pallet:   { label: 'QR Pallet', placeholder: 'mis. PLT-0042', button: 'Kunci Pallet' }
+            },
+            move: {
+                pallet:   { label: 'QR Pallet Asal', placeholder: 'mis. PLT-0042', button: 'Verifikasi' },
+                location: { label: 'QR Lokasi Tujuan', placeholder: 'mis. B-b-07', button: 'Pindahkan' }
+            },
+            swap: {
+                pallet_from: { label: 'QR Pallet Lama', placeholder: 'mis. PLT-0001', button: 'Verifikasi' },
+                pallet_to:   { label: 'QR Pallet Baru', placeholder: 'mis. PLT-0007', button: 'Tukar Pallet' }
+            }
+        },
 
         init: function (opts) {
             this.onLocked = opts.onLocked || function () {};
@@ -26,42 +56,50 @@
 
             $('#btnPlacePallet').on('click', function () { self.open('place'); });
             $('#btnMovePallet').on('click', function () { self.open('move'); });
+            $('#btnSwapPallet').on('click', function () { self.open('swap'); });
 
             $('#btnScanStart').on('click', function () { self.startCamera(); });
             $('#btnScanStop').on('click', function () { self.stopCamera(); });
             $('#btnScanRetry').on('click', function () { self.startCamera(); });
 
-            $('#scanManualLocation').on('keydown', function (e) {
-                if (e.key === 'Enter') { e.preventDefault(); self.submitLocation(); }
+            $('#scanStep1Input').on('keydown', function (e) {
+                if (e.key === 'Enter') { e.preventDefault(); self.submitStep1(); }
             });
-            $('#scanManualPallet').on('keydown', function (e) {
-                if (e.key === 'Enter') { e.preventDefault(); self.submitPallet(); }
+            $('#scanStep2Input').on('keydown', function (e) {
+                if (e.key === 'Enter') { e.preventDefault(); self.submitStep2(); }
             });
-            $('#btnScanSubmitLocation').on('click', function () { self.submitLocation(); });
-            $('#btnScanSubmitPallet').on('click', function () { self.submitPallet(); });
+            $('#btnScanStep1').on('click', function () { self.submitStep1(); });
+            $('#btnScanStep2').on('click', function () { self.submitStep2(); });
 
             $('#palletScanModal').on('hidden.bs.modal', function () { self.stopCamera(); });
         },
 
+        /** Jenis field pada langkah ke-n (1/2) untuk mode aktif. */
+        fieldOf: function (step) {
+            const order = this.orders[this.mode] || this.orders.place;
+            return order[step - 1];
+        },
+
         open: function (mode) {
-            const self = this;
             this.mode = mode;
             this.step = 1;
             this.locationCode = null;
             this.palletCode = null;
+            this.oldPalletCode = null;
+            this.newPalletCode = null;
 
-            $('#scanModalTitle').text(mode === 'place' ? 'Tempatkan Pallet' : 'Pindah Pallet');
-            $('#scanStepLocation').text(mode === 'place'
-                ? 'Scan QR lokasi yang sedang dibuka, lalu scan QR pallet.'
-                : 'Scan QR pallet yang mau dipindah, lalu scan QR lokasi tujuan.');
-            $('#scanStepHint').text(mode === 'place'
-                ? 'Pastikan QR lokasi yang discan sama dengan area yang Anda pilih di board.'
-                : 'Pastikan QR lokasi tujuan adalah lokasi tempat pallet akan diletakkan.');
+            const titles = { place: 'Tempatkan Pallet', move: 'Pindah Pallet', swap: 'Tukar Pallet' };
+            const hints = {
+                place: 'Scan QR lokasi yang sedang dibuka, lalu QR pallet yang mau ditempatkan.',
+                move: 'Scan QR pallet yang mau dipindah, lalu QR lokasi tujuan yang masih kosong.',
+                swap: 'Scan QR pallet lama yang berdiri di lokasi ini, lalu QR pallet baru penggantinya. Isi karton ikut pindah, lokasi tidak berubah.'
+            };
 
-            $('#scanLocationCode').val('').removeClass('is-invalid');
-            $('#scanPalletCode').val('').removeClass('is-invalid');
-            $('#errLocationCode, #errPalletCode').text('');
-            $('#scanAlert').addClass('d-none').text('');
+            $('#scanModalTitle').text(titles[mode] || titles.place);
+            $('#scanStepHint').text(hints[mode] || hints.place);
+
+            this.renderSteps();
+
             $('#scanCameraBox').removeClass('d-none');
             $('#scanStep1').removeClass('d-none');
             $('#scanStep2').addClass('d-none');
@@ -75,11 +113,28 @@
             $('#btnScanRetry').addClass('d-none');
             $('#btnScanTorch').addClass('d-none').removeClass('btn-dark').addClass('btn-outline-dark');
             $('#scanCamStatus').text('');
-            $('#scanManualLocation').focus();
+            $('#scanAlert').addClass('d-none').text('');
 
             $('#palletScanModal').one('shown.bs.modal', function () {
-                $('#scanManualLocation').focus();
+                $('#scanStep1Input').focus();
             }).modal('show');
+        },
+
+        /** Setel label, placeholder, dan tombol sesuai mode. */
+        renderSteps: function () {
+            const conf = this.labels[this.mode] || this.labels.place;
+
+            [1, 2].forEach(function (step) {
+                const field = window.PalletPlacementFlow.fieldOf(step);
+                const c = conf[field];
+
+                $('#scanStep' + step + 'Label').text(c.label);
+                $('#scanStep' + step + 'Input').val('')
+                    .attr('placeholder', c.placeholder)
+                    .removeClass('is-invalid');
+                $('#btnScanStep' + step).text(c.button);
+                $('#scanStep' + step + 'Error').text('');
+            });
         },
 
         startCamera: function () {
@@ -100,6 +155,28 @@
             $('#scanGuide').text('Arahkan QR ke dalam kotak. Kode terbaca otomatis.');
 
             this.scanner = new window.QrScanner(video, {
+                // Hanya pindai isi kotak bidik, supaya QR tetangga di luar kotak
+                // tidak ikut terbaca (mis. PLT-0006 di bawah PLT-0005).
+                scanRegion: function () {
+                    const vf = document.getElementById('scanViewfinder');
+                    const vp = document.querySelector('.qr-viewport');
+
+                    if (!vf || !vp || vf.classList.contains('d-none')) {
+                        return null;
+                    }
+
+                    const a = vf.getBoundingClientRect();
+                    const b = vp.getBoundingClientRect();
+
+                    return { x: a.left - b.left, y: a.top - b.top, w: a.width, h: a.height };
+                },
+                // Wajib terbaca 2 frame berturut-turut sebelum diterima.
+                requiredHits: 2,
+                onCandidate: function (value, hits, need) {
+                    if (hits < need) {
+                        self.camStatus('Membaca ' + value + '… (' + hits + '/' + need + ')');
+                    }
+                },
                 onResult: function (value) { self.onDecoded(value); },
                 onError: function (msg) {
                     self.camStatus(msg, true);
@@ -119,25 +196,17 @@
             $('#btnScanStop').removeClass('d-none');
         },
 
-        /**
-         * Tombol senter hanya muncul bila kamera mendukung torch.
-         */
+        /** Tombol senter hanya muncul bila kamera mendukung torch. */
         torchButton: function () {
-            const self = this;
             const track = this.scanner && this.scanner.stream
                 ? this.scanner.stream.getVideoTracks()[0]
                 : null;
 
-            if (!track || !track.getCapabilities) {
-                return;
-            }
+            if (!track || !track.getCapabilities) return;
 
             let caps = {};
             try { caps = track.getCapabilities() || {}; } catch (e) { return; }
-
-            if (!caps.torch) {
-                return;
-            }
+            if (!caps.torch) return;
 
             const $btn = $('#btnScanTorch').removeClass('d-none');
             let on = false;
@@ -173,132 +242,176 @@
         onDecoded: function (value) {
             if (!value) return;
 
-            // Umpan balik cepat: bingkai hijau + getar singkat, supaya user
-            // tahu kode sudah tertangkap sebelum layar berpindah.
+            // Umpan balik cepat: bingkai hijau + getar singkat.
             $('#scanViewfinder').addClass('qr-hit');
             this.camStatus('Terbaca: ' + value);
             if (navigator.vibrate) { try { navigator.vibrate(60); } catch (e) {} }
 
             const self = this;
             setTimeout(function () {
+                $('#scanStep' + self.step + 'Input').val(value);
                 if (self.step === 1) {
-                    $('#scanLocationCode').val(value);
-                    self.submitLocation();
-                } else if (self.step === 2) {
-                    $('#scanPalletCode').val(value);
-                    self.submitPallet();
+                    self.submitStep1();
+                } else {
+                    self.submitStep2();
                 }
             }, 250);
         },
 
-        submitLocation: function () {
-            const self = this;
-            const code = $('#scanLocationCode').val().trim();
+        // ================= LANGKAH 1 =================
+        submitStep1: function () {
+            const field = this.fieldOf(1);
+            const code = $('#scanStep1Input').val().trim();
 
             if (!code) {
-                this.alertBox('Scan QR lokasi dulu.');
+                this.alertBox('Scan QR dulu.');
                 return;
             }
 
-            // Cek lokal: harus sama dengan lokasi yang sedang dibuka di board.
-            const expected = this.expectedLocationCode;
-            if (expected && code.toUpperCase() !== expected.toUpperCase()) {
-                $('#scanLocationCode').addClass('is-invalid');
-                $('#errLocationCode').text('QR lokasi ' + code + ' bukan area yang dipilih (' + expected + ').');
-                this.alertBox('Area yang discan tidak cocok dengan area yang Anda pilih.');
-                return;
+            if (field === 'location') {
+                // Mode place: QR lokasi wajib sama dengan area yang dibuka.
+                const expected = this.expectedLocationCode;
+
+                if (expected && code.toUpperCase() !== expected.toUpperCase()) {
+                    $('#scanStep1Input').addClass('is-invalid');
+                    $('#scanStep1Error').text('QR lokasi ' + code + ' bukan area yang dipilih (' + expected + ').');
+                    this.alertBox('Area yang discan tidak cocok dengan area yang Anda pilih.');
+                    return;
+                }
+
+                this.locationCode = code;
+                this.camStatus('Lokasi terverifikasi: ' + code);
+            } else if (field === 'pallet_from') {
+                // Mode tukar: langkah pertama = pallet lama.
+                this.oldPalletCode = code;
+                this.camStatus('Pallet lama terbaca: ' + code);
+            } else {
+                // Mode pindah: yang discan lebih dulu adalah pallet asal.
+                this.palletCode = code;
+                this.camStatus('Pallet terbaca: ' + code);
             }
 
-            $('#scanLocationCode').removeClass('is-invalid');
-            $('#errLocationCode').text('');
+            $('#scanStep1Input').removeClass('is-invalid');
+            $('#scanStep1Error').text('');
             this.alertBox('');
-            this.locationCode = code;
             this.step = 2;
 
             $('#scanStep1').addClass('d-none');
             $('#scanStep2').removeClass('d-none');
-            $('#scanManualPallet').focus();
-            this.camStatus('Lokasi terverifikasi: ' + code);
+            $('#scanStep2Input').focus();
 
             if (this.scanner && this.scanner.running) { this.scanner.stop(); }
             $('#btnScanStart').removeClass('d-none');
             $('#btnScanStop').addClass('d-none');
         },
 
-        submitPallet: function () {
+        // ================= LANGKAH 2 =================
+        submitStep2: function () {
             const self = this;
-            const code = $('#scanPalletCode').val().trim();
+            const field = this.fieldOf(2);
+            const code = $('#scanStep2Input').val().trim();
 
             if (!code) {
-                this.alertBox('Scan QR pallet dulu.');
+                this.alertBox('Scan QR dulu.');
                 return;
             }
 
-            if (!this.locationCode) {
-                this.alertBox('Verifikasi QR lokasi terlebih dahulu.');
-                return;
+            if (field === 'pallet') {
+                this.palletCode = code;
+            } else if (field === 'pallet_to') {
+                this.newPalletCode = code;
+            } else {
+                this.locationCode = code;
             }
 
-            this.camStatus('Memvalidasi pallet…');
+            // Susun payload + validasi kelengkapan sesuai mode.
+            const payload = { _token: this.csrf, mode: this.mode };
 
+            if (this.mode === 'swap') {
+                if (!this.oldPalletCode || !this.newPalletCode) {
+                    this.alertBox('Kedua QR pallet harus discan dulu.');
+                    return;
+                }
+                payload.old_pallet_code = this.oldPalletCode;
+                payload.new_pallet_code = this.newPalletCode;
+
+                // Lokasi harus sama dengan area yang sedang dibuka.
+                if (this.expectedLocationCode) {
+                    payload.expected_location_code = this.expectedLocationCode;
+                }
+            } else {
+                if (!this.locationCode || !this.palletCode) {
+                    this.alertBox('Kedua QR harus discan dulu.');
+                    return;
+                }
+                payload.location_code = this.locationCode;
+                payload.pallet_code = this.palletCode;
+            }
+
+            this.camStatus('Memvalidasi pasangan…');
+
+            // Validasi dulu (tanpa menyimpan), baru jalankan aksinya.
             $.ajax({
                 url: this.routes.validate,
                 type: 'POST',
                 dataType: 'json',
-                data: {
-                    _token: this.csrf,
-                    location_code: this.locationCode,
-                    pallet_code: code,
-                    mode: this.mode || 'place'
-                },
+                data: payload,
                 headers: { 'Accept': 'application/json' }
-            }).done(function (res) {
-                self.palletCode = code;
+            }).done(function () {
                 self.alertBox('');
 
-                // Kunci pallet ke lokasi (place) atau pindahkan (move).
-                const actionUrl = self.mode === 'move' ? self.routes.move : self.routes.place;
-                const payload = {
-                    _token: self.csrf,
-                    location_code: self.locationCode,
-                    pallet_code: code
-                };
+                // place: pallet -> lokasi | move: pallet ke lokasi tujuan | swap: tukar pallet
+                const actionUrl = self.mode === 'move'
+                    ? self.routes.move
+                    : (self.mode === 'swap' ? self.routes.swap : self.routes.place);
+
+                // Payload aksi: buang 'mode' (hanya dipakai endpoint validasi).
+                const actionData = Object.assign({}, payload);
+                delete actionData.mode;
 
                 $.ajax({
                     url: actionUrl,
                     type: 'POST',
                     dataType: 'json',
-                    data: payload,
+                    data: actionData,
                     headers: { 'Accept': 'application/json' }
                 }).done(function (act) {
                     self.step = 3;
-
-                    $('#scanStep2').addClass('d-none');
-                    $('#scanStep3').removeClass('d-none');
-                    $('#scanStep3').html(
-                        '<div class="alert alert-success py-2 small mb-0">' +
-                        '<strong>Pasangan terverifikasi &amp; terkunci.</strong><br>' +
-                        'Lokasi <code>' + self.locationCode + '</code> · Pallet <code>' + code + '</code>' +
-                        (act.message ? '<br>' + act.message : '') +
-                        '</div>'
-                    );
                     self.stopCamera();
 
-                    // Unlock form penempatan karton.
+                    const headlines = {
+                        place: 'Pallet terkunci.',
+                        move: 'Pallet dipindah.',
+                        swap: 'Pallet ditukar.'
+                    };
+
+                    $('#scanStep2').addClass('d-none');
+                    $('#scanStep1Error, #scanStep2Error').text('');
+                    $('#scanStep1Input, #scanStep2Input').removeClass('is-invalid');
+                    $('#scanStep3').removeClass('d-none').html(
+                        '<div class="alert alert-success py-2 small mb-0">' +
+                        '<strong>' + (headlines[self.mode] || headlines.place) + '</strong><br>' +
+                        (act.message ? act.message : '') +
+                        '</div>'
+                    );
+
+                    // Buka form penempatan karton pada lokasi ini.
                     $('#placementLockedNote').addClass('d-none');
                     $('#formAddCartonToPallet').removeClass('d-none');
                     $('#addCartonPalletId').val(self.expectedAddressId || '');
-                    $('#addCartonPalletId').attr('data-location-code', self.locationCode);
-                    $('#addCartonPalletId').attr('data-pallet-code', code);
+                    $('#addCartonPalletId').attr('data-location-code', self.expectedLocationCode || self.locationCode);
+                    $('#addCartonPalletId').attr('data-pallet-code', self.mode === 'swap' ? self.newPalletCode : self.palletCode);
 
                     if (self.onLocked) {
-                        self.onLocked({ location_code: self.locationCode, pallet_code: code });
+                        self.onLocked({
+                            location_code: self.expectedLocationCode || self.locationCode,
+                            pallet_code: self.mode === 'swap' ? self.newPalletCode : self.palletCode
+                        });
                     }
 
                     $('#palletScanModal').modal('hide');
 
-                    // Muat ulang detail lokasi supaya QR pallet, tombol Pindah &
-                    // Finish, serta isi karton langsung sesuai setelah penempatan.
+                    // Muat ulang detail lokasi supaya QR & tombol ikut terbarui.
                     $('#palletDetailModal').modal('hide');
                     setTimeout(function () {
                         if (typeof window.openPalletModal === 'function' && self.expectedAddressId) {
@@ -306,31 +419,45 @@
                         }
                     }, 350);
                 }).fail(function (xhr2) {
-                    const j = xhr2.responseJSON || {};
-                    const e2 = j.errors || {};
-                    if (e2.pallet_code) {
-                        $('#scanPalletCode').addClass('is-invalid');
-                        $('#errPalletCode').text(e2.pallet_code[0]);
-                    }
-                    if (e2.location_code) {
-                        $('#scanLocationCode').addClass('is-invalid');
-                        $('#errLocationCode').text(e2.location_code[0]);
-                    }
-                    self.alertBox(j.message || 'Pallet gagal dikunci ke lokasi ini.');
+                    self.showErrors(xhr2, 2);
                 });
             }).fail(function (xhr) {
-                const json = xhr.responseJSON || {};
-                const errors = json.errors || {};
-                if (errors.pallet_code) {
-                    $('#scanPalletCode').addClass('is-invalid');
-                    $('#errPalletCode').text(errors.pallet_code[0]);
-                }
-                if (errors.location_code) {
-                    $('#scanLocationCode').addClass('is-invalid');
-                    $('#errLocationCode').text(errors.location_code[0]);
-                }
-                self.alertBox(json.message || 'Pallet tidak bisa dipakai untuk lokasi ini.');
+                self.showErrors(xhr, 2);
             });
+        },
+
+        /** Tampilkan error per-field dari response 422. */
+        showErrors: function (xhr, step) {
+            const json = (xhr && xhr.responseJSON) || {};
+            const errors = json.errors || {};
+            const locMsg = errors.location_code ? errors.location_code[0] : null;
+            const palletMsg = errors.pallet_code ? errors.pallet_code[0] : null;
+            const oldMsg = errors.old_pallet_code ? errors.old_pallet_code[0] : null;
+            const newMsg = errors.new_pallet_code ? errors.new_pallet_code[0] : null;
+
+            // Petakan pesan ke field langkah yang sesuai mode.
+            const map = {
+                location:    locMsg,
+                pallet:      palletMsg,
+                pallet_from: oldMsg,
+                pallet_to:   newMsg
+            };
+
+            [1, 2].forEach(function (n) {
+                const msg = map[window.PalletPlacementFlow.fieldOf(n)];
+
+                if (msg) {
+                    $('#scanStep' + n + 'Input').addClass('is-invalid');
+                    $('#scanStep' + n + 'Error').text(msg);
+                }
+            });
+
+            if (errors.expected_location_code) {
+                this.alertBox(errors.expected_location_code[0]);
+                return;
+            }
+
+            this.alertBox(json.message || 'Pasangan QR tidak valid.');
         },
 
         alertBox: function (msg) {

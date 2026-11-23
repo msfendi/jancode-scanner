@@ -16,6 +16,7 @@ class PalletPlacement extends Model
     public const REASON_PLACED   = 'placed';
     public const REASON_MOVED    = 'moved';
     public const REASON_FINISHED = 'finished';
+    public const REASON_SWAPPED  = 'swapped';
 
     protected $fillable = [
         'pallet_id',

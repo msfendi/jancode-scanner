@@ -935,6 +935,37 @@ class PalletController extends Controller
     }
 
     /**
+     * Tukar pallet di lokasi yang sama.
+     *
+     * Isi karton pindah dari pallet lama ke pallet baru; lokasi tidak berubah.
+     */
+    public function swapPallet(Request $request)
+    {
+        $data = $request->validate([
+            'old_pallet_code'        => 'required|string|max:20',
+            'new_pallet_code'        => 'required|string|max:20',
+            'expected_location_code' => 'nullable|string|max:20',
+        ]);
+
+        $result = app(PalletPlacementService::class)->swapPallet(
+            $data['old_pallet_code'],
+            $data['new_pallet_code'],
+            $data['expected_location_code'] ?? null,
+            auth()->id()
+        );
+
+        return response()->json([
+            'success'  => true,
+            'message'  => 'Pallet ' . $result['from']->code . ' ditukar dengan ' . $result['to']->code
+                . ' di ' . $result['location']->code . '. ' . $result['cartons'] . ' karton ikut pindah.',
+            'location' => $result['location']->code,
+            'from'     => $result['from']->code,
+            'to'       => $result['to']->code,
+            'cartons'  => $result['cartons'],
+        ]);
+    }
+
+    /**
      * Kosongkan isi pallet (pallet tetap di lokasi).
      */
     public function emptyPallet($palletId)
@@ -974,28 +1005,53 @@ class PalletController extends Controller
     public function validatePair(Request $request)
     {
         $data = $request->validate([
-            'location_code' => 'required|string|max:20',
-            'pallet_code'   => 'required|string|max:20',
-            'mode'          => 'nullable|in:place,move',
+            'location_code'    => 'nullable|string|max:20',
+            'pallet_code'      => 'nullable|string|max:20',
+            'old_pallet_code'  => 'nullable|string|max:20',
+            'new_pallet_code'  => 'nullable|string|max:20',
+            'expected_location_code' => 'nullable|string|max:20',
+            'mode'             => 'nullable|in:place,move,swap',
         ]);
 
         $mode = $data['mode'] ?? 'place';
 
+        if ($mode === 'swap') {
+            // Pallet lama (yang berdiri di lokasi) ditukar dengan pallet baru.
+            // Lokasi tidak discan karena memang tidak berubah.
+            $result = app(PalletPlacementService::class)->checkSwap(
+                (string) ($data['old_pallet_code'] ?? ''),
+                (string) ($data['new_pallet_code'] ?? ''),
+                $data['expected_location_code'] ?? null
+            );
+
+            return response()->json([
+                'success'         => true,
+                'message'         => 'Siap ditukar: ' . $result['from']->code . ' → ' . $result['to']->code
+                    . ' di ' . $result['location']->code . ' (' . $result['cartons'] . ' karton).',
+                'location_code'   => $result['location']->code,
+                'old_pallet_code' => $result['from']->code,
+                'new_pallet_code' => $result['to']->code,
+                'total_carton'    => $result['cartons'],
+            ]);
+        }
+
         if ($mode === 'move') {
-            [$location, $pallet] = app(PalletPlacementService::class)
-                ->assertBoundPair($data['location_code'], $data['pallet_code']);
+            // Pallet yang discan = pallet yang mau dipindah.
+            // Lokasi yang discan = lokasi TUJUAN (harus kosong), bukan lokasi asal.
+            $result = app(PalletPlacementService::class)
+                ->checkMove((string) $data['pallet_code'], (string) $data['location_code']);
 
             return response()->json([
                 'success'       => true,
-                'message'       => 'Pasangan valid: ' . $pallet->code . ' di ' . $location->code . '.',
-                'location_code' => $location->code,
-                'pallet_code'   => $pallet->code,
-                'total_carton'  => (int) ($pallet->assignment->total_carton ?? 0),
+                'message'       => 'Siap dipindah: ' . $result['pallet']->code . ' ke ' . $result['location']->code . '.',
+                'location_code' => $result['location']->code,
+                'pallet_code'   => $result['pallet']->code,
+                'total_carton'  => (int) ($result['pallet']->assignment->total_carton ?? 0),
             ]);
         }
 
         // mode place: validasi dulu tanpa menyimpan, supaya user bisa
-        //.scan QR pallet dan baru terkunci setelah verifikasi.
+        //scan QR pallet dan baru terkunci setelah verifikasi.
         [$location, $pallet] = app(PalletPlacementService::class)
             ->resolvePair($data['location_code'], $data['pallet_code']);
 
