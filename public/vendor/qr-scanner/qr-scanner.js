@@ -70,6 +70,14 @@
                 }
             });
         }).then(function () {
+            // Autoplay untuk <video muted> tidak selalu jalan (terutama saat
+            // elemen baru ditampilkan). Panggil play() eksplisit supaya frame
+            // benar-benar mengalir; tanpa ini yang digambar ke canvas kosong.
+            var playResult = self.video.play();
+            if (playResult && typeof playResult.then === 'function') {
+                return playResult.catch(function () { /* dibiarkan: tick tetap jalan */ });
+            }
+        }).then(function () {
             if (global.BarcodeDetector) {
                 var formats = ['qr_code'];
                 if (global.BarcodeDetector.getSupportedFormats) {
@@ -111,33 +119,49 @@
         var w = this.video.videoWidth;
         var h = this.video.videoHeight;
 
-        if (w && h) {
-            if (this.useNative) {
-                this.detector.detect(this.video)
-                    .then(function (codes) {
-                        if (codes && codes.length && codes[0].rawValue) {
-                            self._hit(codes[0].rawValue);
-                            return;
-                        }
-                        self.frameId = global.requestAnimationFrame(self._tick);
-                    })
-                    .catch(function () {
-                        self.frameId = global.requestAnimationFrame(self._tick);
-                    });
-                return;
-            }
+        // Frame pertama sering 0x0 (metadata video belum siap). Jangan
+        // diumpankan ke decoder: jsQR melempar "Malformed data passed to
+        // binarizer" dan loop pemindaian ikut mati.
+        if (!w || !h) {
+            this.frameId = global.requestAnimationFrame(this._tick);
+            return;
+        }
 
-            this.canvas.width = w;
-            this.canvas.height = h;
-            this.canvasContext.drawImage(this.video, 0, 0, w, h);
+        if (this.useNative) {
+            this.detector.detect(this.video)
+                .then(function (codes) {
+                    if (codes && codes.length && codes[0].rawValue) {
+                        self._hit(codes[0].rawValue);
+                        return;
+                    }
+                    self.frameId = global.requestAnimationFrame(self._tick);
+                })
+                .catch(function () {
+                    self.frameId = global.requestAnimationFrame(self._tick);
+                });
+            return;
+        }
 
+        this.canvas.width = w;
+        this.canvas.height = h;
+        this.canvasContext.drawImage(this.video, 0, 0, w, h);
+
+        try {
             var imageData = this.canvasContext.getImageData(0, 0, w, h);
-            var result = global.jsQR(imageData.data, { inversionAttempts: 'attemptBoth' });
+            // jsQR(data, width, height, options) — width & height wajib.
+            var result = global.jsQR(
+                imageData.data,
+                imageData.width,
+                imageData.height,
+                { inversionAttempts: 'attemptBoth' }
+            );
 
             if (result && result.data) {
                 this._hit(result.data);
                 return;
             }
+        } catch (e) {
+            // Frame buram/terlalu kecil: abaikan, lanjut frame berikutnya.
         }
 
         this.frameId = global.requestAnimationFrame(this._tick);
