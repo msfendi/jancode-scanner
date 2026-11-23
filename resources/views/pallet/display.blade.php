@@ -584,28 +584,31 @@
                     card.appendChild(title);
 
                     const fallbackAreas = [
-                        { label: 'AREA ATAS', columns: ['a', 'b'], positions: 14 },
-                        { label: 'AREA BAWAH', columns: ['c', 'd'], positions: 19 },
+                        { label: 'DEPAN', columns: ['a', 'b'], positions: 14, from: 1, to: 14 },
+                        { label: '', columns: ['a', 'b'], positions: 33, from: 15, to: 33 },
                     ];
                     const areas = (ROW_AREAS && ROW_AREAS[row]) ? ROW_AREAS[row] : fallbackAreas;
 
                     areas.forEach(function (area) {
                         const cols = area.columns || [];
-                        const count = parseInt(area.positions, 10) || 19;
+                        const from = parseInt(area.from, 10) || 1;
+                        const to = parseInt(area.to, 10) || (parseInt(area.positions, 10) || 33);
+                        const count = to - from + 1;
 
                         const wrap = document.createElement('div');
                         wrap.className = 'half';
 
                         const h = document.createElement('div');
                         h.className = 'half-title';
-                        h.textContent = area.label + ' · ' + cols.join(' | ');
+                        const label = (area.label || '').trim();
+                        h.textContent = label ? label + ' · ' + cols.join(' | ') : cols.join(' | ');
                         wrap.appendChild(h);
 
                         const grid = document.createElement('div');
                         grid.className = 'positions';
                         grid.style.gridTemplateRows = 'repeat(' + count + ', minmax(0, 1fr))';
 
-                        for (let p = 1; p <= count; p++) {
+                        for (let p = from; p <= to; p++) {
                             const line = document.createElement('div');
                             line.className = 'pos-row';
                             line.style.gridTemplateColumns = 'repeat(' + cols.length + ', minmax(0, 1fr))';

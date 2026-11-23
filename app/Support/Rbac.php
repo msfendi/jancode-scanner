@@ -47,6 +47,11 @@ class Rbac
                 'carton-out.manage' => 'Proses karton keluar',
             ],
 
+            'Manage Lokasi' => [
+                'location.view'   => 'Lihat daftar lokasi & QR',
+                'location.manage' => 'Edit & cetak label lokasi',
+            ],
+
             'Manage Pallet' => [
                 'pallet.view'   => 'Lihat layout & detail pallet',
                 'pallet.manage' => 'Tempatkan / pindahkan / kosongkan pallet',

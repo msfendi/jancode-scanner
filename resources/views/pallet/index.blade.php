@@ -54,14 +54,14 @@
         border-top: 5px solid #e74a3b;
     }
 
-    /* Layout 3 kolom per area butuh kartu lebih lebar */
+    /* Layout 3 line per row butuh kartu lebih lebar */
     .pallet-row-card.mode-3 {
         flex: 0 0 440px;
         width: 440px;
         min-width: 440px;
     }
 
-    /* Slot kosong agar kolom tetap sejajar saat jumlah posisi berbeda (a/b/e 14, c/d/f 19) */
+    /* Slot kosong agar kolom tetap sejajar (tiap line 33 posisi) */
     .pallet-box.pallet-absent {
         visibility: hidden;
         pointer-events: none;
@@ -388,7 +388,7 @@
                                         <div class="col mr-2">
                                             <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Total Alamat Pallet</div>
                                             <div class="h5 mb-0 font-weight-bold text-gray-800">{{ $totalPositions }} Posisi</div>
-                                            <div class="small text-muted">{{ count($rowLayouts) }} Row (B–I) &middot; layout dinamis 2/3 kolom</div>
+                                            <div class="small text-muted">{{ count($rowLayouts) }} Row (B–I) &middot; layout dinamis 2/3 line</div>
                                         </div>
                                         <div class="col-auto">
                                             <i class="fas fa-th fa-2x text-gray-300"></i>
@@ -642,21 +642,29 @@
                                                     @endphp
 
                                                     @foreach($cardAreas as $area)
+                                                        @php
+                                                            $areaFrom = (int) ($area['from'] ?? 1);
+                                                            $areaTo    = (int) ($area['to'] ?? $area['positions']);
+                                                            $isFront   = ($area['key'] ?? '') === 'depan';
+                                                        @endphp
+
                                                         @if(!$loop->first)
                                                             <hr class="my-3" style="border-top: 2px dashed #b7b9cc;">
                                                         @endif
 
-                                                        <div class="text-center font-weight-bold small {{ $area['key'] === 'top' ? 'text-primary' : 'text-secondary' }} mb-1">
-                                                            {{ $area['label'] }} ({{ implode(' & ', $area['columns']) }})
-                                                        </div>
+                                                        @if(trim((string) ($area['label'] ?? '')) !== '')
+                                                            <div class="text-center font-weight-bold small {{ $isFront ? 'text-primary' : 'text-secondary' }} mb-1">
+                                                                {{ $area['label'] }} ({{ implode(' & ', $area['columns']) }})
+                                                            </div>
+                                                        @endif
                                                         <div class="subrow-vert-header">
                                                             <div class="subrow-header-pos">Pos</div>
                                                             @foreach($area['columns'] as $col)
-                                                                <div class="subrow-header-col {{ $area['key'] === 'top' ? '' : 'text-secondary' }}">{{ $col }}</div>
+                                                                <div class="subrow-header-col {{ $isFront ? '' : 'text-secondary' }}">{{ $col }}</div>
                                                             @endforeach
                                                         </div>
 
-                                                        @for($p = 1; $p <= $area['positions']; $p++)
+                                                        @for($p = $areaFrom; $p <= $areaTo; $p++)
                                                             <div class="pallet-vert-row">
                                                                 <span class="pallet-pos-tag">{{ $p }}</span>
                                                                 @foreach($area['columns'] as $col)
@@ -675,7 +683,7 @@
                                                                             <span class="pallet-code">{{ $addr->code }}</span>
                                                                         </div>
                                                                     @else
-                                                                        {{-- Slot kosong agar kolom tetap sejajar (mis. a/b hanya 14 posisi) --}}
+                                                                        {{-- Slot kosong agar kolom tetap sejajar (tiap line 33 posisi) --}}
                                                                         <div class="pallet-box pallet-absent" aria-hidden="true"></div>
                                                                     @endif
                                                                 @endforeach
@@ -774,13 +782,13 @@
         </div>
     </div>
 
-    <!-- Modal Atur Layout Kolom per Row -->
+    <!-- Modal Atur Layout Line per Row -->
     <div class="modal fade" id="palletLayoutModal" tabindex="-1" role="dialog" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-scrollable" role="document">
             <div class="modal-content">
                 <div class="modal-header bg-dark text-white">
                     <h5 class="modal-title font-weight-bold">
-                        <i class="fas fa-columns mr-2"></i> Atur Layout Kolom per Row
+                        <i class="fas fa-columns mr-2"></i> Atur Layout Line per Row
                     </h5>
                     <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
                         <span aria-hidden="true">&times;</span>
@@ -789,18 +797,18 @@
                 <form id="palletLayoutForm">
                     <div class="modal-body p-4">
                         <p class="small text-muted mb-3">
-                            Setiap row memiliki <strong>2 area</strong> (atas &amp; bawah). Pilih
-                            <strong>2 atau 3 kolom</strong> per area untuk tiap row:
+                            Setiap row memiliki <strong>3 line</strong> (<code>a</code>, <code>b</code>, <code>c</code>),
+                            masing-masing <strong>33 posisi</strong> menerus: <strong>01–14 depan</strong> dan
+                            <strong>15–33 belakang</strong>. Pilih berapa line yang dipakai per row:
                         </p>
                         <ul class="small text-muted mb-3">
-                            <li><strong>3 kolom</strong> &rarr; atas <code>a | b | e</code>, bawah <code>c | d | f</code>.</li>
-                            <li><strong>2 kolom</strong> &rarr; atas <code>a | b</code>, bawah <code>c | d</code> (kolom <code>e</code> &amp; <code>f</code> nonaktif).</li>
+                            <li><strong>3 line</strong> &rarr; <code>a | b | c</code> (99 posisi per row).</li>
+                            <li><strong>2 line</strong> &rarr; <code>a | b</code> (66 posisi per row; line <code>c</code> disembunyikan, datanya tetap tersimpan).</li>
                         </ul>
 
                         <div class="alert alert-warning small py-2">
                             <i class="fas fa-info-circle mr-1"></i>
-                            Kolom <code>a</code>/<code>b</code>/<code>e</code> memiliki 14 posisi, sedangkan <code>c</code>/<code>d</code>/<code>f</code> memiliki 19 posisi.
-                            Perubahan ke 2 kolom ditolak bila kolom <code>e</code>/<code>f</code> masih berisi pallet.
+                            Perubahan ke 2 line ditolak bila line <code>c</code> pada row tersebut masih berisi pallet.
                         </div>
 
                         <div class="table-responsive">
@@ -808,7 +816,7 @@
                                 <thead class="thead-light">
                                     <tr>
                                         <th width="90">Row</th>
-                                        <th width="150">Kolom / Area</th>
+                                        <th width="150">Line aktif</th>
                                         <th>Preview</th>
                                     </tr>
                                 </thead>
@@ -818,8 +826,8 @@
                                             <td class="align-middle"><strong>ROW {{ $layoutRow }}</strong></td>
                                             <td class="align-middle">
                                                 <select class="form-control form-control-sm" data-layout-row="{{ $layoutRow }}">
-                                                    <option value="2" {{ $layoutMode === 2 ? 'selected' : '' }}>2 kolom</option>
-                                                    <option value="3" {{ $layoutMode === 3 ? 'selected' : '' }}>3 kolom</option>
+                                                    <option value="2" {{ $layoutMode === 2 ? 'selected' : '' }}>2 line</option>
+                                                    <option value="3" {{ $layoutMode === 3 ? 'selected' : '' }}>3 line</option>
                                                 </select>
                                             </td>
                                             <td class="align-middle small text-muted" data-layout-preview="{{ $layoutRow }}"></td>
@@ -1331,17 +1339,17 @@
             }
         });
 
-        // ================= ATUR LAYOUT KOLOM PER ROW =================
-        function layoutPreviewText(mode) {
+        // ================= ATUR LAYOUT LINE PER ROW =================
+        function layoutPreview(mode) {
             return Number(mode) === 3
-                ? 'Atas: a | b | e   ·   Bawah: c | d | f'
-                : 'Atas: a | b   ·   Bawah: c | d   (e & f nonaktif)';
+                ? 'Line: a | b | c   ·   33 posisi/line (01-14 depan, 15-33 belakang)'
+                : 'Line: a | b   ·   line c disembunyikan (data tetap tersimpan)';
         }
 
         function refreshLayoutPreviews() {
             $('#palletLayoutForm select[data-layout-row]').each(function () {
                 const row = $(this).data('layout-row');
-                $('[data-layout-preview="' + row + '"]').text(layoutPreviewText($(this).val()));
+                $('[data-layout-preview="' + row + '"]').text(layoutPreview($(this).val()));
             });
         }
 

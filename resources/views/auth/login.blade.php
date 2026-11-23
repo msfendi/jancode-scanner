@@ -607,7 +607,7 @@
                     </div>
                     <div class="cap">
                         <b>792 alamat pallet</b>
-                        8 row &middot; layout dinamis 2/3 kolom
+                        8 row &middot; layout dinamis 2/3 line
                     </div>
                 </div>
             </div>

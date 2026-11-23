@@ -115,6 +115,30 @@ Route::group(['middleware' => 'auth'], function () {
         Route::delete('/clear/{addressId}', [\App\Http\Controllers\PalletController::class, 'clearPallet'])->name('clear');
     });
 
+    // Master Lokasi (QR)
+    Route::prefix('locations')->name('locations.')->middleware(['auth', 'module:location'])->group(function () {
+        Route::get('/', [\App\Http\Controllers\LocationController::class, 'index'])->name('index');
+        Route::get('/labels', [\App\Http\Controllers\LocationController::class, 'labels'])->name('labels');
+        Route::post('/bulk-toggle', [\App\Http\Controllers\LocationController::class, 'bulkToggle'])->name('bulkToggle')->middleware('can:location.manage');
+        Route::get('/{id}/qr.svg', [\App\Http\Controllers\LocationController::class, 'qrSvg'])->name('qr')->whereNumber('id');
+        Route::get('/{id}', [\App\Http\Controllers\LocationController::class, 'show'])->name('show')->whereNumber('id');
+        Route::put('/{id}', [\App\Http\Controllers\LocationController::class, 'update'])->name('update')->middleware('can:location.manage');
+    });
+
+    // Master Pallet (QR)
+    Route::prefix('pallets')->name('pallets.')->middleware(['auth', 'module:pallet'])->group(function () {
+        Route::get('/', [\App\Http\Controllers\PalletMasterController::class, 'index'])->name('index');
+        Route::get('/create', [\App\Http\Controllers\PalletMasterController::class, 'create'])->name('create')->middleware('can:pallet.manage');
+        Route::post('/', [\App\Http\Controllers\PalletMasterController::class, 'store'])->name('store')->middleware('can:pallet.manage');
+        Route::get('/labels', [\App\Http\Controllers\PalletMasterController::class, 'labels'])->name('labels');
+        Route::get('/{id}/qr.svg', [\App\Http\Controllers\PalletMasterController::class, 'qrSvg'])->name('qr')->whereNumber('id');
+        Route::get('/{id}', [\App\Http\Controllers\PalletMasterController::class, 'show'])->name('show')->whereNumber('id');
+        Route::put('/{id}', [\App\Http\Controllers\PalletMasterController::class, 'update'])->name('update')->middleware('can:pallet.manage');
+    });
+
+    // Resolver QR (lokasi & pallet)
+    Route::get('/q/{code}', [\App\Http\Controllers\QrResolveController::class, 'show'])->name('qr.resolve');
+
     Route::prefix('scanner')->name('scanner.')->group(function () {
         Route::get('/', [JancodeScanController::class, 'index'])->name('index')->middleware(['auth', 'module:scan']);
         Route::get('/packing-lists', [JancodeScanController::class, 'packingLists'])->name('packingLists')->middleware(['auth', 'module:scan']);

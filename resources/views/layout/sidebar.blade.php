@@ -123,6 +123,21 @@
             <span>Manage Pallet Location</span>
         </a>
     </li>
+    <li class="nav-item {{ request()->is('pallets*') ? 'active' : '' }}">
+        <a class="nav-link" href="{{ route('pallets.index') }}">
+            <i class="fas fa-fw fa-qrcode"></i>
+            <span>Master Pallet &amp; QR</span>
+        </a>
+    </li>
+    @endcan
+
+    @canany(['location.view', 'location.manage'])
+    <li class="nav-item {{ request()->is('locations*') ? 'active' : '' }}">
+        <a class="nav-link" href="{{ route('locations.index') }}">
+            <i class="fas fa-fw fa-map-marker-alt"></i>
+            <span>Master Lokasi &amp; QR</span>
+        </a>
+    </li>
     @endcan
 
     @canany(['hangtag.view', 'hangtag.manage'])

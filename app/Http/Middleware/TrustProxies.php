@@ -8,11 +8,14 @@ use Illuminate\Http\Request;
 class TrustProxies extends Middleware
 {
     /**
-     * The trusted proxies for this application.
+     * Proxy yang dipercaya: hanya reverse proxy lokal (dev TLS proxy di 8443,
+     * atau nginx/php-fpm di host yang sama). Tanpa ini, `X-Forwarded-Proto`
+     * diabaikan dan redirect/asset URL ikut skema http sehingga halaman HTTPS
+     * gagal dimuat.
      *
      * @var array<int, string>|string|null
      */
-    protected $proxies;
+    protected $proxies = '127.0.0.1,::1';
 
     /**
      * The headers that should be used to detect proxies.

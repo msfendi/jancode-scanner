@@ -18,6 +18,12 @@ class PalletAddress extends Model
         'code',
         'max_carton',
         'country_mode',
+        'is_active',
+    ];
+
+    protected $casts = [
+        'is_active'  => 'boolean',
+        'max_carton' => 'integer',
     ];
 
     public function isMultiCountry(): bool
