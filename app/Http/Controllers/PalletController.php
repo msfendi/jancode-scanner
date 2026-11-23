@@ -965,24 +965,76 @@ class PalletController extends Controller
     }
 
     /**
-     * Validasi pasangan QR (lokasi + pallet) tanpa mengubah data.
+     * Validasi pasangan QR (lokasi + pallet).
+     *
+     * mode = 'place' : lokasi + pallet harus berpasangan, pallet harus free.
+     *                   Bila lolos, pallet langsung dikunci ke lokasi tersebut.
+     * mode = 'move'  : pallet harus sudah berada di lokasi tujuan.
      */
     public function validatePair(Request $request)
     {
         $data = $request->validate([
             'location_code' => 'required|string|max:20',
             'pallet_code'   => 'required|string|max:20',
+            'mode'          => 'nullable|in:place,move',
         ]);
 
+        $mode = $data['mode'] ?? 'place';
+
+        if ($mode === 'move') {
+            [$location, $pallet] = app(PalletPlacementService::class)
+                ->assertBoundPair($data['location_code'], $data['pallet_code']);
+
+            return response()->json([
+                'success'       => true,
+                'message'       => 'Pasangan valid: ' . $pallet->code . ' di ' . $location->code . '.',
+                'location_code' => $location->code,
+                'pallet_code'   => $pallet->code,
+                'total_carton'  => (int) ($pallet->assignment->total_carton ?? 0),
+            ]);
+        }
+
+        // mode place: validasi dulu tanpa menyimpan, supaya user bisa
+        //.scan QR pallet dan baru terkunci setelah verifikasi.
         [$location, $pallet] = app(PalletPlacementService::class)
-            ->assertBoundPair($data['location_code'], $data['pallet_code']);
+            ->resolvePair($data['location_code'], $data['pallet_code']);
+
+        $service = app(PalletPlacementService::class);
+
+        if (! $location->is_active) {
+            throw ValidationException::withMessages([
+                'location_code' => 'Lokasi ' . $location->code . ' sedang nonaktif.',
+            ]);
+        }
+
+        if (in_array($pallet->status, ['maintenance', 'retired'], true)) {
+            throw ValidationException::withMessages([
+                'pallet_code' => 'Pallet ' . $pallet->code . ' berstatus ' . $pallet->status . ' dan tidak bisa ditempatkan.',
+            ]);
+        }
+
+        $occupant = Pallet::where('current_location_id', $location->id)->first();
+
+        if ($occupant && (int) $occupant->id !== (int) $pallet->id) {
+            throw ValidationException::withMessages([
+                'location_code' => 'Lokasi ' . $location->code . ' sudah berisi pallet ' . $occupant->code . '.',
+            ]);
+        }
+
+        if ($pallet->current_location_id && (int) $pallet->current_location_id !== (int) $location->id) {
+            $current = PalletAddress::find($pallet->current_location_id);
+
+            throw ValidationException::withMessages([
+                'pallet_code' => 'Pallet ' . $pallet->code . ' masih berada di ' . ($current->code ?? 'lokasi lain') . '.',
+            ]);
+        }
 
         return response()->json([
-            'success'      => true,
-            'message'      => 'Pasangan valid: ' . $pallet->code . ' di ' . $location->code . '.',
+            'success'       => true,
+            'message'       => 'Pasangan valid: ' . $pallet->code . ' untuk ' . $location->code . '.',
             'location_code' => $location->code,
-            'pallet_code'  => $pallet->code,
-            'total_carton' => (int) ($pallet->assignment->total_carton ?? 0),
+            'pallet_code'   => $pallet->code,
+            'total_carton'  => (int) ($pallet->assignment->total_carton ?? 0),
         ]);
     }
 
@@ -1018,11 +1070,30 @@ class PalletController extends Controller
             'pallet_address_id' => 'required|exists:pallet_address,id',
             'jancode_id'        => 'required|exists:jancode,id',
             'qty_carton'        => 'nullable|integer|min:1',
+            'location_code'     => 'nullable|string|max:20',
+            'pallet_code'       => 'nullable|string|max:20',
         ]);
 
         $addressId = $request->input('pallet_address_id');
         $jancodeId = $request->input('jancode_id');
         $requestedQty = $request->input('qty_carton') ? (int)$request->input('qty_carton') : null;
+
+        // Bila CLIENT mengirim scan QR (lokasi + pallet), pastikan pasangan itu
+        // benar-benar terhubung. Ini menutup celah: user bisa mengisi form
+        // tanpa pernah scan.
+        if ($request->filled('pallet_code') && $request->filled('location_code')) {
+            [$scannedLocation, $scannedPallet] = app(PalletPlacementService::class)
+                ->assertBoundPair(
+                    (string) $request->input('location_code'),
+                    (string) $request->input('pallet_code')
+                );
+
+            if ((int) $scannedLocation->id !== (int) $addressId) {
+                throw ValidationException::withMessages([
+                    'location_code' => 'QR lokasi ' . $scannedLocation->code . ' tidak cocok dengan lokasi tujuan penempatan.',
+                ]);
+            }
+        }
 
         return DB::transaction(function () use ($addressId, $jancodeId, $requestedQty) {
             $address = PalletAddress::lockForUpdate()->findOrFail($addressId);

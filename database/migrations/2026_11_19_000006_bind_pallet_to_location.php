@@ -59,9 +59,6 @@ return new class extends Migration
             });
         }
 
-        $this->backfill();
-
-        // Lokasi yang sudah terisi wajib punya pallet setelah backfill.
         $this->syncAssignmentLocationIds();
     }
 
@@ -87,76 +84,12 @@ return new class extends Migration
     }
 
     /**
-     * Beri identitas pallet untuk setiap lokasi yang sudah berisi karton.
-     *
-     * Pallet diambil dari stok `available` dengan kode terkecil, berurutan
-     * mengikuti lokasi (row, line, pos). Idempoten: baris yang sudah punya
-     * pallet dilewati.
-     */
-    private function backfill(): void
-    {
-        if (! Schema::hasTable('pallet_assignment') || ! Schema::hasColumn('pallet_assignment', 'pallet_id')) {
-            return;
-        }
-
-        $assignments = DB::table('pallet_assignment as pa')
-            ->join('pallet_address as a', 'a.id', '=', 'pa.pallet_address_id')
-            ->whereNull('pa.pallet_id')
-            ->orderBy('a.row_label')
-            ->orderBy('a.col_label')
-            ->orderBy('a.position_no')
-            ->select('pa.id', 'pa.pallet_address_id')
-            ->get();
-
-        if ($assignments->isEmpty()) {
-            return;
-        }
-
-        $freePallets = DB::table('pallets')
-            ->whereNull('current_location_id')
-            ->whereNull('deleted_at')
-            ->orderBy('id')
-            ->pluck('id')
-            ->all();
-
-        $now = now();
-
-        foreach ($assignments as $index => $assignment) {
-            $palletId = $freePallets[$index] ?? null;
-
-            if (! $palletId) {
-                break; // stok pallet habis; sisanya dibiarkan terbuka
-            }
-
-            DB::table('pallets')->where('id', $palletId)->update([
-                'current_location_id' => $assignment->pallet_address_id,
-                'placed_at'           => $now,
-                'status'              => 'in_use',
-                'updated_at'          => $now,
-            ]);
-
-            DB::table('pallet_assignment')->where('id', $assignment->id)->update([
-                'pallet_id'  => $palletId,
-                'updated_at' => $now,
-            ]);
-
-            DB::table('pallet_placements')->insert([
-                'pallet_id'   => $palletId,
-                'location_id' => $assignment->pallet_address_id,
-                'placed_at'   => $now,
-                'removed_at'  => null,
-                'placed_by'   => null,
-                'removed_by'  => null,
-                'reason'      => 'placed',
-                'created_at'  => $now,
-                'updated_at'  => $now,
-            ]);
-        }
-    }
-
-    /**
      * Samakan denormalisasi pallet_address_id pada pallet_assignment dengan
      * lokasi pallet saat ini.
+     *
+     * CATATAN: tidak ada backfill otomatis. Data lama yang masih menempel ke
+     * lokasi TIDAK otomatis diberi pallet — penempatan pallet wajib lewat
+     * scan QR (lokasi + pallet) supaya identitas pallet benar-benarphysical.
      */
     private function syncAssignmentLocationIds(): void
     {

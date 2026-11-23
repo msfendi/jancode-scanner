@@ -7,6 +7,7 @@ use App\Models\PalletAddress;
 use App\Models\PalletAssignment;
 use App\Models\PalletPlacement;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -94,9 +95,31 @@ class PalletPlacementService
             }
 
             $this->bind($location, $pallet, PalletPlacement::REASON_PLACED, $userId);
+            $this->adoptExistingAssignment($location, $pallet);
 
             return ['location' => $location, 'pallet' => $pallet, 'unchanged' => false];
         });
+    }
+
+    /**
+     * K-moving assignment lama yang menempel di lokasi ini supaya ikut punya
+     * pallet. Data lama bisa sudah berisi karton sebelum identitas pallet ada.
+     */
+    private function adoptExistingAssignment(PalletAddress $location, Pallet $pallet): void
+    {
+        if (! Schema::hasTable('pallet_assignment') || ! Schema::hasColumn('pallet_assignment', 'pallet_id')) {
+            return;
+        }
+
+        $assignment = PalletAssignment::where('pallet_address_id', $location->id)
+            ->whereNull('pallet_id')
+            ->first();
+
+        if (! $assignment) {
+            return;
+        }
+
+        $assignment->update(['pallet_id' => $pallet->id]);
     }
 
     /**
@@ -144,6 +167,7 @@ class PalletPlacementService
 
             $this->closeActivePlacement($pallet, PalletPlacement::REASON_MOVED, $userId);
             $this->bind($location, $pallet, PalletPlacement::REASON_MOVED, $userId, false);
+            $this->adoptExistingAssignment($location, $pallet);
 
             return ['location' => $location, 'pallet' => $pallet, 'unchanged' => false];
         });
