@@ -3,6 +3,117 @@
 @include('layout.header')
 
 <style>
+    /* Badge langkah pada modal scan QR */
+    .step-badge {
+        display: inline-block;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .5px;
+        text-transform: uppercase;
+        color: #fff;
+        background: #4e73df;
+        border-radius: 3px;
+        padding: 1px 6px;
+        margin-bottom: 4px;
+    }
+
+    /* ===== Viewport kamera + area bidik QR ===== */
+    .qr-viewport {
+        position: relative;
+        width: 100%;
+        height: 300px;
+        background: #111;
+        border-radius: 10px;
+        overflow: hidden;
+    }
+
+    .qr-viewport video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+
+    .qr-placeholder {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        color: #8b93a7;
+        background: repeating-linear-gradient(45deg, #171a21, #171a21 12px, #1d212a 12px, #1d212a 24px);
+    }
+
+    .qr-viewfinder {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 200px;
+        height: 200px;
+        transform: translate(-50%, -50%);
+        box-shadow: 0 0 0 9999px rgba(0, 0, 0, .45);
+        border-radius: 10px;
+        pointer-events: none;
+    }
+
+    .qr-corner {
+        position: absolute;
+        width: 30px;
+        height: 30px;
+        border: 3px solid #4e73df;
+    }
+
+    .qr-tl { top: -2px; left: -2px; border-right: 0; border-bottom: 0; border-top-left-radius: 10px; }
+    .qr-tr { top: -2px; right: -2px; border-left: 0; border-bottom: 0; border-top-right-radius: 10px; }
+    .qr-bl { bottom: -2px; left: -2px; border-right: 0; border-top: 0; border-bottom-left-radius: 10px; }
+    .qr-br { bottom: -2px; right: -2px; border-left: 0; border-top: 0; border-bottom-right-radius: 10px; }
+
+    .qr-laser {
+        position: absolute;
+        left: 6px;
+        right: 6px;
+        height: 2px;
+        background: linear-gradient(90deg, transparent, #4e73df, transparent);
+        animation: qr-scan 2.2s linear infinite;
+    }
+
+    @keyframes qr-scan {
+        0%   { top: 8px; opacity: .2; }
+        50%  { opacity: 1; }
+        100% { top: calc(100% - 10px); opacity: .2; }
+    }
+
+    .qr-viewfinder.qr-hit .qr-corner {
+        border-color: #1cc88a;
+    }
+
+    .qr-viewfinder.qr-hit {
+        box-shadow: 0 0 0 9999px rgba(28, 200, 138, .18);
+    }
+
+    .qr-status {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        padding: 6px 10px;
+        font-size: 12px;
+        color: #e8ecf5;
+        background: rgba(0, 0, 0, .55);
+        text-align: center;
+    }
+
+    .qr-status.text-danger {
+        background: rgba(180, 30, 30, .75);
+        color: #fff !important;
+    }
+
+    @media (max-width: 576px) {
+        .qr-viewport { height: 240px; }
+        .qr-viewfinder { width: 170px; height: 170px; }
+    }
+
     /* Container Drag-to-Scroll Horizontal Board */
     .pallet-board-wrapper {
         position: relative;
@@ -862,6 +973,57 @@
                     </button>
                 </div>
                 <div class="modal-body p-4">
+                    <!-- Pallet & Lokasi: dua QR + aksi penempatan -->
+                    <div class="card border-left-dark shadow-sm mb-3">
+                        <div class="card-body py-2">
+                            <div class="d-flex justify-content-between align-items-start flex-wrap">
+                                <div class="pr-3">
+                                    <div class="text-xs font-weight-bold text-dark text-uppercase mb-1">Pallet di Lokasi Ini</div>
+                                    <div id="bindingEmpty" class="small text-muted">Belum ada pallet. Scan QR lokasi + QR pallet untuk menempatkan.</div>
+                                    <div id="bindingFilled" class="d-none">
+                                        <div class="h6 mb-0 font-weight-bold text-gray-800">
+                                            <span id="bindingPalletCode">-</span>
+                                            <span class="badge badge-info ml-1" id="bindingStatus">-</span>
+                                        </div>
+                                        <div class="small text-muted">
+                                            Sejak <span id="bindingPlacedAt">-</span> &middot;
+                                            <span id="bindingCarton">0</span>/<span id="bindingMax">42</span> karton
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="d-flex text-center">
+                                    <div class="mr-3">
+                                        <img id="qrLocationImg" src="" alt="QR Lokasi" style="width:92px;height:92px">
+                                        <div class="small font-weight-bold"><span id="qrLocationCode">-</span></div>
+                                        <div class="text-xs text-muted">QR Lokasi</div>
+                                    </div>
+                                    <div id="qrPalletBox">
+                                        <img id="qrPalletImg" src="" alt="QR Pallet" style="width:92px;height:92px">
+                                        <div class="small font-weight-bold"><span id="qrPalletCode">-</span></div>
+                                        <div class="text-xs text-muted">QR Pallet</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mt-2">
+                                <button type="button" class="btn btn-sm btn-primary" id="btnPlacePallet">
+                                    <i class="fas fa-thumbtack mr-1"></i>Tempatkan Pallet
+                                </button>
+                                <button type="button" class="btn btn-sm btn-warning d-none" id="btnMovePallet">
+                                    <i class="fas fa-dolly mr-1"></i>Pindah Pallet
+                                </button>
+                                <button type="button" class="btn btn-sm btn-info d-none" id="btnSwapPallet">
+                                    <i class="fas fa-exchange-alt mr-1"></i>Tukar Pallet
+                                </button>
+                                <a href="#" target="_blank" class="btn btn-sm btn-outline-success d-none" id="btnPairLabel">
+                                    <i class="fas fa-print mr-1"></i>Label Pasangan
+                                </a>
+                                <button type="button" class="btn btn-sm btn-danger d-none" id="btnFinishPallet">
+                                    <i class="fas fa-flag-checkered mr-1"></i>Finish
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Status Kapasitas & Kunci Grup -->
                     <div class="row mb-3">
                         <div class="col-md-4">
@@ -936,11 +1098,22 @@
                     </div>
 
                     <!-- Form Tambah Karton ke Pallet Ini -->
-                    <div class="card bg-light border-0 shadow-sm p-3 mb-3">
+                    <div id="placementLockedNote" class="card bg-light border-0 shadow-sm p-3 mb-3">
+                        <div class="d-flex align-items-start">
+                            <i class="fas fa-lock text-warning mr-2 mt-1"></i>
+                            <div class="small">
+                                <strong>Penempatan karton terkunci.</strong><br>
+                                Scan QR lokasi lalu QR pallet terlebih dahulu untuk memastikan pallet yang
+                                benar-benar berada di area ini. Setelah terverifikasi, pilih item hasil scan di bawah.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card bg-light border-0 shadow-sm p-3 mb-3 d-none" id="formAddCartonToPallet">
                         <h6 class="font-weight-bold text-primary mb-2">
                             <i class="fas fa-plus-circle mr-1"></i> Penempatan Karton Hasil Scan ke Pallet Ini:
                         </h6>
-                        <form id="formAddCartonToPallet">
+                        <form id="formAddCartonToPalletInner">
                             <input type="hidden" id="addCartonPalletId" name="pallet_address_id">
                             <div class="form-row align-items-end">
                                 <div class="col-md-7 mb-2">
@@ -1016,27 +1189,15 @@
                         </div>
 
                         <div class="form-group">
-                            <label class="font-weight-bold">Pilih Pallet Tujuan:</label>
-                            <select class="form-control" id="moveTargetPalletSelect" name="target_pallet_address_id" required>
-                                <option value="">-- Pilih Pallet Tujuan --</option>
-                                @foreach($addresses as $addr)
-                                    @php
-                                        $tAssign = $addr->assignment;
-                                        $tCartons = $tAssign ? $tAssign->total_carton : 0;
-                                        $tSisa = max(0, 42 - $tCartons);
-                                        $statusStr = $tCartons == 0 ? 'Kosong (42 slot)' : "Terisi {$tCartons}/42 ({$tAssign->style} - {$tAssign->country})";
-                                    @endphp
-                                    @if($tSisa > 0)
-                                        <option value="{{ $addr->id }}" 
-                                                data-style="{{ $tAssign ? $tAssign->style : '' }}"
-                                                data-country="{{ $tAssign ? $tAssign->country : '' }}"
-                                                data-sisa="{{ $tSisa }}">
-                                            {{ $addr->code }} &mdash; {{ $statusStr }}
-                                        </option>
-                                    @endif
-                                @endforeach
-                            </select>
-                            <small class="text-muted">Pallet tujuan harus kosong atau memiliki Style, OCF &amp; Country yang sama (BR-09). Row boleh berisi style lain, tetapi pallet tidak boleh dicampur.</small>
+                            <label class="font-weight-bold">Pallet Tujuan (wajib scan):</label>
+                            <input type="text" class="form-control mb-2" id="moveTargetLocationCode" name="target_location_code"
+                                placeholder="1. Scan QR lokasi tujuan (mis. B-a-15)" autocomplete="off">
+                            <input type="text" class="form-control" id="moveTargetPalletCode" name="target_pallet_code"
+                                placeholder="2. Scan QR pallet tujuan (mis. PLT-0042)" autocomplete="off">
+                            <small class="text-muted d-block mt-1">
+                                Kedua QR harus cocok: pallet tujuan harus benar-benar berada di lokasi tujuan.
+                                Pallet tujuan harus kosong atau memiliki Style, OCF &amp; Country yang sama (BR-09).
+                            </small>
                         </div>
                     </div>
                     <div class="modal-footer">
@@ -1165,6 +1326,11 @@
                     ? (assign.style || '-') + (assign.ocf ? ' / OCF ' + assign.ocf : '')
                     : '- (Bebas)');
                 $('#modalLockedCountry').text(assign ? assign.country : '- (Bebas)');
+
+                // Pallet & lokasi: dua QR + tombol penempatan
+                if (typeof window.renderPalletBinding === 'function') {
+                    window.renderPalletBinding(addr, res.pallet);
+                }
 
                 // Mode negara pallet (single / multi)
                 const isMulti = (addr.country_mode === 'multi');
@@ -1661,10 +1827,17 @@
         }
 
         // Submit Plot Karton ke Pallet Tertentu
-        $('#formAddCartonToPallet').on('submit', function(e) {
+        $('#formAddCartonToPalletInner').on('submit', function(e) {
             e.preventDefault();
             const form = $(this);
             const $input = $('#inputAddQtyCarton');
+
+            // Wajib: pallet sudah diverifikasi lewat scan QR.
+            const $lock = $('#addCartonPalletId');
+            if (!$lock.val() || !$lock.attr('data-pallet-code')) {
+                Swal.fire('Pallet Belum Diverifikasi', 'Scan QR lokasi dan QR pallet terlebih dahulu.', 'warning');
+                return;
+            }
 
             if (!validateQtyInput($input)) {
                 const max = parseInt($input.attr('max')) || 0;
@@ -1679,7 +1852,9 @@
             $.ajax({
                 url: "{{ route('pallet.store') }}",
                 type: "POST",
-                data: form.serialize(),
+                data: form.serialize()
+                    + '&location_code=' + encodeURIComponent($('#addCartonPalletId').attr('data-location-code') || '')
+                    + '&pallet_code=' + encodeURIComponent($('#addCartonPalletId').attr('data-pallet-code') || ''),
                 headers: { 'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content') },
                 success: function(res) {
                     if (res.success) {
@@ -1734,8 +1909,20 @@
             $('#moveItemDesc').text(`Pallet Asal: ${sourcePalletCode} | Warna: ${color} | Size: ${size}`);
             $('#moveMaxQty').text(currentQty);
             $('#moveQtyInput').val(currentQty).attr('max', currentQty);
-            $('#moveCartonModal').modal('show');
+            $('#moveTargetLocationCode').val('').removeClass('is-invalid');
+            $('#moveTargetPalletCode').val('').removeClass('is-invalid');
+            $('#moveCartonModal').one('shown.bs.modal', function () {
+                $('#moveTargetLocationCode').focus();
+            }).modal('show');
         }
+
+        // USB scanner: Enter pindah ke field berikutnya / submit
+        $('#moveTargetLocationCode').on('keydown', function (e) {
+            if (e.key === 'Enter') { e.preventDefault(); $('#moveTargetPalletCode').focus(); }
+        });
+        $('#moveTargetPalletCode').on('keydown', function (e) {
+            if (e.key === 'Enter') { e.preventDefault(); $('#formMoveCarton').trigger('submit'); }
+        });
 
         // Submit Pindah Karton
         $('#formMoveCarton').on('submit', function(e) {
@@ -2373,6 +2560,231 @@
                 closeFullscreen();
             }
         });
+    </script>
+
+    <!-- Modal Scan Validasi Pallet ↔ Lokasi (kamera + manual) -->
+    <div class="modal fade" id="palletScanModal" tabindex="-1" role="dialog" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+            <div class="modal-content">
+                <div class="modal-header bg-dark text-white py-2">
+                    <h6 class="modal-title font-weight-bold">
+                        <i class="fas fa-qrcode mr-2"></i> <span id="scanModalTitle">Validasi Scan</span>
+                    </h6>
+                    <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p class="small text-muted mb-2" id="scanStepHint"></p>
+
+                    <!-- Kamera -->
+                    <div id="scanCameraBox" class="mb-3">
+                        <div class="qr-viewport mb-2">
+                            <video id="scanVideo" playsinline muted class="d-none"></video>
+
+                            <!-- Area bidik: kotak dengan sudut, tempat QR diarahkan -->
+                            <div id="scanViewfinder" class="qr-viewfinder d-none" aria-hidden="true">
+                                <span class="qr-corner qr-tl"></span>
+                                <span class="qr-corner qr-tr"></span>
+                                <span class="qr-corner qr-bl"></span>
+                                <span class="qr-corner qr-br"></span>
+                                <div class="qr-laser"></div>
+                            </div>
+
+                            <div id="scanPlaceholder" class="qr-placeholder">
+                                <i class="fas fa-qrcode fa-2x mb-2"></i>
+                                <div class="small">Kamera belum aktif</div>
+                            </div>
+
+                            <div id="scanCamStatus" class="qr-status"></div>
+                        </div>
+
+                        <div class="small text-muted text-center mb-2" id="scanGuide">
+                            Arahkan QR ke dalam kotak. Kode terbaca otomatis.
+                        </div>
+
+                        <div class="d-flex flex-wrap align-items-center">
+                            <button type="button" class="btn btn-sm btn-primary mr-2 mb-1" id="btnScanStart">
+                                <i class="fas fa-camera mr-1"></i> Scan dengan Kamera
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary mr-2 mb-1 d-none" id="btnScanStop">
+                                <i class="fas fa-stop mr-1"></i> Stop
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-warning mr-2 mb-1 d-none" id="btnScanRetry">
+                                <i class="fas fa-rotate mr-1"></i> Coba Lagi
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-dark mb-1 d-none" id="btnScanTorch" title="Senter">
+                                <i class="fas fa-bolt mr-1"></i> Senter
+                            </button>
+                            <span class="small text-muted mb-1">atau ketik kode QR (USB scanner)</span>
+                        </div>
+                    </div>
+
+                    <!-- Langkah 1 -->
+                    <div id="scanStep1" class="mb-3">
+                        <div class="step-badge">Langkah 1</div>
+                        <label class="small font-weight-bold" id="scanStep1Label">QR Lokasi</label>
+                        <div class="input-group input-group-sm">
+                            <input type="text" class="form-control" id="scanStep1Input" autocomplete="off" placeholder="mis. B-a-15">
+                            <div class="input-group-append">
+                                <button class="btn btn-outline-primary" type="button" id="btnScanStep1">Verifikasi</button>
+                            </div>
+                        </div>
+                        <div class="invalid-feedback d-block" id="scanStep1Error"></div>
+                    </div>
+
+                    <!-- Langkah 2 -->
+                    <div id="scanStep2" class="mb-3 d-none">
+                        <div class="step-badge">Langkah 2</div>
+                        <label class="small font-weight-bold" id="scanStep2Label">QR Pallet</label>
+                        <div class="input-group input-group-sm">
+                            <input type="text" class="form-control" id="scanStep2Input" autocomplete="off" placeholder="mis. PLT-0042">
+                            <div class="input-group-append">
+                                <button class="btn btn-outline-primary" type="button" id="btnScanStep2">Lanjut</button>
+                            </div>
+                        </div>
+                        <div class="invalid-feedback d-block" id="scanStep2Error"></div>
+                    </div>
+
+                    <!-- Langkah 3: siap -->
+                    <div id="scanStep3" class="d-none"></div>
+
+                    <div class="alert alert-danger d-none small mt-3 mb-0" id="scanAlert"></div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-sm btn-secondary" data-dismiss="modal">Batal</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ asset('vendor/qr-scanner/jsQR.min.js') }}"></script>
+    <script src="{{ asset('vendor/qr-scanner/qr-scanner.js') }}"></script>
+    @include('pallet.placement-flow')
+
+    <script>
+    $(function () {
+        const CSRF = $('meta[name="csrf-token"]').attr('content');
+        const routes = {
+            place: "{{ route('pallet.place') }}",
+            move: "{{ route('pallet.movePallet') }}",
+            swap: "{{ route('pallet.swapPallet') }}",
+            validate: "{{ route('pallet.validatePair') }}",
+            finish: "{{ url('pallet') }}/__id__/finish"
+        };
+
+        let binding = null;        // pallet yang sudah terkunci di lokasi ini
+        let currentAddress = null; // lokasi yang sedang dibuka
+
+        // ================= QR LOKASI & PALLET DI MODAL =================
+        window.renderPalletBinding = function (addr, pallet) {
+            currentAddress = addr;
+            binding = pallet || null;
+
+            $('#qrLocationImg').attr('src', addr.qr_location || '');
+            $('#qrLocationCode').text(addr.code);
+
+            if (binding) {
+                $('#bindingEmpty').addClass('d-none');
+                $('#bindingFilled').removeClass('d-none');
+                $('#bindingPalletCode').text(binding.code);
+                $('#bindingStatus').text(binding.status_label || binding.status);
+                $('#bindingPlacedAt').text(binding.placed_at || '-');
+                $('#bindingCarton').text(binding.total_carton || 0);
+                $('#bindingMax').text(binding.max_carton || 42);
+                $('#qrPalletBox').removeClass('d-none');
+                $('#qrPalletImg').attr('src', binding.qr_pallet || '');
+                $('#qrPalletCode').text(binding.code);
+                $('#btnPlacePallet').addClass('d-none');
+                $('#btnMovePallet').removeClass('d-none');
+                $('#btnSwapPallet').removeClass('d-none');
+                $('#btnPairLabel').removeClass('d-none').attr('href', binding.label_url || '#');
+                $('#btnFinishPallet').removeClass('d-none');
+            } else {
+                $('#bindingEmpty').removeClass('d-none');
+                $('#bindingFilled').addClass('d-none');
+                $('#qrPalletBox').addClass('d-none');
+                $('#qrPalletImg').attr('src', '');
+                $('#qrPalletCode').text('-');
+                $('#btnPlacePallet').removeClass('d-none');
+                $('#btnMovePallet').addClass('d-none');
+                $('#btnSwapPallet').addClass('d-none');
+                $('#btnPairLabel').addClass('d-none');
+                $('#btnFinishPallet').addClass('d-none');
+            }
+
+            // Form penempatan karton terkunci sampai pallet terverifikasi.
+            // Kalau lokasi ini sudah punya pallet, form tetap bisa dipakai
+            // (pallet sudah terkunci dari scan sebelumnya).
+            if (! binding) {
+                resetPlacementForm();
+            } else {
+                $('#placementLockedNote').addClass('d-none');
+                $('#formAddCartonToPallet').removeClass('d-none');
+                $('#addCartonPalletId').val(addr.id);
+                $('#addCartonPalletId').attr('data-location-code', addr.code);
+                $('#addCartonPalletId').attr('data-pallet-code', binding.code);
+            }
+        };
+
+        function resetPlacementForm() {
+            $('#formAddCartonToPallet').addClass('d-none');
+            $('#placementLockedNote').removeClass('d-none');
+            $('#selectAddJancode').val('').trigger('change');
+            $('#inputAddQtyCarton').val('').removeAttr('max').removeClass('is-invalid');
+            $('#infoAddQty').text('Pilih item hasil scan');
+            $('#addCartonPalletId').val('');
+            $('#addCartonPalletId').removeAttr('data-location-code data-pallet-code');
+        }
+
+        // ================= FLOW SCAN 3 LANGKAH =================
+        window.PalletPlacementFlow.init({
+            csrf: CSRF,
+            routes: routes,
+            onLocked: function (pair) {
+                // Pallet terkunci -> buka form pilih item hasil scan.
+                $('#placementLockedNote').addClass('d-none');
+                $('#formAddCartonToPallet').removeClass('d-none');
+                $('#addCartonPalletId').val(currentAddress ? currentAddress.id : '');
+                $('#addCartonPalletId').attr('data-location-code', pair.location_code);
+                $('#addCartonPalletId').attr('data-pallet-code', pair.pallet_code);
+            }
+        });
+
+        // Lokasi & pallet yang diharapkan saat flow dibuka.
+        const origOpen = window.PalletPlacementFlow.open;
+        window.PalletPlacementFlow.open = function (mode) {
+            window.PalletPlacementFlow.expectedLocationCode = currentAddress ? currentAddress.code : null;
+            window.PalletPlacementFlow.expectedAddressId = currentAddress ? currentAddress.id : null;
+            origOpen.call(window.PalletPlacementFlow, mode);
+        };
+
+        // ================= FINISH PALLET =================
+        $('#btnFinishPallet').on('click', function () {
+            if (!binding) return;
+
+            fireSwal({
+                icon: 'warning',
+                title: 'Finish ' + binding.code + '?',
+                html: 'Semua karton dikeluarkan dan pallet dilepas dari <strong>' + currentAddress.code + '</strong>. Lokasi menjadi kosong.',
+                showCancelButton: true,
+                confirmButtonText: 'Ya, finish',
+                cancelButtonText: 'Batal',
+                confirmButtonColor: '#e74a3b'
+            }).then(function (r) {
+                if (!r.isConfirmed) return;
+
+                $.ajax({
+                    url: routes.finish.replace('__id__', binding.id),
+                    type: 'POST', dataType: 'json', data: { _token: CSRF },
+                    headers: { 'Accept': 'application/json' }
+                }).done(function (res) {
+                    fireSwal({ icon: 'success', title: 'Selesai', text: res.message, timer: 2200, showConfirmButton: false })
+                        .then(function () { window.location.reload(); });
+                }).fail(function (xhr) {
+                    fireSwal({ icon: 'error', title: 'Gagal', text: (xhr.responseJSON && xhr.responseJSON.message) || 'Finish gagal.' });
+                });
+            });
+        });
+    });
     </script>
 </body>
 </html>
