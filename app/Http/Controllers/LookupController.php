@@ -17,23 +17,23 @@ use Illuminate\Http\Request;
  */
 class LookupController extends Controller
 {
-    /** Halaman scan QR lokasi. */
+    /** Halaman scan QR lokasi (publik, tanpa login). */
     public function lokasiPage()
     {
-        return view('lookup.scan', [
-            'mode'   => 'lokasi',
-            'judul'  => 'Cari Lokasi (Scan QR)',
-            'arah'   => 'Arahkan ke QR lokasi, mis. B-a-15',
+        return view('lookup.public', [
+            'mode'  => 'lokasi',
+            'judul' => 'Cari Lokasi',
+            'arah'  => 'Arahkan ke QR lokasi, mis. B-a-15',
         ]);
     }
 
-    /** Halaman scan QR pallet. */
+    /** Halaman scan QR pallet (publik, tanpa login). */
     public function palletPage()
     {
-        return view('lookup.scan', [
-            'mode'   => 'pallet',
-            'judul'  => 'Cari Pallet (Scan QR)',
-            'arah'   => 'Arahkan ke QR pallet, mis. PLT-0042',
+        return view('lookup.public', [
+            'mode'  => 'pallet',
+            'judul' => 'Cari Pallet',
+            'arah'  => 'Arahkan ke QR pallet, mis. PLT-0042',
         ]);
     }
 

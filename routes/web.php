@@ -40,6 +40,15 @@ Route::get('/display/pallet', [\App\Http\Controllers\PalletController::class, 'p
 Route::get('/display/pallet/stream', [\App\Http\Controllers\PalletController::class, 'stream'])->name('pallet.public.stream');
 Route::get('/display/pallet/detail/{id}', [\App\Http\Controllers\PalletController::class, 'publicDetail'])->name('pallet.public.detail');
 
+// Pencarian lokasi & pallet lewat scan QR — publik, tanpa login.
+// Hanya membaca data; tidak ada endpoint yang menulis.
+Route::prefix('scan')->name('lookup.')->middleware('throttle:120,1')->group(function () {
+    Route::get('/lokasi', [\App\Http\Controllers\LookupController::class, 'lokasiPage'])->name('lokasi.page');
+    Route::get('/pallet', [\App\Http\Controllers\LookupController::class, 'palletPage'])->name('pallet.page');
+    Route::get('/lokasi/{code}', [\App\Http\Controllers\LookupController::class, 'lokasi'])->name('lokasi');
+    Route::get('/pallet/{code}', [\App\Http\Controllers\LookupController::class, 'pallet'])->name('pallet');
+});
+
 Route::group(['middleware' => 'auth'], function () {
     Route::get('/home', [HomeController::class, 'index'])->name('home');
     Route::get('/logout', [LoginController::class, 'logout'])->name('logout');
@@ -123,14 +132,6 @@ Route::group(['middleware' => 'auth'], function () {
         Route::post('/{palletId}/finish', [\App\Http\Controllers\PalletController::class, 'finishPallet'])->name('finish')->whereNumber('palletId')->middleware('can:pallet.manage');
         Route::get('/pair-label/{addressId}', [\App\Http\Controllers\PalletController::class, 'pairLabel'])->name('pairLabel')->whereNumber('addressId');
         Route::get('/pair-labels', [\App\Http\Controllers\PalletController::class, 'pairLabels'])->name('pairLabels');
-    });
-
-    // Pencarian lewat scan QR (hanya menampilkan, tanpa aksi tulis)
-    Route::prefix('lookup')->name('lookup.')->middleware(['auth', 'module:pallet'])->group(function () {
-        Route::get('/lokasi', [\App\Http\Controllers\LookupController::class, 'lokasiPage'])->name('lokasi.page');
-        Route::get('/pallet', [\App\Http\Controllers\LookupController::class, 'palletPage'])->name('pallet.page');
-        Route::get('/lokasi/{code}', [\App\Http\Controllers\LookupController::class, 'lokasi'])->name('lokasi');
-        Route::get('/pallet/{code}', [\App\Http\Controllers\LookupController::class, 'pallet'])->name('pallet');
     });
 
     // Master Lokasi (QR)
