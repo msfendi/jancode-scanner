@@ -122,6 +122,7 @@ Route::group(['middleware' => 'auth'], function () {
         Route::post('/{palletId}/empty', [\App\Http\Controllers\PalletController::class, 'emptyPallet'])->name('empty')->whereNumber('palletId')->middleware('can:pallet.manage');
         Route::post('/{palletId}/finish', [\App\Http\Controllers\PalletController::class, 'finishPallet'])->name('finish')->whereNumber('palletId')->middleware('can:pallet.manage');
         Route::get('/pair-label/{addressId}', [\App\Http\Controllers\PalletController::class, 'pairLabel'])->name('pairLabel')->whereNumber('addressId');
+        Route::get('/pair-labels', [\App\Http\Controllers\PalletController::class, 'pairLabels'])->name('pairLabels');
     });
 
     // Master Lokasi (QR)

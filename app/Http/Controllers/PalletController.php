@@ -1112,8 +1112,7 @@ class PalletController extends Controller
     }
 
     /**
-     * Label pasangan: QR lokasi + QR pallet dalam satu kartu (untuk ditempel
-     * di pallet fisik yang berdiri di lokasi tersebut).
+     * Stiker pasangan untuk SATU lokasi (dipakai tombol "Label Pasangan").
      */
     public function pairLabel($addressId)
     {
@@ -1124,13 +1123,67 @@ class PalletController extends Controller
             abort(404, 'Lokasi ' . $address->code . ' belum ditempati pallet.');
         }
 
+        return $this->renderPairLabels([$pallet]);
+    }
+
+    /**
+     * Stiker pasangan borongan: 150 x 50 mm, isi QR lokasi + QR pallet.
+     *
+     * Pilihannya: ids[] (id pallet), atau rentang kode pallet from/to.
+     */
+    public function pairLabels(Request $request)
+    {
+        $query = Pallet::whereNotNull('current_location_id')->orderBy('code');
+
+        $ids = array_filter((array) $request->input('ids', []));
+
+        if (! empty($ids)) {
+            $query->whereIn('id', $ids);
+        } else {
+            if ($request->filled('from')) {
+                $query->where('code', '>=', (string) $request->input('from'));
+            }
+            if ($request->filled('to')) {
+                $query->where('code', '<=', (string) $request->input('to'));
+            }
+        }
+
+        $pallets = $query->get();
+
+        if ($pallets->isEmpty()) {
+            return back()->with('error', 'Tidak ada pallet terikat pada pilihan itu.');
+        }
+
+        return $this->renderPairLabels($pallets);
+    }
+
+    /**
+     * Susun data stiker pasangan (lokasi + pallet) lalu render lembar A4.
+     *
+     * @param  \Illuminate\Support\Collection<int,Pallet>  $pallets
+     */
+    private function renderPairLabels($pallets)
+    {
         $qr = app(QrLabelService::class);
 
-        return view('pallet.pair-label', [
-            'address' => $address,
-            'pallet'  => $pallet,
-            'qrLocation' => $qr->dataUri($address->code, 320, 2),
-            'qrPallet'   => $qr->dataUri($pallet->code, 320, 2),
+        $pairs = $pallets->map(function (Pallet $pallet) use ($qr) {
+            $location = PalletAddress::find($pallet->current_location_id);
+
+            if (! $location) {
+                return null;
+            }
+
+            return [
+                'location_code' => $location->code,
+                'pallet_code'   => $pallet->code,
+                'qr_location'   => $qr->dataUri($location->code, 320, 2),
+                'qr_pallet'     => $qr->dataUri($pallet->code, 320, 2),
+            ];
+        })->filter()->values();
+
+        return view('pallet.pair-labels', [
+            'pairs'  => $pairs,
+            'sheets' => $pairs->chunk(5),
         ]);
     }
 

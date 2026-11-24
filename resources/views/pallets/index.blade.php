@@ -76,6 +76,23 @@
                                     <i class="fas fa-print mr-1"></i> Cetak
                                 </button>
                             </form>
+
+                            <hr class="my-3">
+
+                            <!-- Cetak stiker pasangan (QR lokasi + QR pallet dalam satu stiker 15 x 5 cm) -->
+                            <form method="GET" action="{{ route('pallet.pairLabels') }}" target="_blank" class="form-inline">
+                                <span class="small font-weight-bold text-gray-600 mr-2">Stiker pasangan:</span>
+                                <input type="text" name="from" class="form-control form-control-sm mr-2 mb-1"
+                                    placeholder="dari, mis. PLT-0001">
+                                <input type="text" name="to" class="form-control form-control-sm mr-2 mb-1"
+                                    placeholder="sampai, mis. PLT-0050">
+                                <button type="submit" class="btn btn-sm btn-outline-success mb-1">
+                                    <i class="fas fa-qrcode mr-1"></i> Cetak stiker
+                                </button>
+                                <small class="text-muted ml-2 mb-1">
+                                    Hanya pallet yang sudah terikat ke lokasi
+                                </small>
+                            </form>
                         </div>
                     </div>
 
