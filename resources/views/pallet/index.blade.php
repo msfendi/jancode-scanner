@@ -1103,8 +1103,14 @@
                             <i class="fas fa-lock text-warning mr-2 mt-1"></i>
                             <div class="small">
                                 <strong>Penempatan karton terkunci.</strong><br>
-                                Scan QR lokasi lalu QR pallet terlebih dahulu untuk memastikan pallet yang
-                                benar-benar berada di area ini. Setelah terverifikasi, pilih item hasil scan di bawah.
+                                Lokasi ini sudah ditempati pallet. Scan QR lokasi lalu QR pallet dulu untuk
+                                memastikan pallet yang benar-benar berada di area ini. Setelah terverifikasi,
+                                pilih item hasil scan di bawah.
+                                <div class="mt-2">
+                                    <button type="button" class="btn btn-sm btn-primary" id="btnVerifyPallet">
+                                        <i class="fas fa-qrcode mr-1"></i>Verifikasi dengan Scan
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1189,13 +1195,15 @@
                         </div>
 
                         <div class="form-group">
-                            <label class="font-weight-bold">Pallet Tujuan (wajib scan):</label>
+                            <label class="font-weight-bold">Lokasi Tujuan:</label>
                             <input type="text" class="form-control mb-2" id="moveTargetLocationCode" name="target_location_code"
-                                placeholder="1. Scan QR lokasi tujuan (mis. B-a-15)" autocomplete="off">
+                                placeholder="1. QR / kode lokasi tujuan (mis. B-a-15)" autocomplete="off">
                             <input type="text" class="form-control" id="moveTargetPalletCode" name="target_pallet_code"
-                                placeholder="2. Scan QR pallet tujuan (mis. PLT-0042)" autocomplete="off">
+                                placeholder="2. QR pallet tujuan (mis. PLT-0042) — wajib bila lokasi tujuan sudah berpallet" autocomplete="off">
                             <small class="text-muted d-block mt-1">
-                                Kedua QR harus cocok: pallet tujuan harus benar-benar berada di lokasi tujuan.
+                                Kalau lokasi tujuan <strong>sudah ditempati pallet</strong>: scan QR lokasi tujuan
+                                lalu QR palletnya (keduanya harus cocok). Kalau <strong>belum berpallet</strong>:
+                                cukup kode lokasinya saja.
                                 Pallet tujuan harus kosong atau memiliki Style, OCF &amp; Country yang sama (BR-09).
                             </small>
                         </div>
@@ -1832,9 +1840,10 @@
             const form = $(this);
             const $input = $('#inputAddQtyCarton');
 
-            // Wajib: pallet sudah diverifikasi lewat scan QR.
+            // Wajib verifikasi hanya bila lokasi ini sudah punya pallet.
+            // Lokasi tanpa pallet mengikuti perilaku lama (tanpa scan).
             const $lock = $('#addCartonPalletId');
-            if (!$lock.val() || !$lock.attr('data-pallet-code')) {
+            if (binding && !$lock.attr('data-pallet-code')) {
                 Swal.fire('Pallet Belum Diverifikasi', 'Scan QR lokasi dan QR pallet terlebih dahulu.', 'warning');
                 return;
             }
@@ -2711,21 +2720,23 @@
                 $('#btnFinishPallet').addClass('d-none');
             }
 
-            // Form penempatan karton terkunci sampai pallet terverifikasi.
-            // Kalau lokasi ini sudah punya pallet, form tetap bisa dipakai
-            // (pallet sudah terkunci dari scan sebelumnya).
+            // Lokasi BELUM berpallet -> perilaku lama: form karton langsung
+            // terbuka, karton menempel ke lokasi (pallet_id NULL), tanpa scan.
+            //
+            // Lokasi SUDAH berpallet:
+            //   - pallet-nya baru saja discan/verifikasi di sesi ini -> langsung terbuka
+            //   - belum pernah discan di sesi ini -> terkunci, wajib verifikasi
             if (! binding) {
-                resetPlacementForm();
+                bukaFormPenempatan(addr, null);
+            } else if (sudahTerverifikasi(binding.code)) {
+                bukaFormPenempatan(addr, binding.code);
             } else {
-                $('#placementLockedNote').addClass('d-none');
-                $('#formAddCartonToPallet').removeClass('d-none');
-                $('#addCartonPalletId').val(addr.id);
-                $('#addCartonPalletId').attr('data-location-code', addr.code);
-                $('#addCartonPalletId').attr('data-pallet-code', binding.code);
+                kunciFormPenempatan();
             }
         };
 
-        function resetPlacementForm() {
+        /** Form karton dikunci; user harus verifikasi scan dulu. */
+        function kunciFormPenempatan() {
             $('#formAddCartonToPallet').addClass('d-none');
             $('#placementLockedNote').removeClass('d-none');
             $('#selectAddJancode').val('').trigger('change');
@@ -2735,18 +2746,84 @@
             $('#addCartonPalletId').removeAttr('data-location-code data-pallet-code');
         }
 
-        // ================= FLOW SCAN 3 LANGKAH =================
+        /**
+         * Buka form penempatan karton.
+         *
+         * `palletCode` null = lokasi belum berpallet (mode lama, tanpa scan).
+         * `palletCode` terisi = hasil verifikasi/menempatkan pallet.
+         */
+        function bukaFormPenempatan(addr, palletCode) {
+            $('#placementLockedNote').addClass('d-none');
+            $('#formAddCartonToPallet').removeClass('d-none');
+
+            if (addr) {
+                $('#addCartonPalletId').val(addr.id);
+                $('#addCartonPalletId').attr('data-location-code', addr.code);
+            }
+
+            if (palletCode) {
+                $('#addCartonPalletId').attr('data-pallet-code', palletCode);
+            } else {
+                $('#addCartonPalletId').removeAttr('data-pallet-code');
+            }
+        }
+
+        // ================= FLOW SCAN =================
+
+        /**
+         * Pallet yang sudah terverifikasi di sesi browser ini.
+         *
+         * Disimpan di sessionStorage supaya tidak perlu scan ulang setelah
+         * halaman reload (mis. setelah menyimpan karton), tapi tetap hilang
+         * saat tab ditutup — jadi verifikasi tetap perlu diulang di sesi baru.
+         */
+        function palletTerverifikasi() {
+            try {
+                return JSON.parse(sessionStorage.getItem('palletVerified') || '[]');
+            } catch (e) {
+                return [];
+            }
+        }
+
+        function tandaiTerverifikasi(code) {
+            if (! code) return;
+            const set = new Set(palletTerverifikasi());
+            set.add(String(code).toUpperCase());
+            try {
+                sessionStorage.setItem('palletVerified', JSON.stringify([...set]));
+            } catch (e) { /* storage penuh/diblokir: abaikan */ }
+        }
+
+        function sudahTerverifikasi(code) {
+            return !! code && palletTerverifikasi().includes(String(code).toUpperCase());
+        }
+
         window.PalletPlacementFlow.init({
             csrf: CSRF,
             routes: routes,
+
+            // Pallet ditempatkan / dipindah / ditukar -> memang baru discan,
+            // jadi langsung dianggap terverifikasi.
             onLocked: function (pair) {
-                // Pallet terkunci -> buka form pilih item hasil scan.
-                $('#placementLockedNote').addClass('d-none');
-                $('#formAddCartonToPallet').removeClass('d-none');
-                $('#addCartonPalletId').val(currentAddress ? currentAddress.id : '');
-                $('#addCartonPalletId').attr('data-location-code', pair.location_code);
-                $('#addCartonPalletId').attr('data-pallet-code', pair.pallet_code);
+                tandaiTerverifikasi(pair.pallet_code);
+                bukaFormPenempatan(currentAddress, pair.pallet_code);
+            },
+
+            // Verifikasi pasangan yang sudah terikat -> form karton dibuka,
+            // tanpa perubahan data apa pun di server.
+            onVerified: function (pair) {
+                tandaiTerverifikasi(pair.pallet_code);
+                bukaFormPenempatan(currentAddress, pair.pallet_code);
             }
+        });
+
+        // Tombol "Verifikasi dengan Scan" pada catatan terkunci.
+        $(document).on('click', '#btnVerifyPallet', function () {
+            if (! binding) {
+                return;
+            }
+            window.PalletPlacementFlow.expectedPalletCode = binding.code;
+            window.PalletPlacementFlow.open('verify');
         });
 
         // Lokasi & pallet yang diharapkan saat flow dibuka.

@@ -466,22 +466,20 @@ class PalletController extends Controller
     }
 
     /**
-     * Pallet yang berdiri di sebuah lokasi. Wajib ada: karton hanya boleh
-     * masuk lewat pallet, bukan langsung ke lokasi.
+     * Pallet yang berdiri di sebuah lokasi, bila ada.
+     *
+     * Lokasi yang BELUM ditempati pallet tetap boleh diisi karton seperti
+     * perilaku lama (karton menempel ke lokasi, `pallet_id` NULL). Yang dijaga
+     * adalah lokasi yang SUDAH punya pallet: karton wajib masuk ke pallet itu,
+     * bukan menggantung tanpa pallet.
+     *
+     * @return int|null id pallet, atau null bila lokasi belum berpallet
      */
-    private function requirePalletIdAt(int $addressId): int
+    private function palletIdAtOrNull(int $addressId): ?int
     {
         $palletId = Pallet::where('current_location_id', $addressId)->value('id');
 
-        if (! $palletId) {
-            $code = PalletAddress::whereKey($addressId)->value('code');
-
-            throw ValidationException::withMessages([
-                'pallet_address_id' => "Lokasi {$code} belum ditempati pallet. Tempatkan pallet dulu sebelum mengisi karton.",
-            ]);
-        }
-
-        return (int) $palletId;
+        return $palletId ? (int) $palletId : null;
     }
 
     /**
@@ -1010,10 +1008,29 @@ class PalletController extends Controller
             'old_pallet_code'  => 'nullable|string|max:20',
             'new_pallet_code'  => 'nullable|string|max:20',
             'expected_location_code' => 'nullable|string|max:20',
-            'mode'             => 'nullable|in:place,move,swap',
+            'mode'             => 'nullable|in:place,move,swap,verify',
         ]);
 
         $mode = $data['mode'] ?? 'place';
+
+        if ($mode === 'verify') {
+            // Verifikasi pasangan yang SUDAH terikat: pallet harus benar-benar
+            // berdiri di lokasi itu. Tidak menulis apa pun ke database.
+            [$location, $pallet] = app(PalletPlacementService::class)
+                ->assertBoundPair(
+                    (string) $data['location_code'],
+                    (string) $data['pallet_code']
+                );
+
+            return response()->json([
+                'success'       => true,
+                'message'       => 'Terverifikasi: ' . $pallet->code . ' di ' . $location->code
+                    . ' (' . (int) ($pallet->assignment->total_carton ?? 0) . ' karton).',
+                'location_code' => $location->code,
+                'pallet_code'   => $pallet->code,
+                'total_carton'  => (int) ($pallet->assignment->total_carton ?? 0),
+            ]);
+        }
 
         if ($mode === 'swap') {
             // Pallet lama (yang berdiri di lokasi) ditukar dengan pallet baru.
@@ -1134,10 +1151,18 @@ class PalletController extends Controller
         $jancodeId = $request->input('jancode_id');
         $requestedQty = $request->input('qty_carton') ? (int)$request->input('qty_carton') : null;
 
-        // Bila CLIENT mengirim scan QR (lokasi + pallet), pastikan pasangan itu
-        // benar-benar terhubung. Ini menutup celah: user bisa mengisi form
-        // tanpa pernah scan.
-        if ($request->filled('pallet_code') && $request->filled('location_code')) {
+        // Lokasi yang SUDAH ditempati pallet wajib disertai bukti scan:
+        // user harus memindai QR lokasi + QR pallet yang cocok. Lokasi yang
+        // belum berpallet tetap boleh diisi seperti perilaku lama.
+        $palletAtAddressId = $this->palletIdAtOrNull((int) $addressId);
+
+        if ($palletAtAddressId) {
+            if (! $request->filled('pallet_code') || ! $request->filled('location_code')) {
+                throw ValidationException::withMessages([
+                    'location_code' => 'Lokasi ini sudah ditempati pallet. Scan QR lokasi + QR pallet dulu untuk verifikasi sebelum menempatkan karton.',
+                ]);
+            }
+
             [$scannedLocation, $scannedPallet] = app(PalletPlacementService::class)
                 ->assertBoundPair(
                     (string) $request->input('location_code'),
@@ -1147,6 +1172,12 @@ class PalletController extends Controller
             if ((int) $scannedLocation->id !== (int) $addressId) {
                 throw ValidationException::withMessages([
                     'location_code' => 'QR lokasi ' . $scannedLocation->code . ' tidak cocok dengan lokasi tujuan penempatan.',
+                ]);
+            }
+
+            if ((int) $scannedPallet->id !== (int) $palletAtAddressId) {
+                throw ValidationException::withMessages([
+                    'pallet_code' => 'QR pallet ' . $scannedPallet->code . ' bukan pallet yang berdiri di lokasi ini.',
                 ]);
             }
         }
@@ -1338,11 +1369,11 @@ class PalletController extends Controller
 
                 if (!$assignment) {
                     $payload['pallet_address_id'] = $addressId;
-                    $payload['pallet_id'] = $this->requirePalletIdAt($addressId);
+                    $payload['pallet_id'] = $this->palletIdAtOrNull($addressId);
                     $assignment = PalletAssignment::create($payload);
                 } else {
                     if (! $assignment->pallet_id) {
-                        $payload['pallet_id'] = $this->requirePalletIdAt($addressId);
+                        $payload['pallet_id'] = $this->palletIdAtOrNull($addressId);
                     }
                     $assignment->update($payload);
                 }
@@ -1381,12 +1412,14 @@ class PalletController extends Controller
             'source_detail_id'         => 'required|exists:pallet_assignment_detail,id',
             'target_pallet_address_id' => 'nullable|exists:pallet_address,id',
             'qty_carton'               => 'required|integer|min:1',
-            'target_location_code'     => 'required_without:target_pallet_address_id|nullable|string|max:20',
-            'target_pallet_code'       => 'required_without:target_pallet_address_id|nullable|string|max:20',
+            'target_location_code'     => 'nullable|string|max:20',
+            'target_pallet_code'       => 'nullable|string|max:20',
         ]);
 
-        // Pallet tujuan wajib lewat scan: QR lokasi tujuan + QR pallet tujuan harus
-        // benar-benar satu kesatuan (pallet itu memang berdiri di lokasi itu).
+        // Tentukan lokasi tujuan:
+        //   1. QR lokasi + QR pallet  -> divalidasi sebagai satu kesatuan
+        //   2. QR lokasi saja         -> lokasi yang belum berpallet (perilaku lama)
+        //   3. id lokasi langsung     -> pemanggil lama
         if ($request->filled('target_pallet_code')) {
             [$targetLocation] = app(PalletPlacementService::class)
                 ->assertBoundPair(
@@ -1395,11 +1428,47 @@ class PalletController extends Controller
                 );
 
             $request->merge(['target_pallet_address_id' => $targetLocation->id]);
+        } elseif ($request->filled('target_location_code')) {
+            $targetLocation = PalletAddress::where('code', (string) $request->input('target_location_code'))->first();
+
+            if (! $targetLocation) {
+                throw ValidationException::withMessages([
+                    'target_location_code' => 'QR lokasi tujuan ' . $request->input('target_location_code') . ' tidak terdaftar.',
+                ]);
+            }
+
+            $request->merge(['target_pallet_address_id' => $targetLocation->id]);
         }
 
         $detailId = $request->input('source_detail_id');
         $targetAddressId = $request->input('target_pallet_address_id');
         $moveQty = (int)$request->input('qty_carton');
+
+        if (! $targetAddressId) {
+            throw ValidationException::withMessages([
+                'target_location_code' => 'Lokasi tujuan belum dipilih.',
+            ]);
+        }
+
+        // Lokasi tujuan yang SUDAH berpallet wajib disertai bukti scan yang
+        // cocok. Lokasi tanpa pallet boleh diisi tanpa scan (perilaku lama).
+        $palletAtTargetId = $this->palletIdAtOrNull((int) $targetAddressId);
+
+        if ($palletAtTargetId) {
+            if (! $request->filled('target_pallet_code') || ! $request->filled('target_location_code')) {
+                throw ValidationException::withMessages([
+                    'target_location_code' => 'Lokasi tujuan sudah ditempati pallet. Scan QR lokasi + QR pallet tujuan dulu untuk verifikasi.',
+                ]);
+            }
+
+            $scannedPalletId = (string) Pallet::where('code', strtoupper(trim((string) $request->input('target_pallet_code'))))->value('id');
+
+            if ((int) $scannedPalletId !== (int) $palletAtTargetId) {
+                throw ValidationException::withMessages([
+                    'target_pallet_code' => 'QR pallet tujuan bukan pallet yang berdiri di lokasi tujuan.',
+                ]);
+            }
+        }
 
         return DB::transaction(function () use ($detailId, $targetAddressId, $moveQty) {
             $sourceDetail = PalletAssignmentDetail::with(['assignment.address', 'jancode'])->lockForUpdate()->findOrFail($detailId);
@@ -1504,11 +1573,11 @@ class PalletController extends Controller
 
                 if (!$targetAssignment) {
                     $movePayload['pallet_address_id'] = $targetAddressId;
-                    $movePayload['pallet_id'] = $this->requirePalletIdAt($targetAddressId);
+                    $movePayload['pallet_id'] = $this->palletIdAtOrNull($targetAddressId);
                     $targetAssignment = PalletAssignment::create($movePayload);
                 } else {
                     if (! $targetAssignment->pallet_id) {
-                        $movePayload['pallet_id'] = $this->requirePalletIdAt($targetAddressId);
+                        $movePayload['pallet_id'] = $this->palletIdAtOrNull($targetAddressId);
                     }
                     $targetAssignment->update($movePayload);
                 }

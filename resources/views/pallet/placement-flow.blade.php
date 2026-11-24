@@ -29,7 +29,8 @@
         orders: {
             place: ['location', 'pallet'],
             move: ['pallet', 'location'],
-            swap: ['pallet_from', 'pallet_to']
+            swap: ['pallet_from', 'pallet_to'],
+            verify: ['location', 'pallet']
         },
 
         labels: {
@@ -44,11 +45,16 @@
             swap: {
                 pallet_from: { label: 'QR Pallet Lama', placeholder: 'mis. PLT-0001', button: 'Verifikasi' },
                 pallet_to:   { label: 'QR Pallet Baru', placeholder: 'mis. PLT-0007', button: 'Tukar Pallet' }
+            },
+            verify: {
+                location: { label: 'QR Lokasi', placeholder: 'mis. B-a-15', button: 'Verifikasi' },
+                pallet:   { label: 'QR Pallet', placeholder: 'mis. PLT-0042', button: 'Buka Penempatan' }
             }
         },
 
         init: function (opts) {
             this.onLocked = opts.onLocked || function () {};
+            this.onVerified = opts.onVerified || function () {};
             this.csrf = opts.csrf;
             this.routes = opts.routes || {};
 
@@ -88,11 +94,12 @@
             this.oldPalletCode = null;
             this.newPalletCode = null;
 
-            const titles = { place: 'Tempatkan Pallet', move: 'Pindah Pallet', swap: 'Tukar Pallet' };
+            const titles = { place: 'Tempatkan Pallet', move: 'Pindah Pallet', swap: 'Tukar Pallet', verify: 'Verifikasi Pallet & Lokasi' };
             const hints = {
                 place: 'Scan QR lokasi yang sedang dibuka, lalu QR pallet yang mau ditempatkan.',
                 move: 'Scan QR pallet yang mau dipindah, lalu QR lokasi tujuan yang masih kosong.',
-                swap: 'Scan QR pallet lama yang berdiri di lokasi ini, lalu QR pallet baru penggantinya. Isi karton ikut pindah, lokasi tidak berubah.'
+                swap: 'Scan QR pallet lama yang berdiri di lokasi ini, lalu QR pallet baru penggantinya. Isi karton ikut pindah, lokasi tidak berubah.',
+                verify: 'Scan QR lokasi yang sedang dibuka, lalu QR pallet yang berdiri di lokasi itu. Setelah cocok, penempatan karton dibuka.'
             };
 
             $('#scanModalTitle').text(titles[mode] || titles.place);
@@ -318,6 +325,16 @@
 
             if (field === 'pallet') {
                 this.palletCode = code;
+
+                // Mode verifikasi: pallet yang discan harus pallet yang terikat
+                // di lokasi ini, bukan pallet lain.
+                if (this.mode === 'verify' && this.expectedPalletCode
+                    && code.toUpperCase() !== this.expectedPalletCode.toUpperCase()) {
+                    $('#scanStep2Input').addClass('is-invalid');
+                    $('#scanStep2Error').text('QR pallet ' + code + ' bukan pallet di lokasi ini (' + this.expectedPalletCode + ').');
+                    this.alertBox('QR pallet tidak cocok dengan pallet yang terikat di lokasi ini.');
+                    return;
+                }
             } else if (field === 'pallet_to') {
                 this.newPalletCode = code;
             } else {
@@ -359,6 +376,35 @@
                 headers: { 'Accept': 'application/json' }
             }).done(function () {
                 self.alertBox('');
+
+                // Mode verifikasi: tidak ada aksi yang ditulis ke database.
+                // Cukup cocokkan QR, lalu buka penempatan karton.
+                if (self.mode === 'verify') {
+                    self.step = 3;
+                    self.stopCamera();
+
+                    $('#scanStep2').addClass('d-none');
+                    $('#scanStep1Error, #scanStep2Error').text('');
+                    $('#scanStep1Input, #scanStep2Input').removeClass('is-invalid');
+                    $('#scanStep3').removeClass('d-none').html(
+                        '<div class="alert alert-success py-2 small mb-0">' +
+                        '<strong>Terverifikasi.</strong><br>' +
+                        'Lokasi <code>' + self.locationCode + '</code> · Pallet <code>' + self.palletCode + '</code>' +
+                        '<br>Penempatan karton dibuka.' +
+                        '</div>'
+                    );
+
+                    if (self.onVerified) {
+                        self.onVerified({
+                            location_code: self.locationCode,
+                            pallet_code: self.palletCode
+                        });
+                    }
+
+                    $('#palletScanModal').modal('hide');
+                    $('#palletDetailModal').modal('show');
+                    return;
+                }
 
                 // place: pallet -> lokasi | move: pallet ke lokasi tujuan | swap: tukar pallet
                 const actionUrl = self.mode === 'move'
