@@ -125,6 +125,14 @@ Route::group(['middleware' => 'auth'], function () {
         Route::get('/pair-labels', [\App\Http\Controllers\PalletController::class, 'pairLabels'])->name('pairLabels');
     });
 
+    // Pencarian lewat scan QR (hanya menampilkan, tanpa aksi tulis)
+    Route::prefix('lookup')->name('lookup.')->middleware(['auth', 'module:pallet'])->group(function () {
+        Route::get('/lokasi', [\App\Http\Controllers\LookupController::class, 'lokasiPage'])->name('lokasi.page');
+        Route::get('/pallet', [\App\Http\Controllers\LookupController::class, 'palletPage'])->name('pallet.page');
+        Route::get('/lokasi/{code}', [\App\Http\Controllers\LookupController::class, 'lokasi'])->name('lokasi');
+        Route::get('/pallet/{code}', [\App\Http\Controllers\LookupController::class, 'pallet'])->name('pallet');
+    });
+
     // Master Lokasi (QR)
     Route::prefix('locations')->name('locations.')->middleware(['auth', 'module:location'])->group(function () {
         Route::get('/', [\App\Http\Controllers\LocationController::class, 'index'])->name('index');

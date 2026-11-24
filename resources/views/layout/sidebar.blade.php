@@ -132,10 +132,25 @@
     @endcan
 
     @canany(['location.view', 'location.manage'])
-    <li class="nav-item {{ request()->is('locations*') ? 'active' : '' }}">
+    <li class="nav-item {{ request()->routeIs('locations.*') ? 'active' : '' }}">
         <a class="nav-link" href="{{ route('locations.index') }}">
             <i class="fas fa-fw fa-map-marker-alt"></i>
             <span>Master Lokasi &amp; QR</span>
+        </a>
+    </li>
+    @endcan
+
+    @canany(['pallet.view', 'pallet.manage'])
+    <li class="nav-item {{ request()->routeIs('lookup.lokasi*') ? 'active' : '' }}">
+        <a class="nav-link" href="{{ route('lookup.lokasi.page') }}">
+            <i class="fas fa-fw fa-search-location"></i>
+            <span>Cari Lokasi (Scan QR)</span>
+        </a>
+    </li>
+    <li class="nav-item {{ request()->routeIs('lookup.pallet*') ? 'active' : '' }}">
+        <a class="nav-link" href="{{ route('lookup.pallet.page') }}">
+            <i class="fas fa-fw fa-search"></i>
+            <span>Cari Pallet (Scan QR)</span>
         </a>
     </li>
     @endcan
