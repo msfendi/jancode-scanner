@@ -1842,8 +1842,14 @@
 
             // Wajib verifikasi hanya bila lokasi ini sudah punya pallet.
             // Lokasi tanpa pallet mengikuti perilaku lama (tanpa scan).
+            //
+            // Penanda diambil dari atribut DOM, bukan variabel lintas blok:
+            // variabel `binding` hidup di blok script lain sehingga tidak
+            // terjangkau dari sini (menyebabkan ReferenceError).
             const $lock = $('#addCartonPalletId');
-            if (binding && !$lock.attr('data-pallet-code')) {
+            const butuhVerifikasi = $('#formAddCartonToPallet').attr('data-has-pallet') === '1';
+
+            if (butuhVerifikasi && !$lock.attr('data-pallet-code')) {
                 Swal.fire('Pallet Belum Diverifikasi', 'Scan QR lokasi dan QR pallet terlebih dahulu.', 'warning');
                 return;
             }
@@ -2738,6 +2744,8 @@
         /** Form karton dikunci; user harus verifikasi scan dulu. */
         function kunciFormPenempatan() {
             $('#formAddCartonToPallet').addClass('d-none');
+            // Lokasi ini punya pallet -> form hanya boleh dibuka setelah verifikasi.
+            $('#formAddCartonToPallet').attr('data-has-pallet', '1');
             $('#placementLockedNote').removeClass('d-none');
             $('#selectAddJancode').val('').trigger('change');
             $('#inputAddQtyCarton').val('').removeAttr('max').removeClass('is-invalid');
@@ -2755,6 +2763,8 @@
         function bukaFormPenempatan(addr, palletCode) {
             $('#placementLockedNote').addClass('d-none');
             $('#formAddCartonToPallet').removeClass('d-none');
+            // Penanda untuk handler submit: apakah lokasi ini berpallet atau tidak.
+            $('#formAddCartonToPallet').attr('data-has-pallet', palletCode ? '1' : '0');
 
             if (addr) {
                 $('#addCartonPalletId').val(addr.id);
