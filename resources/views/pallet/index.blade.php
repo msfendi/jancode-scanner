@@ -409,7 +409,7 @@
                     <div class="d-sm-flex align-items-center justify-content-between mb-4">
                         <div>
                             <h1 class="h4 mb-1 text-gray-800 font-weight-bold">Manage Pallet Location &amp; Placement</h1>
-                            <p class="text-muted small mb-0">Total {{ number_format($totalPositions, 0, ',', '.') }} Alamat Pallet (Row B-I) &bull; Kapasitas Maks 42 Karton/Pallet &bull; Per Pallet: 1 Country &amp; 1 Style/OCF &bull; Satu Row Boleh Beberapa Style</p>
+                            <p class="text-muted small mb-0">Total {{ number_format($totalPositions, 0, ',', '.') }} Alamat Pallet (Row B-I) &bull; Kapasitas Sesuai Max Carton &bull; Per Pallet: 1 Country &amp; 1 Style/OCF &bull; Satu Row Boleh Beberapa Style</p>
                         </div>
                         <div>
                             <a href="{{ route('scanner.index') }}" class="btn btn-sm btn-success shadow-sm">
@@ -444,9 +444,9 @@
                                 Langkah <strong>5</strong>: setelah karton di-<em>scan</em>, tempatkan pada lokasi pallet.
                                 Warna pallet mengikuti <strong>negara</strong>: Japan (biru), China (merah tua / pink),
                                 Taiwan (hijau), MUJI negara lain (oranye).
-                                Warna <strong>gelap</strong> = penuh 42 karton, warna <strong>terang</strong> = belum penuh.
+                                Warna <strong>gelap</strong> = penuh (sesuai max carton), warna <strong>terang</strong> = belum penuh.
                                 Pallet kosong berwarna netral.
-                                Satu pallet maksimal <strong>42 karton</strong> dengan kompatibilitas <strong>1 Country &amp; 1 Style/OCF per pallet</strong>.
+                                Satu pallet memiliki batas <strong>max carton</strong> masing-masing dengan kompatibilitas <strong>1 Country &amp; 1 Style/OCF per pallet</strong>.
                                 Satu <strong>row boleh berisi beberapa Style/OCF</strong>, tetapi Style/OCF berbeda tidak boleh berada dalam pallet yang sama.
                                 <div class="d-flex flex-wrap align-items-center mt-2" style="gap: 14px;">
                                     @foreach(($palletLegend['groups'] ?? []) as $group)
@@ -596,7 +596,7 @@
                                 <div class="d-flex align-items-center gap-2">
                                     <span class="badge badge-success px-2 py-1 mr-2"><i class="fas fa-circle mr-1"></i> Kosong</span>
                                     <span class="badge badge-warning px-2 py-1 mr-2"><i class="fas fa-circle mr-1"></i> Terisi (belum penuh)</span>
-                                    <span class="badge badge-danger px-2 py-1 mr-2"><i class="fas fa-circle mr-1"></i> Penuh 42</span>
+                                    <span class="badge badge-danger px-2 py-1 mr-2"><i class="fas fa-circle mr-1"></i> Penuh</span>
                                     <span class="badge badge-primary px-2 py-1 mr-2"><i class="fas fa-globe mr-1"></i> Bingkai biru = Multi Negara</span>
                                     <a href="{{ route('pallet.public') }}" target="_blank" class="btn btn-sm btn-outline-dark ml-1" title="Display publik tanpa login">
                                         <i class="fas fa-tv mr-1"></i> Public Display
@@ -788,9 +788,10 @@
                                                                     @endphp
 
                                                                     @if($addr)
+                                                                        @php $addrMax = (int) ($addr->max_carton ?: 42); @endphp
                                                                         <div class="pallet-box {{ $state }}{{ $multi }}" data-pallet-id="{{ $addr->id }}" data-code="{{ $addr->code }}" onclick="openPalletModal({{ $addr->id }})"
                                                                              style="--pallet-bg: {{ $addr->visual_color ?? '#e5e7eb' }}; --pallet-fg: {{ $addr->visual_text_color ?? '#374151' }}; --pallet-shadow: {{ $addr->visual_text_shadow ?? 'none' }};"
-                                                                             title="{{ $addr->code }}: {{ $isOccupied ? $cartons . '/42 Karton (' . $addr->assignment->style . ' - ' . $addr->assignment->country . ')' : 'Kosong (Maks 42)' }}{{ $addr->country_mode === 'multi' ? ' [Multi Negara]' : ' [1 Negara]' }}">
+                                                                             title="{{ $addr->code }}: {{ $isOccupied ? $cartons . '/' . $addrMax . ' Karton (' . $addr->assignment->style . ' - ' . $addr->assignment->country . ')' : 'Kosong (Maks ' . $addrMax . ')' }}{{ $addr->country_mode === 'multi' ? ' [Multi Negara]' : ' [1 Negara]' }}">
                                                                             <span class="pallet-code">{{ $addr->code }}</span>
                                                                         </div>
                                                                     @else
@@ -832,7 +833,7 @@
                 <form id="palletColorForm">
                     <div class="modal-body p-4">
                         <p class="small text-muted mb-3">
-                            Warna disimpan di database. Warna <strong>gelap</strong> untuk pallet penuh (42 karton),
+                            Warna disimpan di database. Warna <strong>gelap</strong> untuk pallet penuh,
                             warna <strong>terang</strong> untuk pallet belum penuh. Pallet kosong memakai warna netral.
                             Warna teks dipakai agar alamat pallet tetap terbaca.
                         </p>
@@ -1031,7 +1032,7 @@
                                 <div class="card-body py-2">
                                     <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Status Kapasitas</div>
                                     <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                        <span id="modalTotalCarton">0</span> / 42 Karton
+                                        <span id="modalTotalCarton">0</span> / <span id="modalMaxCarton">42</span> Karton
                                     </div>
                                     <div class="small text-muted">Sisa Slot: <strong id="modalAvailableSpace">42</strong></div>
                                 </div>
@@ -1257,11 +1258,12 @@
                                     @php
                                         $tAssign = $addr->assignment;
                                         $tCartons = $tAssign ? $tAssign->total_carton : 0;
-                                        $tSisa = max(0, 42 - $tCartons);
+                                        $tMax = (int) ($addr->max_carton ?: 42);
+                                        $tSisa = max(0, $tMax - $tCartons);
                                     @endphp
                                     @if($tSisa > 0)
                                         <option value="{{ $addr->id }}" data-sisa="{{ $tSisa }}">
-                                            {{ $addr->code }} (Sisa Slot: {{ $tSisa }}/42) {{ $tAssign ? '- ' . $tAssign->style . ' (' . $tAssign->country . ')' : '- Kosong' }}
+                                            {{ $addr->code }} (Sisa Slot: {{ $tSisa }}/{{ $tMax }}) {{ $tAssign ? '- ' . $tAssign->style . ' (' . $tAssign->country . ')' : '- Kosong' }}
                                         </option>
                                     @endif
                                 @endforeach
@@ -1329,6 +1331,7 @@
 
                 $('#modalPalletCode').text(addr.code);
                 $('#modalTotalCarton').text(assign ? assign.total_carton : 0);
+                $('#modalMaxCarton').text(addr.max_carton || 42);
                 $('#modalAvailableSpace').text(res.available_space);
                 $('#modalLockedStyle').text(assign
                     ? (assign.style || '-') + (assign.ocf ? ' / OCF ' + assign.ocf : '')

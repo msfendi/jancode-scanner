@@ -87,7 +87,7 @@ class PalletController extends Controller
         $occupiedCount = $activeAddresses->filter(fn($a) => $a->assignment && $a->assignment->total_carton > 0)->count();
         $vacantCount = $totalPositions - $occupiedCount;
         $totalCartons = $activeAddresses->sum(fn($a) => $a->assignment ? $a->assignment->total_carton : 0);
-        $totalCapacity = $totalPositions * 42;
+        $totalCapacity = $activeAddresses->sum(fn($a) => (int) ($a->max_carton ?: 42));
 
         // Daftar Master Jancode yang memiliki sisa karton hasil scan yang siap ditempatkan
         $placedCartonsPerJancode = PalletAssignmentDetail::selectRaw('jancode_id, SUM(qty_carton) as placed')
@@ -265,10 +265,13 @@ class PalletController extends Controller
         $pallets = [];
         $occupied = 0;
         $cartons = 0;
+        $capacity = 0;
 
         foreach ($addresses as $addr) {
             $asg = $addr->assignment;
             $qty = $asg ? (int) $asg->total_carton : 0;
+            $cap = (int) ($addr->max_carton ?: 42);
+            $capacity += $cap;
 
             $items = [];
             if ($asg) {
@@ -293,7 +296,7 @@ class PalletController extends Controller
                 'row'      => $addr->row_label,
                 'col'      => $addr->col_label,
                 'pos'      => (int) $addr->position_no,
-                'capacity' => (int) ($addr->max_carton ?: 42),
+                'capacity' => $cap,
                 'qty'      => $qty,
                 'style'    => $asg ? $asg->style : null,
                 'country'  => $asg ? $asg->country : null,
@@ -311,7 +314,7 @@ class PalletController extends Controller
                 'occupied'  => $occupied,
                 'vacant'    => $total - $occupied,
                 'cartons'   => $cartons,
-                'capacity'  => $total * 42,
+                'capacity'  => $capacity,
             ],
             'pallets'    => $pallets,
             'updated_at' => now()->toDateTimeString(),
@@ -779,7 +782,7 @@ class PalletController extends Controller
                 'occupied' => $occupied,
                 'vacant' => $vacant,
                 'totalCartons' => $sum,
-                'totalCapacity' => $total * 42,
+                'totalCapacity' => collect($pallets)->sum('max_carton'),
                 'pct' => $total ? round($occupied/$total*100,1) : 0,
             ],
             'pallets' => $pallets,
@@ -1273,7 +1276,7 @@ class PalletController extends Controller
             if ($palletSpace <= 0) {
                 return response()->json([
                     'success' => false,
-                    'message' => "Pallet {$address->code} sudah penuh (kapasitas 42/42)."
+                    'message' => "Pallet {$address->code} sudah penuh (kapasitas {$currentCartons}/{$address->max_carton})."
                 ], 422);
             }
 
@@ -1371,12 +1374,12 @@ class PalletController extends Controller
                     ], 422);
                 }
 
-                // BR-08 & BR-11: Maksimum isi satu alamat = 42 karton
+                // BR-08 & BR-11: Maksimum isi satu alamat = max_carton
                 if ($assignment->total_carton + $addQty > $address->max_carton) {
                     $sisaSlot = max(0, $address->max_carton - $assignment->total_carton);
                     return response()->json([
                         'success' => false,
-                        'message' => "Pelanggaran BR-11: Kapasitas Pallet {$address->code} terlampaui. Total saat ini: {$assignment->total_carton}, sisa slot: {$sisaSlot}. Menambahkan {$addQty} karton akan melebihi batas 42 karton."
+                        'message' => "Pelanggaran BR-11: Kapasitas Pallet {$address->code} terlampaui. Total saat ini: {$assignment->total_carton}, sisa slot: {$sisaSlot}. Menambahkan {$addQty} karton akan melebihi batas {$address->max_carton} karton."
                     ], 422);
                 }
 
@@ -1404,7 +1407,7 @@ class PalletController extends Controller
                 if ($addQty > $address->max_carton) {
                     return response()->json([
                         'success' => false,
-                        'message' => "Pelanggaran BR-11: Jumlah karton ({$addQty}) melebihi batas maksimal pallet 42 karton."
+                        'message' => "Pelanggaran BR-11: Jumlah karton ({$addQty}) melebihi batas maksimal pallet {$address->max_carton} karton."
                     ], 422);
                 }
 
@@ -1608,7 +1611,7 @@ class PalletController extends Controller
                 if ($moveQty > $targetAddress->max_carton) {
                     return response()->json([
                         'success' => false,
-                        'message' => "Karton yang dipindah ({$moveQty}) melebihi kapasitas pallet tujuan (42 karton)."
+                        'message' => "Karton yang dipindah ({$moveQty}) melebihi kapasitas pallet tujuan ({$targetAddress->max_carton} karton)."
                     ], 422);
                 }
 
