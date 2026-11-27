@@ -860,8 +860,8 @@
                         '</div></div>'
                     : '<div class="qr-card"><div class="qr-info">' +
                         '<div class="meta-label">QR Pallet</div>' +
-                        '<div class="qr-code" style="color:var(--muted)">Belum ada pallet</div>' +
-                        '<div class="qr-sub">Lokasi belum di-bind ke pallet</div>' +
+                        '<div class="qr-code" style="color:var(--muted)">Belum dibind ke palet</div>' +
+                        '<div class="qr-sub">Scan lokasi + pallet di board untuk bind</div>' +
                       '</div></div>';
 
                 document.getElementById('dQr').innerHTML = qrLocHtml + qrPalHtml;
