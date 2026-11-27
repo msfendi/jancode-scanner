@@ -577,6 +577,8 @@ class PalletController extends Controller
         $maxCarton = (int) ($address->max_carton ?: 42);
         $buyer = $assignment?->details->first()?->jancode?->buyer;
         $visual = app(PalletColorService::class)->resolve($assignment?->country, $buyer, $cartons, $maxCarton);
+        $qr = app(QrLabelService::class);
+        $boundPallet = Pallet::where('current_location_id', $address->id)->first();
 
         return response()->json([
             'success' => true,
@@ -597,7 +599,15 @@ class PalletController extends Controller
                 'color'        => $visual['color'],
                 'text_color'   => $visual['text_color'],
                 'text_shadow'  => $visual['text_shadow'],
+                'qr_location'  => $qr->dataUri($address->code, 180, 1),
             ],
+            'bound_pallet' => $boundPallet ? [
+                'id'           => $boundPallet->id,
+                'code'         => $boundPallet->code,
+                'status_label' => $boundPallet->status_label,
+                'placed_at'    => $boundPallet->placed_at?->format('d M Y H:i'),
+                'qr_pallet'    => $qr->dataUri($boundPallet->code, 180, 1),
+            ] : null,
             'items' => $items,
         ]);
     }

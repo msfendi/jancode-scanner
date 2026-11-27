@@ -359,6 +359,37 @@
             margin-bottom: 14px;
         }
 
+        .detail-qr-row {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .qr-card {
+            background: #0c1424;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            padding: 8px 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 0;
+        }
+
+        .qr-card img {
+            width: 68px;
+            height: 68px;
+            background: #fff;
+            padding: 4px;
+            border-radius: 4px;
+            flex-shrink: 0;
+        }
+
+        .qr-card .qr-info { min-width: 0; }
+        .qr-card .qr-code { font-size: 13px; font-weight: 800; color: var(--text); margin-top: 2px; }
+        .qr-card .qr-sub { font-size: 10px; color: var(--muted); margin-top: 2px; }
+
         .meta-item {
             background: #0c1424;
             border: 1px solid var(--line);
@@ -475,6 +506,7 @@
 
             #detailOverlay { padding: 8px; }
             .detail-card { width: 100%; max-height: 92vh; }
+            .detail-qr-row { grid-template-columns: 1fr; }
             .detail-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
             .detail-table { font-size: 10px; }
         }
@@ -543,6 +575,7 @@
                 <button class="detail-close" type="button" id="dClose" aria-label="Tutup">✕</button>
             </div>
             <div class="detail-body">
+                <div class="detail-qr-row" id="dQr"></div>
                 <div class="detail-meta" id="dMeta"></div>
                 <div id="dItemsWrap" class="detail-loading">Memuat…</div>
             </div>
@@ -805,8 +838,33 @@
 
             function renderDetail(data) {
                 const p = data.pallet;
+                const bp = data.bound_pallet;
 
                 document.getElementById('dCode').textContent = p.code;
+
+                const qrLocHtml = '<div class="qr-card">' +
+                    (p.qr_location ? '<img src="' + esc(p.qr_location) + '" alt="QR Lokasi ' + esc(p.code) + '">' : '') +
+                    '<div class="qr-info">' +
+                        '<div class="meta-label">QR Lokasi</div>' +
+                        '<div class="qr-code">' + esc(p.code) + '</div>' +
+                        '<div class="qr-sub">Row ' + esc(p.row) + ' · Line ' + esc(p.col) + ' · Pos ' + esc(p.pos) + '</div>' +
+                    '</div></div>';
+
+                const qrPalHtml = bp
+                    ? '<div class="qr-card">' +
+                        (bp.qr_pallet ? '<img src="' + esc(bp.qr_pallet) + '" alt="QR Pallet ' + esc(bp.code) + '">' : '') +
+                        '<div class="qr-info">' +
+                            '<div class="meta-label">QR Pallet</div>' +
+                            '<div class="qr-code">' + esc(bp.code) + '</div>' +
+                            '<div class="qr-sub">' + esc(bp.status_label) + (bp.placed_at ? ' · ' + esc(bp.placed_at) : '') + '</div>' +
+                        '</div></div>'
+                    : '<div class="qr-card"><div class="qr-info">' +
+                        '<div class="meta-label">QR Pallet</div>' +
+                        '<div class="qr-code" style="color:var(--muted)">Belum ada pallet</div>' +
+                        '<div class="qr-sub">Lokasi belum di-bind ke pallet</div>' +
+                      '</div></div>';
+
+                document.getElementById('dQr').innerHTML = qrLocHtml + qrPalHtml;
 
                 const badge = document.getElementById('dStatus');
                 badge.className = 'detail-badge';
@@ -864,6 +922,7 @@
                 document.getElementById('dStatus').style.color = '';
                 document.getElementById('dStatus').style.textShadow = '';
                 document.getElementById('dStatus').textContent = '-';
+                document.getElementById('dQr').innerHTML = '';
                 document.getElementById('dMeta').innerHTML = '';
                 document.getElementById('dItemsWrap').className = 'detail-loading';
                 document.getElementById('dItemsWrap').textContent = 'Memuat detail pallet…';
